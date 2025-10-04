@@ -152,8 +152,25 @@ enum Opcode {
     SetBR { b: u3, r: u3 }, // SET b, r
     SetBHl { b: u3 },       // SET b, (HL)
 
-                            // Control flow instructions
-                            // TODO
+    // Control flow instructions
+    JpNn,               // JP nn
+    JpHl,               // JP HL
+    JpCcNn { c: u2 },   // JP cc, nn
+    JrE,                // JR e
+    JrCcE { c: u2 },    // JR cc, e
+    CallNn,             // CALL nn
+    CallCcNn { c: u2 }, // CALL cc, nn
+    Ret,                // RET
+    RetCc,              // RET cc
+    Reti,               // RETI
+    RstN { x: u3 },     // RST n
+
+    // Miscellaneous instructions
+    Halt, // HALT
+    Stop, // STOP
+    Di,   // DI
+    Ei,   // EI
+    Nop,  // NOP
 }
 
 #[cfg(test)]
