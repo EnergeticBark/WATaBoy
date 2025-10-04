@@ -8,24 +8,59 @@ fn decode(first_byte: u8) -> Result<Opcode, String> {
     use Opcode::*;
     let op = #[bitmatch]
     match first_byte {
-        // 8-bit load instructions.
-        /* TODO: This is overriding LdRHl. Manually order these from most to least specific
-        (reverse order?). */
+        // Block 0
+        "0000_0000" => Nop,
+
+        "00xx_0001" => LdRrNn { x: u2::new(x) },
+        "00xx_0010" => match x {
+            0 => LdBcA,
+            1 => LdDeA,
+            2 => LdHlIncA,
+            3 => LdHlDecA,
+            4_u8.. => unreachable!(),
+        },
+        "00xx_1010" => match x {
+            0 => LdABc,
+            1 => LdADe,
+            2 => LdAHlInc,
+            3 => LdAHlDec,
+            4_u8.. => unreachable!()
+        },
+        "0000_1000" => LdNnSp,
+
+        "00xx_0011" => IncRr { x: u2::new(x) },
+        "00xx_1011" => DecRr { x: u2::new(x) },
+        "00xx_1001" => AddHlRr { x: u2::new(x) },
+
+        "00xx_x100" => IncR { x: u3::new(x) },
+        "00xx_x101" => DecR { x: u3::new(x) },
+
+        "0011_0110" => LdHlN,
+        "00xx_x110" => LdRN { x: u3::new(x) },
+
+        "0000_0111" => Rlca,
+        "0000_1111" => Rrca,
+        "0001_0111" => Rla,
+        "0001_1111" => Rra,
+        "0010_0111" => Daa,
+        "0010_1111" => Cpl,
+        "0011_0111" => Scf,
+        "0011_1111" => Ccf,
+
+        "0001_1000" => JrE,
+        "001x_x000" => JrCcE { c: u2::new(x) },
+
+        "0001_0000" => Stop,
+
+        // Block 1
+        "0111_0110" => Halt,
+        "01xx_x110" => LdRHl { x: u3::new(x) },
+        "0111_0xxx" => LdHlR { x: u3::new(x) },
         "01xx_xyyy" => LdRR {
             x: u3::new(x),
             y: u3::new(y),
         },
-        "00xx_x110" => LdRN { x: u3::new(x) },
-        "01xx_x110" => LdRHl { x: u3::new(x) },
-        "0111_0xxx" => LdHlR { x: u3::new(x) },
-        "0011_0110" => LdHlN,
-        "0000_1010" => LdABc,
-        "0001_1010" => LdADe,
-        "0000_0010" => LdBcA,
-        "0001_0010" => LdDeA,
-        "1111_1010" => LdANn,
-        "1110_1010" => LdNnA,
-        "1111_0010" => LdhAC,
+
         _ => invalid_instruction_error?,
     };
 
@@ -41,7 +76,7 @@ fn decode(first_byte: u8) -> Result<Opcode, String> {
 #[derive(Debug, Eq, PartialEq)]
 enum Opcode {
     // 8-bit load instructions.
-    LdRR { x: u3, y: u3 },
+    LdRR { x: u3, y: u3 }, // LD r, r'
     LdRN { x: u3 },
     LdRHl { x: u3 },
     LdHlR { x: u3 },
@@ -144,7 +179,6 @@ enum Opcode {
     SrlR { x: u3 }, // SRL r
     SrlHl,          // SRL (HL)
     // Bit
-    // TODO: the documentation for this one is fucked. Double check this later.
     BitBR { b: u3, x: u3 }, // BIT b, r
     BitBHl { b: u3 },       // BIT b, (HL)
     ResBR { b: u3, x: u3 }, // RES b, r
@@ -179,7 +213,7 @@ mod tests {
     use arbitrary_int::u3;
 
     #[test]
-    fn decode_load_a_indirect_hl() {
+    fn decode_load_b_indirect_hl() {
         let bytecode = 0b01000110;
 
         let opcode = decode(bytecode).unwrap();
