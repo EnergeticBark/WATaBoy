@@ -54,11 +54,9 @@ fn decode(first_byte: u8) -> Result<Opcode, String> {
 
         // Block 1
         "0111_0110" => Halt,
-        "01xx_x110" => LdRHl { x: u3::new(x) },
-        "0111_0xxx" => LdHlR { x: u3::new(x) },
         "01xx_xyyy" => LdRR {
-            x: u3::new(x),
-            y: u3::new(y),
+            x: R8Param::from_bits(u3::new(x)),
+            y: R8Param::from_bits(u3::new(y)),
         },
 
         _ => invalid_instruction_error?,
@@ -67,19 +65,46 @@ fn decode(first_byte: u8) -> Result<Opcode, String> {
     Ok(op)
 }
 
+#[derive(Debug, PartialEq, Eq)]
+#[repr(u8)]
+enum R8Param {
+    B = 0,
+    C = 1,
+    D = 2,
+    E = 3,
+    H = 4,
+    L = 5,
+    IndirectHL = 6,
+    A = 7,
+}
+impl R8Param {
+    const fn from_bits(value: u3) -> Self {
+        use R8Param::*;
+        match value.value() {
+            0 => B,
+            1 => C,
+            2 => D,
+            3 => E,
+            4 => H,
+            5 => L,
+            6 => IndirectHL,
+            7 => A,
+            _ => unreachable!()
+        }
+    }
+}
+
 /* Instruction info and mnemonics sourced from: https://gekkio.fi/files/gb-docs/gbctr.pdf
 
   Opcodes that work with literal values from a second byte (PC + 1) are denoted with 'N'.
   It's up to the emulator to get that literal value from memory, not the opcode parser.
   Opcodes that use 16-bit literals/addresses will be denoted 'Nn'.
 */
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 enum Opcode {
     // 8-bit load instructions.
-    LdRR { x: u3, y: u3 }, // LD r, r'
+    LdRR { x: R8Param, y: R8Param }, // LD r, r'
     LdRN { x: u3 },
-    LdRHl { x: u3 },
-    LdHlR { x: u3 },
     LdHlN,
     LdABc,
     LdADe,
@@ -209,14 +234,21 @@ enum Opcode {
 
 #[cfg(test)]
 mod tests {
-    use crate::opcodes::{Opcode, decode};
-    use arbitrary_int::u3;
+    use crate::opcodes::{Opcode, decode, R8Param};
 
     #[test]
     fn decode_load_b_indirect_hl() {
-        let bytecode = 0b01000110;
+        let bytecode = 0b0100_0110;
 
         let opcode = decode(bytecode).unwrap();
-        assert_eq!(opcode, Opcode::LdRHl { x: u3::new(0) });
+        assert_eq!(opcode, Opcode::LdRR { x: R8Param::B, y: R8Param::IndirectHL });
+    }
+
+    #[test]
+    fn decode_halt() {
+        let bytecode = 0b0111_0110;
+
+        let opcode = decode(bytecode).unwrap();
+        assert_eq!(opcode, Opcode::Halt);
     }
 }
