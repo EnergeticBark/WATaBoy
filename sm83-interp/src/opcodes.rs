@@ -1,6 +1,8 @@
 use arbitrary_int::{u2, u3};
 use bitmatch::bitmatch;
 
+use crate::parameters::*;
+
 #[bitmatch]
 fn decode(first_byte: u8) -> Result<Opcode, String> {
     let invalid_instruction_error = Err(String::from("Invalid instruction"));
@@ -12,13 +14,7 @@ fn decode(first_byte: u8) -> Result<Opcode, String> {
         "0000_0000" => Nop,
 
         "00xx_0001" => LdRrNn { x: u2::new(x) },
-        "00xx_0010" => match x {
-            0 => LdBcA,
-            1 => LdDeA,
-            2 => LdHlIncA,
-            3 => LdHlDecA,
-            4_u8.. => unreachable!(),
-        },
+        "00xx_0010" => LdMemA { x: R16Mem::from_bits(u2::new(x)) },
         "00xx_1010" => match x {
             0 => LdABc,
             1 => LdADe,
@@ -55,43 +51,14 @@ fn decode(first_byte: u8) -> Result<Opcode, String> {
         // Block 1
         "0111_0110" => Halt,
         "01xx_xyyy" => LdRR {
-            x: R8Param::from_bits(u3::new(x)),
-            y: R8Param::from_bits(u3::new(y)),
+            x: R8::from_bits(u3::new(x)),
+            y: R8::from_bits(u3::new(y)),
         },
 
         _ => invalid_instruction_error?,
     };
 
     Ok(op)
-}
-
-#[derive(Debug, PartialEq, Eq)]
-#[repr(u8)]
-enum R8Param {
-    B = 0,
-    C = 1,
-    D = 2,
-    E = 3,
-    H = 4,
-    L = 5,
-    IndirectHL = 6,
-    A = 7,
-}
-impl R8Param {
-    const fn from_bits(value: u3) -> Self {
-        use R8Param::*;
-        match value.value() {
-            0 => B,
-            1 => C,
-            2 => D,
-            3 => E,
-            4 => H,
-            5 => L,
-            6 => IndirectHL,
-            7 => A,
-            _ => unreachable!()
-        }
-    }
 }
 
 /* Instruction info and mnemonics sourced from: https://gekkio.fi/files/gb-docs/gbctr.pdf
@@ -103,13 +70,12 @@ impl R8Param {
 #[derive(Debug, PartialEq, Eq)]
 enum Opcode {
     // 8-bit load instructions.
-    LdRR { x: R8Param, y: R8Param }, // LD r, r'
+    LdRR { x: R8, y: R8 }, // LD r, r'
     LdRN { x: u3 },
     LdHlN,
     LdABc,
     LdADe,
-    LdBcA,
-    LdDeA,
+    LdMemA { x: R16Mem }, // // LD (BC|DE|HL+|HL-), A
     LdANn,
     LdNnA,
     LdhAC,    // LDH A, (C)
@@ -117,9 +83,7 @@ enum Opcode {
     LdhAN,    // LDH A, (n)
     LdhNA,    // LDH (n), A
     LdAHlDec, // LD A, (HL-)
-    LdHlDecA, // LD (HL-), A
     LdAHlInc, // LD A, (HL+)
-    LdHlIncA, // LD (HL+), A
 
     // 16-bit load instructions.
     LdRrNn { x: u2 }, // LD rr, nn
@@ -234,14 +198,14 @@ enum Opcode {
 
 #[cfg(test)]
 mod tests {
-    use crate::opcodes::{Opcode, decode, R8Param};
+    use super::*;
 
     #[test]
     fn decode_load_b_indirect_hl() {
         let bytecode = 0b0100_0110;
 
         let opcode = decode(bytecode).unwrap();
-        assert_eq!(opcode, Opcode::LdRR { x: R8Param::B, y: R8Param::IndirectHL });
+        assert_eq!(opcode, Opcode::LdRR { x: R8::B, y: R8::IndirectHL });
     }
 
     #[test]
