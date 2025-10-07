@@ -134,47 +134,28 @@ enum Opcode {
     LdHlSpPlusE,            // LD HL, SP+e
 
     // 8-bit arithmetic and logical instructions.
-    // Add
     AddR { x: R8 }, // ADD r
-    AddHl,          // ADD (HL)
     AddN,           // ADD n
     AdcR { x: R8 }, // ADC r
-    AdcHl,          // ADC (HL)
     AdcN,           // ADC n
-    // Subtract
     SubR { x: R8 }, // SUB r
-    SubHl,          // SUB (HL)
     SubN,           // SUB n
     SbcR { x: R8 }, // SBC r
-    SbcHl,          // SBC (HL)
     SbcN,           // SBC n
-    // Compare
-    CpR { x: R8 }, // CP r
-    CpHl,          // CP (HL)
-    CpN,           // CP n
-    // Increment
+    CpR { x: R8 },  // CP r
+    CpN,            // CP n
     IncR { x: R8 }, // INC r
-    IncHl,          // INC (HL)
-    // Decrement
     DecR { x: R8 }, // DEC r
-    DecHl,          // DEC (HL)
-    // And
     AndR { x: R8 }, // AND r
-    AndHl,          // AND (HL)
     AndN,           // AND n
-    // Or
-    OrR { x: R8 }, // OR r
-    OrHl,          // OR (HL)
-    OrN,           // OR n
-    // Xor
+    OrR { x: R8 },  // OR r
+    OrN,            // OR n
     XorR { x: R8 }, // XOR r
-    XorHl,          // XOR (HL)
     XorN,           // XOR n
-    // Flags
-    Ccf, // CCF
-    Scf, // SCF
-    Daa, // DAA
-    Cpl, // CPL
+    Ccf,            // CCF
+    Scf,            // SCF
+    Daa,            // DAA
+    Cpl,            // CPL
 
     // 16-bit arithmetic instructions.
     IncRr { x: R16 },   // INC rr
@@ -182,38 +163,11 @@ enum Opcode {
     AddHlRr { x: R16 }, // ADD HL, rr
     AddSpE,             // ADD SP, e
 
-    // Rotate, shift, and bit-operation instructions.
-    // Rotate
-    Rlca,           // RLCA
-    Rrca,           // RRCA
-    Rla,            // RLA
-    Rra,            // RRA
-    RlcR { x: u3 }, // RLC r
-    RlcHl,          // RLC (HL)
-    RrcR { x: u3 }, // RRC r
-    RrcHl,          // RRC (HL)
-    RlR { x: u3 },  // RL r
-    RlHl,           // RL (HL)
-    RrR { x: u3 },  // RR r
-    RrHl,           // RR (HL)
-    // Arithmetic shift
-    SlaR { x: u3 }, // SLA r
-    SlaHl,          // SLA (HL)
-    SraR { x: u3 }, // SRA r
-    SraHl,          // SRA (HL)
-    // Swap
-    SwapR { x: u3 }, // SWAP r
-    SwapHl,          // SWAP (HL)
-    // Logical shift
-    SrlR { x: u3 }, // SRL r
-    SrlHl,          // SRL (HL)
-    // Bit
-    BitBR { b: u3, x: u3 }, // BIT b, r
-    BitBHl { b: u3 },       // BIT b, (HL)
-    ResBR { b: u3, x: u3 }, // RES b, r
-    ResBHl { b: u3 },       // RES b, (HL)
-    SetBR { b: u3, r: u3 }, // SET b, r
-    SetBHl { b: u3 },       // SET b, (HL)
+    // Rotate instructions.
+    Rlca, // RLCA
+    Rrca, // RRCA
+    Rla,  // RLA
+    Rra,  // RRA
 
     // Control flow instructions
     JpNn,                      // JP nn
@@ -234,6 +188,20 @@ enum Opcode {
     Di,   // DI
     Ei,   // EI
     Nop,  // NOP
+}
+
+enum PrefixOpcode {
+    RlcR { x: R8 },         // RLC r
+    RrcR { x: R8 },         // RRC r
+    RlR { x: R8 },          // RL r
+    RrR { x: R8 },          // RR r
+    SlaR { x: R8 },         // SLA r
+    SraR { x: R8 },         // SRA r
+    SwapR { x: R8 },        // SWAP r
+    SrlR { x: R8 },         // SRL r
+    BitBR { b: u3, x: R8 }, // BIT b, r
+    ResBR { b: u3, x: R8 }, // RES b, r
+    SetBR { b: u3, x: R8 }, // SET b, r
 }
 
 #[cfg(test)]
