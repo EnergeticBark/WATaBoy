@@ -48,6 +48,16 @@ fn decode(first_byte: u8) -> Result<Opcode, String> {
             y: R8::from_bits(u3::new(y)),
         },
 
+        // Block 2
+        "1000_0xxx" => AddR { x: R8::from_bits(u3::new(x)) },
+        "1000_1xxx" => AdcR { x: R8::from_bits(u3::new(x)) },
+        "1001_0xxx" => SubR { x: R8::from_bits(u3::new(x)) },
+        "1001_1xxx" => SbcR { x: R8::from_bits(u3::new(x)) },
+        "1010_0xxx" => AndR { x: R8::from_bits(u3::new(x)) },
+        "1010_1xxx" => XorR { x: R8::from_bits(u3::new(x)) },
+        "1011_0xxx" => OrR { x: R8::from_bits(u3::new(x)) },
+        "1011_1xxx" => CpR { x: R8::from_bits(u3::new(x)) },
+
         _ => invalid_instruction_error?,
     };
 
@@ -86,21 +96,21 @@ enum Opcode {
 
     // 8-bit arithmetic and logical instructions.
     // Add
-    AddR { x: u3 }, // ADD r
+    AddR { x: R8 }, // ADD r
     AddHl,          // ADD (HL)
     AddN,           // ADD n
-    AdcR { x: u3 }, // ADC r
+    AdcR { x: R8 }, // ADC r
     AdcHl,          // ADC (HL)
     AdcN,           // ADC n
     // Subtract
-    SubR { x: u3 }, // SUB r
+    SubR { x: R8 }, // SUB r
     SubHl,          // SUB (HL)
     SubN,           // SUB n
-    SbcR { x: u3 }, // SBC r
+    SbcR { x: R8 }, // SBC r
     SbcHl,          // SBC (HL)
     SbcN,           // SBC n
     // Compare
-    CpR { x: u3 }, // CP r
+    CpR { x: R8 }, // CP r
     CpHl,          // CP (HL)
     CpN,           // CP n
     // Increment
@@ -110,15 +120,15 @@ enum Opcode {
     DecR { x: R8 }, // DEC r
     DecHl,          // DEC (HL)
     // And
-    AndR { x: u3 }, // AND r
+    AndR { x: R8 }, // AND r
     AndHl,          // AND (HL)
     AndN,           // AND n
     // Or
-    OrR { x: u3 }, // OR r
+    OrR { x: R8 }, // OR r
     OrHl,          // OR (HL)
     OrN,           // OR n
     // Xor
-    XorR { x: u3 }, // XOR r
+    XorR { x: R8 }, // XOR r
     XorHl,          // XOR (HL)
     XorN,           // XOR n
     // Flags
