@@ -63,24 +63,26 @@ fn decode(first_byte: u8) -> Result<Opcode, String> {
 #[derive(Debug, PartialEq, Eq)]
 enum Opcode {
     // 8-bit load instructions.
+    // Ld
     LdRR { x: R8, y: R8 }, // LD r, r'
-    LdRN { x: R8 },
-    LdMemA { x: R16Mem }, // LD (BC|DE|HL+|HL-), A
-    LdAMem { x: R16Mem }, // LD A, (BC|DE|HL+|HL-)
-    LdANn,
-    LdNnA,
-    LdhAC,    // LDH A, (C)
-    LdhCA,    // LDH (C), A
-    LdhAN,    // LDH A, (n)
-    LdhNA,    // LDH (n), A
+    LdRN { x: R8 },        // LD r, n
+    LdMemA { x: R16Mem },  // LD (BC|DE|HL+|HL-), A
+    LdAMem { x: R16Mem },  // LD A, (BC|DE|HL+|HL-)
+    LdANn,                 // LD A, (nn)
+    LdNnA,                 // LD (nn), A
+    // Ldh
+    LdhAC, // LDH A, (C)
+    LdhCA, // LDH (C), A
+    LdhAN, // LDH A, (n)
+    LdhNA, // LDH (n), A
 
     // 16-bit load instructions.
     LdRrNn { x: R16 }, // LD rr, nn
-    LdNnSp,           // LD (nn), SP
-    LdSpHl,           // LD SP, HL
-    PushRr { x: u2 }, // PUSH rr
-    PopRr { x: u2 },  // POP rr
-    LdHlSpPlusE,      // LD HL, SP+e
+    LdNnSp,            // LD (nn), SP
+    LdSpHl,            // LD SP, HL
+    PushRr { x: u2 },  // PUSH rr
+    PopRr { x: u2 },   // POP rr
+    LdHlSpPlusE,       // LD HL, SP+e
 
     // 8-bit arithmetic and logical instructions.
     // Add
@@ -129,7 +131,7 @@ enum Opcode {
     IncRr { x: R16 },   // INC rr
     DecRr { x: R16 },   // DEC rr
     AddHlRr { x: R16 }, // ADD HL, rr
-    AddSpE,            // ADD SP, e
+    AddSpE,             // ADD SP, e
 
     // Rotate, shift, and bit-operation instructions.
     // Rotate
@@ -165,17 +167,17 @@ enum Opcode {
     SetBHl { b: u3 },       // SET b, (HL)
 
     // Control flow instructions
-    JpNn,               // JP nn
-    JpHl,               // JP HL
-    JpCcNn { c: u2 },   // JP cc, nn
-    JrE,                // JR e
-    JrCcE { c: Condition },    // JR cc, e
-    CallNn,             // CALL nn
-    CallCcNn { c: u2 }, // CALL cc, nn
-    Ret,                // RET
-    RetCc,              // RET cc
-    Reti,               // RETI
-    RstN { x: u3 },     // RST n
+    JpNn,                   // JP nn
+    JpHl,                   // JP HL
+    JpCcNn { c: u2 },       // JP cc, nn
+    JrE,                    // JR e
+    JrCcE { c: Condition }, // JR cc, e
+    CallNn,                 // CALL nn
+    CallCcNn { c: u2 },     // CALL cc, nn
+    Ret,                    // RET
+    RetCc,                  // RET cc
+    Reti,                   // RETI
+    RstN { x: u3 },         // RST n
 
     // Miscellaneous instructions
     Halt, // HALT
