@@ -4,7 +4,7 @@ use bitmatch::bitmatch;
 use crate::parameters::*;
 
 #[bitmatch]
-fn decode(first_byte: u8) -> Result<Opcode, String> {
+pub(crate) fn decode(first_byte: u8) -> Result<Opcode, String> {
     let invalid_instruction_error = Err(String::from("Invalid instruction"));
 
     use Opcode::*;
@@ -110,7 +110,7 @@ fn decode(first_byte: u8) -> Result<Opcode, String> {
   Opcodes that use 16-bit literals/addresses will be denoted 'Nn'.
 */
 #[derive(Debug, PartialEq, Eq)]
-enum Opcode {
+pub(crate) enum Opcode {
     // 8-bit load instructions.
     // Ld
     LdRR { x: R8, y: R8 }, // LD r, r'
