@@ -52,6 +52,27 @@ impl R16 {
 
 #[derive(Debug, PartialEq, Eq)]
 #[repr(u8)]
+pub(crate) enum R16Stack {
+    Bc = 0,
+    De = 1,
+    Hl = 2,
+    Af = 3,
+}
+impl R16Stack {
+    pub(crate) const fn from_bits(value: u2) -> Self {
+        use R16Stack::*;
+        match value.value() {
+            0 => Bc,
+            1 => De,
+            2 => Hl,
+            3 => Af,
+            _ => unreachable!()
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+#[repr(u8)]
 pub(crate) enum R16Mem {
     Bc = 0,
     De = 1,

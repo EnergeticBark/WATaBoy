@@ -58,6 +58,45 @@ fn decode(first_byte: u8) -> Result<Opcode, String> {
         "1011_0xxx" => OrR { x: R8::from_bits(u3::new(x)) },
         "1011_1xxx" => CpR { x: R8::from_bits(u3::new(x)) },
 
+        // Block 3
+        "1100_0110" => AddN,
+        "1100_1110" => AdcN,
+        "1101_0110" => SubN,
+        "1101_1110" => SbcN,
+        "1110_0110" => AndN,
+        "1110_1110" => XorN,
+        "1111_0110" => OrN,
+        "1111_1110" => CpN,
+
+        "110x_x000" => RetCc { c: Condition::from_bits(u2::new(x)) },
+        "1100_1001" => Ret,
+        "1101_1001" => Reti,
+        "110x_x010" => JpCcNn { c: Condition::from_bits(u2::new(x))},
+        "1100_0011" => JpNn,
+        "1110_1001" => JpHl,
+        "110x_x100" => CallCcNn { c: Condition::from_bits(u2::new(x)) },
+        "1100_1101" => CallNn,
+        "11xx_x111" => RstN { x: u3::new(x) },
+
+        "11xx_0001" => PopRr { x: R16Stack::from_bits(u2::new(x)) },
+        "11xx_0101" => PushRr { x: R16Stack::from_bits(u2::new(x)) },
+
+        "1100_1011" => todo!("prefix byte!!!"),
+
+        "1110_0010" => LdhCA,
+        "1110_0000" => LdhNA,
+        "1110_1010" => LdNnA,
+        "1111_0010" => LdhAC,
+        "1111_0000" => LdhAN,
+        "1111_1010" => LdANn,
+
+        "1110_1000" => AddSpE,
+        "1111_1000" => LdHlSpPlusE,
+        "1111_1001" => LdSpHl,
+
+        "1111_0011" => Di,
+        "1111_1011" => Ei,
+
         _ => invalid_instruction_error?,
     };
 
@@ -87,12 +126,12 @@ enum Opcode {
     LdhNA, // LDH (n), A
 
     // 16-bit load instructions.
-    LdRrNn { x: R16 }, // LD rr, nn
-    LdNnSp,            // LD (nn), SP
-    LdSpHl,            // LD SP, HL
-    PushRr { x: u2 },  // PUSH rr
-    PopRr { x: u2 },   // POP rr
-    LdHlSpPlusE,       // LD HL, SP+e
+    LdRrNn { x: R16 },      // LD rr, nn
+    LdNnSp,                 // LD (nn), SP
+    LdSpHl,                 // LD SP, HL
+    PushRr { x: R16Stack }, // PUSH rr
+    PopRr { x: R16Stack },  // POP rr
+    LdHlSpPlusE,            // LD HL, SP+e
 
     // 8-bit arithmetic and logical instructions.
     // Add
@@ -177,17 +216,17 @@ enum Opcode {
     SetBHl { b: u3 },       // SET b, (HL)
 
     // Control flow instructions
-    JpNn,                   // JP nn
-    JpHl,                   // JP HL
-    JpCcNn { c: u2 },       // JP cc, nn
-    JrE,                    // JR e
-    JrCcE { c: Condition }, // JR cc, e
-    CallNn,                 // CALL nn
-    CallCcNn { c: u2 },     // CALL cc, nn
-    Ret,                    // RET
-    RetCc,                  // RET cc
-    Reti,                   // RETI
-    RstN { x: u3 },         // RST n
+    JpNn,                      // JP nn
+    JpHl,                      // JP HL
+    JpCcNn { c: Condition },   // JP cc, nn
+    JrE,                       // JR e
+    JrCcE { c: Condition },    // JR cc, e
+    CallNn,                    // CALL nn
+    CallCcNn { c: Condition }, // CALL cc, nn
+    Ret,                       // RET
+    RetCc { c: Condition },    // RET cc
+    Reti,                      // RETI
+    RstN { x: u3 },            // RST n
 
     // Miscellaneous instructions
     Halt, // HALT
