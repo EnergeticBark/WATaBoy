@@ -13,26 +13,19 @@ fn decode(first_byte: u8) -> Result<Opcode, String> {
         // Block 0
         "0000_0000" => Nop,
 
-        "00xx_0001" => LdRrNn { x: u2::new(x) },
+        "00xx_0001" => LdRrNn { x: R16::from_bits(u2::new(x)) },
         "00xx_0010" => LdMemA { x: R16Mem::from_bits(u2::new(x)) },
-        "00xx_1010" => match x {
-            0 => LdABc,
-            1 => LdADe,
-            2 => LdAHlInc,
-            3 => LdAHlDec,
-            4_u8.. => unreachable!()
-        },
+        "00xx_1010" => LdAMem { x: R16Mem::from_bits(u2::new(x)) },
         "0000_1000" => LdNnSp,
 
-        "00xx_0011" => IncRr { x: u2::new(x) },
-        "00xx_1011" => DecRr { x: u2::new(x) },
-        "00xx_1001" => AddHlRr { x: u2::new(x) },
+        "00xx_0011" => IncRr { x: R16::from_bits(u2::new(x)) },
+        "00xx_1011" => DecRr { x: R16::from_bits(u2::new(x)) },
+        "00xx_1001" => AddHlRr { x: R16::from_bits(u2::new(x)) },
 
-        "00xx_x100" => IncR { x: u3::new(x) },
-        "00xx_x101" => DecR { x: u3::new(x) },
+        "00xx_x100" => IncR { x: R8::from_bits(u3::new(x)) },
+        "00xx_x101" => DecR { x: R8::from_bits(u3::new(x)) },
 
-        "0011_0110" => LdHlN,
-        "00xx_x110" => LdRN { x: u3::new(x) },
+        "00xx_x110" => LdRN { x: R8::from_bits(u3::new(x)) },
 
         "0000_0111" => Rlca,
         "0000_1111" => Rrca,
@@ -44,7 +37,7 @@ fn decode(first_byte: u8) -> Result<Opcode, String> {
         "0011_1111" => Ccf,
 
         "0001_1000" => JrE,
-        "001x_x000" => JrCcE { c: u2::new(x) },
+        "001x_x000" => JrCcE { c: Condition::from_bits(u2::new(x)) },
 
         "0001_0000" => Stop,
 
@@ -71,22 +64,18 @@ fn decode(first_byte: u8) -> Result<Opcode, String> {
 enum Opcode {
     // 8-bit load instructions.
     LdRR { x: R8, y: R8 }, // LD r, r'
-    LdRN { x: u3 },
-    LdHlN,
-    LdABc,
-    LdADe,
-    LdMemA { x: R16Mem }, // // LD (BC|DE|HL+|HL-), A
+    LdRN { x: R8 },
+    LdMemA { x: R16Mem }, // LD (BC|DE|HL+|HL-), A
+    LdAMem { x: R16Mem }, // LD A, (BC|DE|HL+|HL-)
     LdANn,
     LdNnA,
     LdhAC,    // LDH A, (C)
     LdhCA,    // LDH (C), A
     LdhAN,    // LDH A, (n)
     LdhNA,    // LDH (n), A
-    LdAHlDec, // LD A, (HL-)
-    LdAHlInc, // LD A, (HL+)
 
     // 16-bit load instructions.
-    LdRrNn { x: u2 }, // LD rr, nn
+    LdRrNn { x: R16 }, // LD rr, nn
     LdNnSp,           // LD (nn), SP
     LdSpHl,           // LD SP, HL
     PushRr { x: u2 }, // PUSH rr
@@ -113,10 +102,10 @@ enum Opcode {
     CpHl,          // CP (HL)
     CpN,           // CP n
     // Increment
-    IncR { x: u3 }, // INC r
+    IncR { x: R8 }, // INC r
     IncHl,          // INC (HL)
     // Decrement
-    DecR { x: u3 }, // DEC r
+    DecR { x: R8 }, // DEC r
     DecHl,          // DEC (HL)
     // And
     AndR { x: u3 }, // AND r
@@ -137,9 +126,9 @@ enum Opcode {
     Cpl, // CPL
 
     // 16-bit arithmetic instructions.
-    IncRr { x: u2 },   // INC rr
-    DecRr { x: u2 },   // DEC rr
-    AddHlRr { x: u2 }, // ADD HL, rr
+    IncRr { x: R16 },   // INC rr
+    DecRr { x: R16 },   // DEC rr
+    AddHlRr { x: R16 }, // ADD HL, rr
     AddSpE,            // ADD SP, e
 
     // Rotate, shift, and bit-operation instructions.
@@ -180,7 +169,7 @@ enum Opcode {
     JpHl,               // JP HL
     JpCcNn { c: u2 },   // JP cc, nn
     JrE,                // JR e
-    JrCcE { c: u2 },    // JR cc, e
+    JrCcE { c: Condition },    // JR cc, e
     CallNn,             // CALL nn
     CallCcNn { c: u2 }, // CALL cc, nn
     Ret,                // RET
