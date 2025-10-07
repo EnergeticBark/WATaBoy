@@ -250,9 +250,35 @@ mod tests {
 
     #[test]
     fn decode_halt() {
+        /* Halt's opcode follows the same pattern as LdRR with both R8 parameters set to IndirectHL.
+           Because of this, the Halt instruction must always take precedence over LdRR when parsing.
+         */
         let bytecode = 0b0111_0110;
 
         let opcode = decode(bytecode).unwrap();
         assert_eq!(opcode, Opcode::Halt);
+    }
+
+    #[test]
+    fn decode_invalid() {
+        // Assert that decoding each possible invalid instruction results in an error.
+        let invalid_instructions = [
+            0xD3,
+            0xDB,
+            0xDD,
+            0xE3,
+            0xE4,
+            0xEB,
+            0xEC,
+            0xED,
+            0xF4,
+            0xFC,
+            0xFD,
+        ];
+
+        for bytecode in invalid_instructions {
+            let result = decode(bytecode);
+            assert!(result.is_err());
+        }
     }
 }
