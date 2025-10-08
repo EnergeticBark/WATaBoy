@@ -4,9 +4,9 @@ use crate::parameters::{R16Mem, R8};
 
 const MEM_MAP_SIZE: usize = u16::MAX as usize;
 
-struct Cpu {
-    registers: Registers,
-    memory: [u8; MEM_MAP_SIZE],
+pub struct Cpu {
+    pub registers: Registers,
+    pub memory: [u8; MEM_MAP_SIZE],
 }
 
 impl Cpu {
@@ -51,12 +51,12 @@ impl Cpu {
         }
     }
 
-    fn load_boot_rom(&mut self) {
-        let agb0_boot_rom = include_bytes!("../agb0.bin");
+    pub fn load_boot_rom(&mut self) {
+        let agb0_boot_rom = include_bytes!("../dmg0.bin");
         self.memory[0..agb0_boot_rom.len()].copy_from_slice(agb0_boot_rom);
     }
 
-    fn execute(&mut self) {
+    pub fn execute(&mut self) {
         let pc = self.registers.pc;
         let bytecode = self.memory[pc as usize];
         let opcode = opcodes::decode(bytecode).unwrap();

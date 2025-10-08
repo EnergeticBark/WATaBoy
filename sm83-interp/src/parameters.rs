@@ -2,7 +2,7 @@ use arbitrary_int::{u2, u3};
 
 #[derive(Debug, PartialEq, Eq)]
 #[repr(u8)]
-pub(crate) enum R8 {
+pub enum R8 {
     B = 0,
     C = 1,
     D = 2,
@@ -31,7 +31,7 @@ impl R8 {
 
 #[derive(Debug, PartialEq, Eq)]
 #[repr(u8)]
-pub(crate) enum R16 {
+pub enum R16 {
     Bc = 0,
     De = 1,
     Hl = 2,
@@ -52,7 +52,7 @@ impl R16 {
 
 #[derive(Debug, PartialEq, Eq)]
 #[repr(u8)]
-pub(crate) enum R16Stack {
+pub enum R16Stack {
     Bc = 0,
     De = 1,
     Hl = 2,
@@ -73,7 +73,7 @@ impl R16Stack {
 
 #[derive(Debug, PartialEq, Eq)]
 #[repr(u8)]
-pub(crate) enum R16Mem {
+pub enum R16Mem {
     Bc = 0,
     De = 1,
     HlInc = 2,
@@ -94,7 +94,7 @@ impl R16Mem {
 
 #[derive(Debug, PartialEq, Eq)]
 #[repr(u8)]
-pub(crate) enum Condition {
+pub enum Condition {
     Nz = 0,
     Z = 1,
     Nc = 2,
