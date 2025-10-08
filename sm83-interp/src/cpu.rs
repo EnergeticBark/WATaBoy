@@ -1,5 +1,6 @@
 use crate::registers::Registers;
-use crate::opcodes;
+use crate::{opcodes, registers};
+use crate::parameters::{R16Mem, R8};
 
 const MEM_MAP_SIZE: usize = u16::MAX as usize;
 
@@ -9,6 +10,47 @@ struct Cpu {
 }
 
 impl Cpu {
+    pub(crate) fn r8(&mut self, r8: R8) -> u8 {
+        match r8 {
+            R8::B => self.registers.bc.b(),
+            R8::C => self.registers.bc.c(),
+            R8::D => self.registers.de.d(),
+            R8::E => self.registers.de.e(),
+            R8::H => self.registers.hl.h(),
+            R8::L => self.registers.hl.l(),
+            R8::IndirectHL => self.memory[self.registers.hl.into_bits() as usize],
+            R8::A => self.registers.af.a(),
+        }
+    }
+
+    pub(crate) fn set_r8(&mut self, r8: R8, value: u8) {
+        match r8 {
+            R8::B => self.registers.bc.set_b(value),
+            R8::C => self.registers.bc.set_c(value),
+            R8::D => self.registers.de.set_d(value),
+            R8::E => self.registers.de.set_e(value),
+            R8::H => self.registers.hl.set_h(value),
+            R8::L => self.registers.hl.set_l(value),
+            R8::IndirectHL => self.memory[self.registers.hl.into_bits() as usize] = value,
+            R8::A => self.registers.af.set_a(value),
+        }
+    }
+
+    pub(crate) fn set_r16_mem(&mut self, r16_mem: R16Mem, value: u8) {
+        match r16_mem {
+            R16Mem::Bc => self.memory[self.registers.bc.into_bits() as usize] = value,
+            R16Mem::De => self.memory[self.registers.de.into_bits() as usize] = value,
+            R16Mem::HlInc => {
+                self.memory[self.registers.hl.into_bits() as usize] = value;
+                self.registers.hl = registers::Hl::from_bits(self.registers.hl.into_bits() + 1);
+            },
+            R16Mem::HlDec => {
+                self.memory[self.registers.hl.into_bits() as usize] = value;
+                self.registers.hl = registers::Hl::from_bits(self.registers.hl.into_bits() - 1);
+            },
+        }
+    }
+
     fn load_boot_rom(&mut self) {
         let agb0_boot_rom = include_bytes!("../agb0.bin");
         self.memory[0..agb0_boot_rom.len()].copy_from_slice(agb0_boot_rom);
@@ -30,7 +72,19 @@ impl Cpu {
 
                 self.registers.pc += 3;
             },
-
+            LdMemA { x } => {
+                self.set_r16_mem(x, self.registers.af.a());
+                self.registers.pc += 1;
+            },
+            XorR { x } => {
+                let result = self.registers.af.a() ^ self.r8(x);
+                self.registers.af.set_a(result);
+                self.registers.af.f().set_z(result == 0);
+                self.registers.af.f().set_n(false);
+                self.registers.af.f().set_h(false);
+                self.registers.af.f().set_c(false);
+                self.registers.pc += 1;
+            },
             _ => panic!("uh oh"),
         }
     }

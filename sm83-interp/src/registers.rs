@@ -2,35 +2,44 @@ use bitfield_struct::bitfield;
 use crate::parameters::R16;
 
 #[bitfield(u8)]
-struct Flags {
-    z: bool, // Zero
-    n: bool, // Subtraction
-    h: bool, // Half carry
-    c: bool, // Carry
+pub(crate) struct Flags {
+    pub(crate) z: bool, // Zero
+    pub(crate) n: bool, // Subtraction
+    pub(crate) h: bool, // Half carry
+    pub(crate) c: bool, // Carry
     #[bits(4)]
     __: u8, // Padding
 }
 
 #[bitfield(u16)]
-struct AccumAndFlags {
-    a: u8,
+pub(crate) struct AccumAndFlags {
+    pub(crate) a: u8,
     #[bits(8)]
-    f: Flags,
+    pub(crate) f: Flags,
 }
 
 #[bitfield(u16)]
-struct Bc { b: u8, c: u8 }
+pub(crate) struct Bc {
+    pub(crate) b: u8,
+    pub(crate) c: u8,
+}
 #[bitfield(u16)]
-struct De { d: u8, e: u8 }
+pub(crate) struct De {
+    pub(crate) d: u8,
+    pub(crate) e: u8,
+}
 #[bitfield(u16)]
-struct Hl { h: u8, l: u8 }
+pub(crate) struct Hl {
+    pub(crate) h: u8,
+    pub(crate) l: u8,
+}
 
 #[derive(Default)]
 pub(crate) struct Registers {
-    af: AccumAndFlags,
-    bc: Bc,
-    de: De,
-    hl: Hl,
+    pub(crate) af: AccumAndFlags,
+    pub(crate) bc: Bc,
+    pub(crate) de: De,
+    pub(crate) hl: Hl,
     pub(crate) sp: u16,
     pub(crate) pc: u16,
 }
