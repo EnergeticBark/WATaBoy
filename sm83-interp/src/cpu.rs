@@ -10,7 +10,7 @@ pub struct Cpu {
 }
 
 impl Cpu {
-    pub(crate) fn r8(&mut self, r8: R8) -> u8 {
+    pub(crate) fn r8(&self, r8: R8) -> u8 {
         match r8 {
             R8::B => self.registers.bc.b(),
             R8::C => self.registers.bc.c(),
@@ -74,6 +74,7 @@ impl Cpu {
 
         use opcodes::Opcode::*;
         match opcode {
+            // Block 0
             LdRrNn { x} => {
                 let next_two_bytes = u16::from_le_bytes([
                     self.memory[pc as usize + 1],
@@ -87,6 +88,23 @@ impl Cpu {
                 self.set_r16_mem(x, self.registers.af.a());
                 self.registers.pc += 1;
             },
+            IncR { x } => {
+                let value = self.r8(x) + 1;
+                self.set_r8(x, value);
+
+                self.registers.af.set_f(
+                    self.registers.af.f()
+                        .with_z(value == 0)
+                        .with_n(false)
+                        .with_h(value & 0x0F == 0)
+                );
+                self.registers.pc += 1;
+            }
+            LdRN { x } => {
+                let next_byte = self.memory[pc as usize + 1];
+                self.set_r8(x, next_byte);
+                self.registers.pc += 2;
+            }
             JrCcE { c } => {
                 let jump_offset = self.memory[pc as usize + 1].cast_signed();
                 if self.check_condition(c) {
@@ -94,6 +112,14 @@ impl Cpu {
                 }
                 self.registers.pc += 2;
             }
+
+            // Block 1
+            LdRR { x: dest, y: src } => {
+                self.set_r8(dest, self.r8(src));
+                self.registers.pc += 1;
+            }
+
+            // Block 2
             XorR { x } => {
                 let result = self.registers.af.a() ^ self.r8(x);
 
@@ -107,7 +133,20 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             },
+
+            // Block 3
             Prefix => self.execute_prefix(),
+            LdhCA => {
+                let destination = u16::from_le_bytes([self.registers.bc.c(), 0xFF]);
+                self.memory[destination as usize] = self.registers.af.a();
+                self.registers.pc += 1;
+            }
+            LdhNA => {
+                let next_byte = self.memory[pc as usize + 1];
+                let destination = u16::from_le_bytes([next_byte, 0xFF]);
+                self.memory[destination as usize] = self.registers.af.a();
+                self.registers.pc += 2;
+            }
             opcode => unimplemented!("opcode: {:?}", opcode),
         }
     }

@@ -1,6 +1,6 @@
 use arbitrary_int::{u2, u3};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum R8 {
     B = 0,
