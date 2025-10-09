@@ -135,6 +135,15 @@ impl Cpu {
             },
 
             // Block 3
+            PushRr { x } => {
+                let [low, high] = self.registers.r16_stack_mut(x).to_le_bytes();
+                // Make room on the stack for a 16-bit value.
+                self.registers.sp -= 2;
+                // Game Boy is little-endian, so load the low byte then the high byte.
+                self.memory[self.registers.sp as usize] = low;
+                self.memory[self.registers.sp as usize + 1] = high;
+                self.registers.pc += 1;
+            }
             Prefix => self.execute_prefix(),
             LdhCA => {
                 let destination = u16::from_le_bytes([self.registers.bc.c(), 0xFF]);

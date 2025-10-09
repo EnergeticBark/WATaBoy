@@ -1,5 +1,5 @@
 use bitfield_struct::bitfield;
-use crate::parameters::R16;
+use crate::parameters::{R16Stack, R16};
 
 #[bitfield(u8)]
 pub struct Flags {
@@ -51,6 +51,15 @@ impl Registers {
             R16::De => &mut self.de.0,
             R16::Hl => &mut self.hl.0,
             R16::Sp => &mut self.sp,
+        }
+    }
+
+    pub(crate) fn r16_stack_mut(&mut self, r16_stack: R16Stack) -> &mut u16 {
+        match r16_stack {
+            R16Stack::Bc => &mut self.bc.0,
+            R16Stack::De => &mut self.de.0,
+            R16Stack::Hl => &mut self.hl.0,
+            R16Stack::Af => &mut self.af.0,
         }
     }
 }
