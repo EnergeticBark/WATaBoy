@@ -1,6 +1,6 @@
 use crate::registers::Registers;
 use crate::{opcodes, registers};
-use crate::parameters::{R16Mem, R8};
+use crate::parameters::{Condition, R16Mem, R8};
 
 const MEM_MAP_SIZE: usize = u16::MAX as usize;
 
@@ -51,6 +51,17 @@ impl Cpu {
         }
     }
 
+    fn check_condition(&self, condition: Condition) -> bool {
+        let flags = self.registers.af.f();
+        use Condition::*;
+        match condition {
+            Nz => !flags.z(),
+            Z => flags.z(),
+            Nc => !flags.c(),
+            C => flags.c(),
+        }
+    }
+
     pub fn load_boot_rom(&mut self) {
         let agb0_boot_rom = include_bytes!("../dmg0.bin");
         self.memory[0..agb0_boot_rom.len()].copy_from_slice(agb0_boot_rom);
@@ -76,6 +87,13 @@ impl Cpu {
                 self.set_r16_mem(x, self.registers.af.a());
                 self.registers.pc += 1;
             },
+            JrCcE { c } => {
+                let jump_offset = self.memory[pc as usize + 1].cast_signed();
+                if self.check_condition(c) {
+                    self.registers.pc = self.registers.pc.wrapping_add_signed(jump_offset as i16);
+                }
+                self.registers.pc += 2;
+            }
             XorR { x } => {
                 let result = self.registers.af.a() ^ self.r8(x);
 
