@@ -93,7 +93,20 @@ impl Cpu {
     fn execute_prefix(&mut self) {
         let second_byte = self.memory[self.registers.pc as usize + 1];
         let prefix_opcode = opcodes::decode_prefix(second_byte);
+
+        use opcodes::PrefixOpcode::*;
         match prefix_opcode {
+            BitBR { b: bit_index, x } => {
+                let value = self.r8(x);
+                let nth_bit = value >> bit_index.value() & 1;
+                let nth_bit_set = nth_bit != 0;
+
+                self.registers.af.f()
+                    .with_z(!nth_bit_set)
+                    .with_n(false)
+                    .with_h(true);
+                self.registers.pc += 2;
+            },
             prefix_opcode => unimplemented!("prefix opcode: {:?}", prefix_opcode),
         }
     }
