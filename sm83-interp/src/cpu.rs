@@ -78,11 +78,15 @@ impl Cpu {
             },
             XorR { x } => {
                 let result = self.registers.af.a() ^ self.r8(x);
+
                 self.registers.af.set_a(result);
-                self.registers.af.f().set_z(result == 0);
-                self.registers.af.f().set_n(false);
-                self.registers.af.f().set_h(false);
-                self.registers.af.f().set_c(false);
+                self.registers.af.set_f(
+                    self.registers.af.f()
+                        .with_z(result == 0)
+                        .with_n(false)
+                        .with_h(false)
+                        .with_c(false)
+                );
                 self.registers.pc += 1;
             },
             Prefix => self.execute_prefix(),
@@ -101,10 +105,12 @@ impl Cpu {
                 let nth_bit = value >> bit_index.value() & 1;
                 let nth_bit_set = nth_bit != 0;
 
-                self.registers.af.f()
-                    .with_z(!nth_bit_set)
-                    .with_n(false)
-                    .with_h(true);
+                self.registers.af.set_f(
+                    self.registers.af.f()
+                        .with_z(!nth_bit_set)
+                        .with_n(false)
+                        .with_h(true)
+                );
                 self.registers.pc += 2;
             },
             prefix_opcode => unimplemented!("prefix opcode: {:?}", prefix_opcode),
