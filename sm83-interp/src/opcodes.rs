@@ -81,7 +81,7 @@ pub fn decode(first_byte: u8) -> Result<Opcode, String> {
         "11xx_0001" => PopRr { x: R16Stack::from_bits(u2::new(x)) },
         "11xx_0101" => PushRr { x: R16Stack::from_bits(u2::new(x)) },
 
-        "1100_1011" => todo!("prefix byte!!!"),
+        "1100_1011" => Prefix,
 
         "1110_0010" => LdhCA,
         "1110_0000" => LdhNA,
@@ -183,14 +183,36 @@ pub enum Opcode {
     RstN { x: u3 },            // RST n
 
     // Miscellaneous instructions
-    Halt, // HALT
-    Stop, // STOP
-    Di,   // DI
-    Ei,   // EI
-    Nop,  // NOP
+    Halt,   // HALT
+    Stop,   // STOP
+    Di,      // DI
+    Ei,     // EI
+    Nop,    // NOP
+    Prefix, // Prefix opcode
 }
 
-enum PrefixOpcode {
+#[bitmatch]
+pub fn decode_prefix(second_byte: u8) -> PrefixOpcode {
+    use PrefixOpcode::*;
+    #[bitmatch]
+    match second_byte {
+        "0000_0xxx" => RlcR { x: R8::from_bits(u3::new(x)) },
+        "0000_1xxx" => RrcR { x: R8::from_bits(u3::new(x)) },
+        "0001_0xxx" => RlR { x: R8::from_bits(u3::new(x)) },
+        "0001_1xxx" => RrR { x: R8::from_bits(u3::new(x)) },
+        "0010_0xxx" => SlaR { x: R8::from_bits(u3::new(x)) },
+        "0010_1xxx" => SraR { x: R8::from_bits(u3::new(x)) },
+        "0011_0xxx" => SwapR { x: R8::from_bits(u3::new(x)) },
+        "0011_1xxx" => SrlR { x: R8::from_bits(u3::new(x)) },
+
+        "01bb_bxxx" => BitBR { b: u3::new(b), x: R8::from_bits(u3::new(x)) },
+        "10bb_bxxx" => ResBR { b: u3::new(b), x: R8::from_bits(u3::new(x)) },
+        "11bb_bxxx" => SetBR { b: u3::new(b), x: R8::from_bits(u3::new(x)) },
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum PrefixOpcode {
     RlcR { x: R8 },         // RLC r
     RrcR { x: R8 },         // RRC r
     RlR { x: R8 },          // RL r

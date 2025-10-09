@@ -85,7 +85,16 @@ impl Cpu {
                 self.registers.af.f().set_c(false);
                 self.registers.pc += 1;
             },
-            _ => panic!("uh oh"),
+            Prefix => self.execute_prefix(),
+            opcode => unimplemented!("opcode: {:?}", opcode),
+        }
+    }
+
+    fn execute_prefix(&mut self) {
+        let second_byte = self.memory[self.registers.pc as usize + 1];
+        let prefix_opcode = opcodes::decode_prefix(second_byte);
+        match prefix_opcode {
+            prefix_opcode => unimplemented!("prefix opcode: {:?}", prefix_opcode),
         }
     }
 }
