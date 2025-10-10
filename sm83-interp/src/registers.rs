@@ -1,7 +1,7 @@
 use bitfield_struct::bitfield;
 use crate::parameters::{R16Stack, R16};
 
-#[bitfield(u8)]
+#[bitfield(u8, order = Lsb)]
 pub struct Flags {
     pub z: bool, // Zero
     pub n: bool, // Subtraction
@@ -11,24 +11,24 @@ pub struct Flags {
     __: u8, // Padding
 }
 
-#[bitfield(u16)]
+#[bitfield(u16, order = Msb)]
 pub struct AccumAndFlags {
     pub a: u8,
     #[bits(8)]
     pub f: Flags,
 }
 
-#[bitfield(u16)]
+#[bitfield(u16, order = Msb)]
 pub struct Bc {
     pub b: u8,
     pub c: u8,
 }
-#[bitfield(u16)]
+#[bitfield(u16, order = Msb)]
 pub struct De {
     pub d: u8,
     pub e: u8,
 }
-#[bitfield(u16)]
+#[bitfield(u16, order = Msb)]
 pub struct Hl {
     pub h: u8,
     pub l: u8,
