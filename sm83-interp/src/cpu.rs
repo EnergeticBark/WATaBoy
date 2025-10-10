@@ -163,6 +163,22 @@ impl Cpu {
             }
 
             // Block 2
+            AddR { x } => {
+                let a = self.registers.af.a();
+                let r8 = self.r8(x);
+                let (result, carry) = a.overflowing_add(r8);
+                let half_carry = ((a & 0x0f) + (r8 & 0x0f)) & 0x10 == 0x10;
+
+                self.registers.af.set_a(result);
+                self.registers.af.set_f(
+                    self.registers.af.f()
+                        .with_z(result == 0)
+                        .with_n(false)
+                        .with_h(half_carry)
+                        .with_c(carry)
+                );
+                self.registers.pc += 1;
+            },
             XorR { x } => {
                 let result = self.registers.af.a() ^ self.r8(x);
 

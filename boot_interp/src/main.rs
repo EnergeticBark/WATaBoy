@@ -8,6 +8,10 @@ fn main() {
     cpu.load_boot_rom();
 
     cpu.memory[0x0104..0x0134].copy_from_slice(NINTENDO_LOGO);
+    /* Our rom header is all zeros, so just hardcode the checksum of those zeros to make the bootrom
+       happy. See: https://gbdev.io/pandocs/The_Cartridge_Header.html#014d--header-checksum
+    */
+    cpu.memory[0x014D] = 0xE7;
 
     loop {
         /* Cycle the LCD Y coordinate so the bootrom doesn't get stuck waiting for a v-blank.
