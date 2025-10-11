@@ -1,6 +1,6 @@
 use crate::registers::Registers;
 use crate::{opcodes, registers};
-use crate::parameters::{Condition, R16Mem, R8};
+use crate::parameters::{Condition, R16Mem, R16, R8};
 
 const MEM_MAP_SIZE: usize = u16::MAX as usize;
 
@@ -114,6 +114,22 @@ impl Cpu {
                 *self.registers.r16_mut(x) += 1;
                 self.registers.pc += 1;
             }
+            AddHlRr { x } => {
+                let hl = self.registers.hl.into_bits();
+                let r16 = *self.registers.r16_mut(x);
+                let (result, carry) = hl.overflowing_add(r16);
+                let half_carry = ((hl & 0x0fff) + (r16 & 0x0fff)) & 0x1000 == 0x1000;
+
+                *self.registers.r16_mut(R16::Hl) = result;
+                self.registers.af.set_f(
+                    self.registers.af.f()
+                        .with_n(false)
+                        .with_h(half_carry)
+                        .with_c(carry)
+                );
+
+                self.registers.pc += 1;
+            }
             IncR { x } => {
                 let value = self.r8(x) + 1;
                 self.set_r8(x, value);
@@ -142,6 +158,27 @@ impl Cpu {
                 let next_byte = self.memory[pc as usize + 1];
                 self.set_r8(x, next_byte);
                 self.registers.pc += 2;
+            }
+            Rla => {
+                // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
+                // output: [b7] [b6][b5][b4][b3][b2][b1][b0][c]
+                let value = self.registers.af.a();
+                let b7 = value & 0b1000_0000 == 0b1000_0000;
+                let mut shifted = value << 1;
+                // Put the old carry bit in the least significant bit.
+                if self.registers.af.f().c() {
+                    shifted |= 0b0000_0001;
+                }
+
+                self.registers.af.set_a(shifted);
+                self.registers.af.set_f(
+                    self.registers.af.f()
+                        .with_z(false)
+                        .with_n(false)
+                        .with_h(false)
+                        .with_c(b7)
+                );
+                self.registers.pc += 1;
             }
             JrE => {
                 let jump_offset = self.memory[pc as usize + 1].cast_signed();
@@ -256,6 +293,15 @@ impl Cpu {
                 ]);
                 self.registers.pc = destination;
             }
+            PopRr { x } => {
+                let low = self.memory[self.registers.sp as usize];
+                let high = self.memory[self.registers.sp as usize + 1];
+                self.registers.sp += 2;
+
+                *self.registers.r16_stack_mut(x) = u16::from_le_bytes([low, high]);
+
+                self.registers.pc += 1;
+            }
             PushRr { x } => {
                 let [low, high] = self.registers.r16_stack_mut(x).to_le_bytes();
                 // Make room on the stack for a 16-bit value.
@@ -294,6 +340,27 @@ impl Cpu {
 
         use opcodes::PrefixOpcode::*;
         match prefix_opcode {
+            RlR { x } => {
+                // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
+                // output: [b7] [b6][b5][b4][b3][b2][b1][b0][c]
+                let value = self.r8(x);
+                let b7 = value & 0b1000_0000 == 0b1000_0000;
+                let mut shifted = value << 1;
+                // Put the old carry bit in the least significant bit.
+                if self.registers.af.f().c() {
+                    shifted |= 0b0000_0001;
+                }
+
+                self.set_r8(x, shifted);
+                self.registers.af.set_f(
+                    self.registers.af.f()
+                        .with_z(shifted == 0)
+                        .with_n(false)
+                        .with_h(false)
+                        .with_c(b7)
+                );
+                self.registers.pc += 2;
+            },
             BitBR { b: bit_index, x } => {
                 let value = self.r8(x);
                 let nth_bit = value >> bit_index.value() & 1;
