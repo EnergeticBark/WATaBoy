@@ -143,7 +143,7 @@ impl Cpu {
                 self.registers.pc += 1;
             }
             DecR { x } => {
-                let value = self.r8(x) - 1;
+                let value = self.r8(x).wrapping_sub(1);
                 self.set_r8(x, value);
 
                 self.registers.af.set_f(
@@ -212,6 +212,21 @@ impl Cpu {
                         .with_z(result == 0)
                         .with_n(false)
                         .with_h(half_carry)
+                        .with_c(carry)
+                );
+                self.registers.pc += 1;
+            },
+            SubR { x } => {
+                let a = self.registers.af.a();
+                let r8 = self.r8(x);
+                let (result, carry) = a.overflowing_sub(r8);
+
+                self.registers.af.set_a(result);
+                self.registers.af.set_f(
+                    self.registers.af.f()
+                        .with_z(result == 0)
+                        .with_n(true)
+                        .with_h(a & 0x0F < r8 & 0x0F)
                         .with_c(carry)
                 );
                 self.registers.pc += 1;
@@ -323,6 +338,14 @@ impl Cpu {
                 self.memory[destination as usize] = self.registers.af.a();
                 self.registers.pc += 2;
             },
+            LdNnA => {
+                let next_two_bytes = u16::from_le_bytes([
+                    self.memory[pc as usize + 1],
+                    self.memory[pc as usize + 2],
+                ]);
+                self.memory[next_two_bytes as usize] = self.registers.af.a();
+                self.registers.pc += 3;
+            }
             LdhAN => {
                 let next_byte = self.memory[pc as usize + 1];
                 let address = u16::from_le_bytes([next_byte, 0xFF]);
