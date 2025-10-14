@@ -1,10 +1,7 @@
-use std::fmt::format;
-use egui::Ui;
 use egui_extras::{Column, TableBody, TableBuilder};
 use sm83_interp::cpu::Cpu;
 
 pub struct PPUViewApp {
-    // Example stuff:
     dmg_state: Cpu,
 }
 
@@ -47,7 +44,7 @@ impl eframe::App for PPUViewApp {
                     .striped(true)
                     .column(Column::auto())
                     .column(Column::remainder())
-                    .header(12.0, |mut header| {
+                    .header(18.0, |mut header| {
                         header.col(|ui| {
                             ui.label("Register");
                         });
@@ -56,12 +53,32 @@ impl eframe::App for PPUViewApp {
                         });
                     })
                     .body(|body| {
-                        draw_registers(body, &self.dmg_state);
+                        draw_registers_body(body, &self.dmg_state);
+                    });
+
+                ui.separator();
+
+                TableBuilder::new(ui)
+                    .id_salt("Memory View")
+                    .striped(true)
+                    .columns(Column::auto(), 17)
+                    .header(18.0, |mut header| {
+                        header.col(|ui| {
+                            ui.label("");
+                        });
+
+                        for column_number in 0..16 {
+                            header.col(|ui| {
+                                ui.label(format!("{:02X}", column_number));
+                            });
+                        }
+                    })
+                    .body(|body| {
+                        draw_memory_body(body, &self.dmg_state);
                     });
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Nothing");
             if ui.button("Step").clicked() {
                 self.dmg_state.execute();
             }
@@ -69,7 +86,7 @@ impl eframe::App for PPUViewApp {
     }
 }
 
-fn draw_registers(body: TableBody<'_>, dmg_state: &Cpu) {
+fn draw_registers_body(body: TableBody<'_>, dmg_state: &Cpu) {
     let reg_names_and_values = [
         ("AF", dmg_state.registers.af.into_bits()),
         ("BC", dmg_state.registers.bc.into_bits()),
@@ -93,5 +110,22 @@ fn draw_registers(body: TableBody<'_>, dmg_state: &Cpu) {
         row.col(|ui| {
             ui.label(value);
         });
+    });
+}
+
+fn draw_memory_body(body: TableBody<'_>, dmg_state: &Cpu) {
+    body.rows(18.0, dmg_state.memory.len() / 16, |mut row| {
+        let row_index = row.index();
+        row.col(|ui| {
+            ui.label(format!("{:03X}0", row_index));
+        });
+
+        for i in 0..16 {
+            let formatted_row = format!("{:02X}", dmg_state.memory[row_index + i]);
+
+            row.col(|ui| {
+                ui.monospace(formatted_row);
+            });
+        }
     });
 }
