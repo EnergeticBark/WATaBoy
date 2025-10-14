@@ -1,3 +1,4 @@
+use egui::{Color32, RichText};
 use egui_extras::{Column, TableBody, TableBuilder};
 use sm83_interp::cpu::Cpu;
 
@@ -69,7 +70,8 @@ impl eframe::App for PPUViewApp {
 
                         for column_number in 0..16 {
                             header.col(|ui| {
-                                ui.label(format!("{:02X}", column_number));
+                                let column_label = format!("{:02X}", column_number);
+                                ui.monospace(RichText::from(column_label).strong());
                             });
                         }
                     })
@@ -116,15 +118,20 @@ fn draw_registers_body(body: TableBody<'_>, dmg_state: &Cpu) {
 fn draw_memory_body(body: TableBody<'_>, dmg_state: &Cpu) {
     body.rows(18.0, dmg_state.memory.len() / 16, |mut row| {
         let row_index = row.index();
+        let row_label = format!("{:03X}0", row_index);
         row.col(|ui| {
-            ui.label(format!("{:03X}0", row_index));
+            ui.monospace(RichText::from(row_label).strong());
         });
 
         for i in 0..16 {
             let formatted_row = format!("{:02X}", dmg_state.memory[row_index + i]);
 
             row.col(|ui| {
-                ui.monospace(formatted_row);
+                if row_index * 16 + i == dmg_state.registers.pc as usize {
+                    ui.monospace(RichText::from(formatted_row).color(Color32::RED));
+                } else {
+                    ui.monospace(formatted_row);
+                }
             });
         }
     });
