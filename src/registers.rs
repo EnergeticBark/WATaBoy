@@ -16,7 +16,7 @@ pub fn draw_register_table(ui: &mut Ui, dmg_state: &Cpu) {
             });
         })
         .body(|body| {
-            draw_registers_body(body, &dmg_state);
+            draw_registers_body(body, dmg_state);
         });
 }
 
@@ -30,8 +30,8 @@ fn draw_registers_body(body: TableBody<'_>, dmg_state: &Cpu) {
         ("PC", dmg_state.registers.pc),
     ];
 
-    let formatted: Vec<_> = reg_names_and_values.iter().map(|(name, value)| {
-        (*name, format!("{:#06X}", value))
+    let formatted: Vec<_> = reg_names_and_values.into_iter().map(|(name, value)| {
+        (name, format!("{value:#06X}"))
     }).collect();
 
     body.rows(18.0, reg_names_and_values.len(), |mut row| {

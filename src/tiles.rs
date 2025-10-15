@@ -7,7 +7,7 @@ use sm83_interp::cpu::Cpu;
 pub fn draw_tile_table(
     ui: &mut Ui,
     ctx: &egui::Context,
-    tiles: &mut Vec<Option<TextureHandle>>,
+    tiles: &mut [Option<TextureHandle>],
     dmg_state: &Cpu,
 ) {
     TableBuilder::new(ui)
@@ -15,7 +15,7 @@ pub fn draw_tile_table(
         .striped(true)
         .columns(Column::auto(), 8)
         .body(|body| {
-            draw_tiles_body(body, ctx, tiles, &dmg_state);
+            draw_tiles_body(body, ctx, tiles, dmg_state);
         });
 }
 
@@ -30,7 +30,7 @@ fn greyscale_from_tile(buffer: &[u8]) -> Vec<u8> {
                     let mut palette_index = 0;
                     if least_significant >> nth_bit & 1 == 1 {
                         palette_index += 1;
-                    };
+                    }
                     if most_significant >> nth_bit & 1 == 1 {
                         palette_index += 2;
                     }
@@ -45,7 +45,7 @@ fn greyscale_from_tile(buffer: &[u8]) -> Vec<u8> {
 fn draw_tiles_body(
     body: TableBody<'_>,
     ctx: &egui::Context,
-    tiles: &mut Vec<Option<TextureHandle>>,
+    tiles: &mut [Option<TextureHandle>],
     dmg_state: &Cpu,
 ) {
     body.rows(34.0, tiles.len() / 8, |mut row| {

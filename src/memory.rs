@@ -15,13 +15,13 @@ pub fn draw_memory_table(ui: &mut Ui, dmg_state: &Cpu) {
 
             for column_number in 0..16 {
                 header.col(|ui| {
-                    let column_label = format!("{:02X}", column_number);
+                    let column_label = format!("{column_number:02X}");
                     ui.monospace(RichText::from(column_label).strong());
                 });
             }
         })
         .body(|body| {
-            draw_memory_body(body, &dmg_state);
+            draw_memory_body(body, dmg_state);
         });
 }
 

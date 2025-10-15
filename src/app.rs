@@ -34,7 +34,7 @@ impl PPUViewApp {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
 
-        Default::default()
+        PPUViewApp::default()
     }
 }
 
