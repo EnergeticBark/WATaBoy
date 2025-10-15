@@ -1,15 +1,29 @@
-use egui::{Color32, RichText};
-use egui_extras::{Column, TableBody, TableBuilder};
+use crate::memory::draw_memory_table;
+use crate::registers::draw_register_table;
+use crate::tiles::draw_tile_table;
+use egui::TextureHandle;
 use sm83_interp::cpu::Cpu;
+
+const NINTENDO_LOGO: &[u8; 48] = include_bytes!("../nintendo_logo.bin");
 
 pub struct PPUViewApp {
     dmg_state: Cpu,
+    tiles: Vec<Option<TextureHandle>>,
 }
 
 impl Default for PPUViewApp {
     fn default() -> Self {
         Self {
-            dmg_state: Cpu::default(),
+            dmg_state: {
+                let mut cpu = Cpu::default();
+                cpu.memory[0x0104..0x0134].copy_from_slice(NINTENDO_LOGO);
+                /* Our rom header is all zeros, so just hardcode the checksum of those zeros to make the bootrom
+                   happy. See: https://gbdev.io/pandocs/The_Cartridge_Header.html#014d--header-checksum
+                */
+                cpu.memory[0x014D] = 0xE7;
+                cpu
+            },
+            tiles: vec![None; 384],
         }
     }
 }
@@ -29,7 +43,6 @@ impl eframe::App for PPUViewApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
-
                 ui.menu_button("File", |ui| {
                     if ui.button("Load Bootrom (dmg0.bin)").clicked() {
                         self.dmg_state.load_boot_rom();
@@ -41,98 +54,34 @@ impl eframe::App for PPUViewApp {
         egui::SidePanel::right("Registers")
             .min_width(300.0)
             .show(ctx, |ui| {
-                TableBuilder::new(ui)
-                    .striped(true)
-                    .column(Column::auto())
-                    .column(Column::remainder())
-                    .header(18.0, |mut header| {
-                        header.col(|ui| {
-                            ui.label("Register");
-                        });
-                        header.col(|ui| {
-                            ui.label("Value");
-                        });
-                    })
-                    .body(|body| {
-                        draw_registers_body(body, &self.dmg_state);
-                    });
+                draw_register_table(ui, &self.dmg_state);
 
                 ui.separator();
 
-                TableBuilder::new(ui)
-                    .id_salt("Memory View")
-                    .striped(true)
-                    .columns(Column::auto(), 17)
-                    .header(18.0, |mut header| {
-                        header.col(|ui| {
-                            ui.label("");
-                        });
+                draw_memory_table(ui, &self.dmg_state);
+            });
 
-                        for column_number in 0..16 {
-                            header.col(|ui| {
-                                let column_label = format!("{:02X}", column_number);
-                                ui.monospace(RichText::from(column_label).strong());
-                            });
-                        }
-                    })
-                    .body(|body| {
-                        draw_memory_body(body, &self.dmg_state);
-                    });
-        });
+        egui::SidePanel::left("Tiles")
+            .min_width(300.0)
+            .show(ctx, |ui| {
+                draw_tile_table(ui, ctx, &mut self.tiles, &self.dmg_state);
+            });
 
         egui::CentralPanel::default().show(ctx, |ui| {
             if ui.button("Step").clicked() {
                 self.dmg_state.execute();
             }
+
+            if ui.button("Step 10,000x").clicked() {
+                for _ in 0..10000 {
+                    /* Cycle the LCD Y coordinate so the bootrom doesn't get stuck waiting for a v-blank.
+                      Once I actually implement the PPU alongside the CPU, I'll want to do this with proper
+                      timing. See: https://gbdev.io/pandocs/Rendering.html
+                    */
+                    self.dmg_state.memory[0xFF44] = (self.dmg_state.memory[0xFF44] + 1) % 154;
+                    self.dmg_state.execute();
+                }
+            }
         });
     }
-}
-
-fn draw_registers_body(body: TableBody<'_>, dmg_state: &Cpu) {
-    let reg_names_and_values = [
-        ("AF", dmg_state.registers.af.into_bits()),
-        ("BC", dmg_state.registers.bc.into_bits()),
-        ("DE", dmg_state.registers.de.into_bits()),
-        ("HL", dmg_state.registers.hl.into_bits()),
-        ("SP", dmg_state.registers.sp),
-        ("PC", dmg_state.registers.pc),
-    ];
-
-    let formatted: Vec<_> = reg_names_and_values.iter().map(|(name, value)| {
-        (*name, format!("{:#06X}", value))
-    }).collect();
-
-    body.rows(18.0, reg_names_and_values.len(), |mut row| {
-        let row_index = row.index();
-        let (name, value) = &formatted[row_index];
-
-        row.col(|ui| {
-            ui.label(*name);
-        });
-        row.col(|ui| {
-            ui.label(value);
-        });
-    });
-}
-
-fn draw_memory_body(body: TableBody<'_>, dmg_state: &Cpu) {
-    body.rows(18.0, dmg_state.memory.len() / 16, |mut row| {
-        let row_index = row.index();
-        let row_label = format!("{:03X}0", row_index);
-        row.col(|ui| {
-            ui.monospace(RichText::from(row_label).strong());
-        });
-
-        for i in 0..16 {
-            let formatted_row = format!("{:02X}", dmg_state.memory[row_index + i]);
-
-            row.col(|ui| {
-                if row_index * 16 + i == dmg_state.registers.pc as usize {
-                    ui.monospace(RichText::from(formatted_row).color(Color32::RED));
-                } else {
-                    ui.monospace(formatted_row);
-                }
-            });
-        }
-    });
 }
