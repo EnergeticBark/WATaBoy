@@ -1,6 +1,6 @@
 use eframe::epaint::textures::TextureOptions;
 use eframe::epaint::{ColorImage, TextureHandle};
-use egui::Ui;
+use egui::{Color32, Ui};
 use egui_extras::{Column, TableBody, TableBuilder};
 use ppu::tiles;
 use sm83_interp::cpu::Cpu;
@@ -48,7 +48,7 @@ fn draw_tiles_body(
                 let tile = tiles[row_index + i].get_or_insert_with(|| {
                     ctx.load_texture(
                         format!("Tile {}", row_index + i),
-                        ColorImage::from_gray([TILE_SIZE, TILE_SIZE], &[0; 64]),
+                        ColorImage::filled([TILE_SIZE, TILE_SIZE], Color32::BLACK),
                         TextureOptions::NEAREST,
                     )
                 });

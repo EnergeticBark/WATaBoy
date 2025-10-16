@@ -1,6 +1,7 @@
 use crate::memory::draw_memory_table;
 use crate::registers::draw_register_table;
 use crate::tiles::draw_tile_table;
+use crate::tile_map::draw_tile_map;
 use egui::TextureHandle;
 use sm83_interp::cpu::Cpu;
 
@@ -9,6 +10,7 @@ const NINTENDO_LOGO: &[u8; 48] = include_bytes!("../nintendo_logo.bin");
 pub struct PPUViewApp {
     dmg_state: Cpu,
     tiles: Vec<Option<TextureHandle>>,
+    tile_map: Option<TextureHandle>,
 }
 
 impl Default for PPUViewApp {
@@ -25,6 +27,7 @@ impl Default for PPUViewApp {
                 cpu
             },
             tiles: vec![None; 384],
+            tile_map: None,
         }
     }
 }
@@ -70,8 +73,21 @@ impl eframe::App for PPUViewApp {
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
+            draw_tile_map(ui, ctx, &mut self.tile_map, &self.dmg_state);
+
             if ui.button("Step").clicked() {
                 self.dmg_state.execute();
+            }
+
+            if ui.button("Step 1000x").clicked() {
+                for _ in 0..1000 {
+                    /* Cycle the LCD Y coordinate so the bootrom doesn't get stuck waiting for a v-blank.
+                      Once I actually implement the PPU alongside the CPU, I'll want to do this with proper
+                      timing. See: https://gbdev.io/pandocs/Rendering.html
+                    */
+                    self.dmg_state.memory[0xFF44] = (self.dmg_state.memory[0xFF44] + 1) % 154;
+                    self.dmg_state.execute();
+                }
             }
 
             if ui.button("Step 10,000x").clicked() {
