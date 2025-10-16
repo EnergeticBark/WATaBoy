@@ -2,6 +2,7 @@ use eframe::epaint::textures::TextureOptions;
 use eframe::epaint::{ColorImage, TextureHandle};
 use egui::Ui;
 use egui_extras::{Column, TableBody, TableBuilder};
+use ppu::tiles;
 use sm83_interp::cpu::Cpu;
 
 const TILE_SIZE: usize = 8;
@@ -23,28 +24,11 @@ pub fn draw_tile_table(
         });
 }
 
-fn greyscale_from_tile(buffer: &[u8]) -> Vec<u8> {
-    // Each tile consists of 16 bytes.
-    assert_eq!(buffer.len(), 16);
-    let (chunks, _) = buffer.as_chunks::<2>();
-    chunks
-        .iter()
-        .flat_map(|&[least_significant, most_significant]| {
-            (0..8)
-                .map(move |nth_bit| {
-                    let mut palette_index = 0;
-                    if least_significant >> nth_bit & 1 == 1 {
-                        palette_index += 1;
-                    }
-                    if most_significant >> nth_bit & 1 == 1 {
-                        palette_index += 2;
-                    }
-                    palette_index
-                })
-                .rev()
-        })
+fn greyscale_from_tile(tile: &[u8; 16]) -> Vec<u8> {
+    tiles::tile_to_palette_indices(tile)
+        .into_iter()
         // Bring the range of values from 0-3 to 0-255.
-        .map(|palette_index| palette_index * 64)
+        .map(|palette_index| palette_index.value() * 64)
         .collect()
 }
 
@@ -69,12 +53,11 @@ fn draw_tiles_body(
                     )
                 });
 
-                let start_byte = 0x8000 + (row_index + i) * 16;
-                let end_byte = start_byte + 16;
+                let tile_data = tiles::unsigned_nth_tile(&dmg_state.memory, row_index + i);
                 tile.set(
                     ColorImage::from_gray(
                         [TILE_SIZE, TILE_SIZE],
-                        &greyscale_from_tile(&dmg_state.memory[start_byte..end_byte]),
+                        &greyscale_from_tile(tile_data),
                     ),
                     TextureOptions::NEAREST,
                 );

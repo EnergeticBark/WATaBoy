@@ -2370,6 +2370,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ppu"
+version = "0.1.0"
+dependencies = [
+ "arbitrary-int",
+]
+
+[[package]]
 name = "ppu-view"
 version = "0.1.0"
 dependencies = [
@@ -2378,6 +2385,7 @@ dependencies = [
  "egui_extras",
  "env_logger",
  "log",
+ "ppu",
  "sm83-interp",
  "wasm-bindgen-futures",
  "web-sys",
