@@ -24,7 +24,7 @@ impl R8 {
             5 => L,
             6 => IndirectHL,
             7 => A,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 }
@@ -45,7 +45,7 @@ impl R16 {
             1 => De,
             2 => Hl,
             3 => Sp,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 }
@@ -66,7 +66,7 @@ impl R16Stack {
             1 => De,
             2 => Hl,
             3 => Af,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 }
@@ -87,7 +87,7 @@ impl R16Mem {
             1 => De,
             2 => HlInc,
             3 => HlDec,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 }
@@ -108,7 +108,7 @@ impl Condition {
             1 => Z,
             2 => Nc,
             3 => C,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 }

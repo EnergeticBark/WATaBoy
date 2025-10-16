@@ -1,7 +1,8 @@
+use crate::parameters::{Condition, R8, R16, R16Mem};
 use crate::registers::Registers;
 use crate::{opcodes, registers};
-use crate::parameters::{Condition, R16Mem, R16, R8};
 
+const DMG_BOOT_ROM: &[u8] = include_bytes!("../dmg.bin");
 const MEM_MAP_SIZE: usize = u16::MAX as usize;
 
 pub struct Cpu {
@@ -44,12 +45,12 @@ impl Cpu {
                 let value = self.memory[self.registers.hl.into_bits() as usize];
                 self.registers.hl = registers::Hl::from_bits(self.registers.hl.into_bits() + 1);
                 value
-            },
+            }
             R16Mem::HlDec => {
                 let value = self.memory[self.registers.hl.into_bits() as usize];
                 self.registers.hl = registers::Hl::from_bits(self.registers.hl.into_bits() - 1);
                 value
-            },
+            }
         }
     }
 
@@ -60,11 +61,11 @@ impl Cpu {
             R16Mem::HlInc => {
                 self.memory[self.registers.hl.into_bits() as usize] = value;
                 self.registers.hl = registers::Hl::from_bits(self.registers.hl.into_bits() + 1);
-            },
+            }
             R16Mem::HlDec => {
                 self.memory[self.registers.hl.into_bits() as usize] = value;
                 self.registers.hl = registers::Hl::from_bits(self.registers.hl.into_bits() - 1);
-            },
+            }
         }
     }
 
@@ -80,8 +81,7 @@ impl Cpu {
     }
 
     pub fn load_boot_rom(&mut self) {
-        let agb0_boot_rom = include_bytes!("../dmg0.bin");
-        self.memory[0..agb0_boot_rom.len()].copy_from_slice(agb0_boot_rom);
+        self.memory[0..DMG_BOOT_ROM.len()].copy_from_slice(DMG_BOOT_ROM);
     }
 
     pub fn execute(&mut self) {
@@ -92,7 +92,7 @@ impl Cpu {
         use opcodes::Opcode::*;
         match opcode {
             // Block 0
-            LdRrNn { x} => {
+            LdRrNn { x } => {
                 let next_two_bytes = u16::from_le_bytes([
                     self.memory[pc as usize + 1],
                     self.memory[pc as usize + 2],
@@ -100,11 +100,11 @@ impl Cpu {
                 *self.registers.r16_mut(x) = next_two_bytes;
 
                 self.registers.pc += 3;
-            },
+            }
             LdMemA { x } => {
                 self.set_r16_mem(x, self.registers.af.a());
                 self.registers.pc += 1;
-            },
+            }
             LdAMem { x } => {
                 let value = self.r16_mem(x);
                 self.registers.af.set_a(value);
@@ -122,10 +122,12 @@ impl Cpu {
 
                 *self.registers.r16_mut(R16::Hl) = result;
                 self.registers.af.set_f(
-                    self.registers.af.f()
+                    self.registers
+                        .af
+                        .f()
                         .with_n(false)
                         .with_h(half_carry)
-                        .with_c(carry)
+                        .with_c(carry),
                 );
 
                 self.registers.pc += 1;
@@ -135,10 +137,12 @@ impl Cpu {
                 self.set_r8(x, value);
 
                 self.registers.af.set_f(
-                    self.registers.af.f()
+                    self.registers
+                        .af
+                        .f()
                         .with_z(value == 0)
                         .with_n(false)
-                        .with_h(value & 0x0F == 0)
+                        .with_h(value & 0x0F == 0),
                 );
                 self.registers.pc += 1;
             }
@@ -147,13 +151,15 @@ impl Cpu {
                 self.set_r8(x, value);
 
                 self.registers.af.set_f(
-                    self.registers.af.f()
+                    self.registers
+                        .af
+                        .f()
                         .with_z(value == 0)
                         .with_n(true)
-                        .with_h(value & 0x0F == 0)
+                        .with_h(value & 0x0F == 0),
                 );
                 self.registers.pc += 1;
-            },
+            }
             LdRN { x } => {
                 let next_byte = self.memory[pc as usize + 1];
                 self.set_r8(x, next_byte);
@@ -172,11 +178,13 @@ impl Cpu {
 
                 self.registers.af.set_a(shifted);
                 self.registers.af.set_f(
-                    self.registers.af.f()
+                    self.registers
+                        .af
+                        .f()
                         .with_z(false)
                         .with_n(false)
                         .with_h(false)
-                        .with_c(b7)
+                        .with_c(b7),
                 );
                 self.registers.pc += 1;
             }
@@ -208,14 +216,16 @@ impl Cpu {
 
                 self.registers.af.set_a(result);
                 self.registers.af.set_f(
-                    self.registers.af.f()
+                    self.registers
+                        .af
+                        .f()
                         .with_z(result == 0)
                         .with_n(false)
                         .with_h(half_carry)
-                        .with_c(carry)
+                        .with_c(carry),
                 );
                 self.registers.pc += 1;
-            },
+            }
             SubR { x } => {
                 let a = self.registers.af.a();
                 let r8 = self.r8(x);
@@ -223,40 +233,46 @@ impl Cpu {
 
                 self.registers.af.set_a(result);
                 self.registers.af.set_f(
-                    self.registers.af.f()
+                    self.registers
+                        .af
+                        .f()
                         .with_z(result == 0)
                         .with_n(true)
                         .with_h(a & 0x0F < r8 & 0x0F)
-                        .with_c(carry)
+                        .with_c(carry),
                 );
                 self.registers.pc += 1;
-            },
+            }
             XorR { x } => {
                 let result = self.registers.af.a() ^ self.r8(x);
 
                 self.registers.af.set_a(result);
                 self.registers.af.set_f(
-                    self.registers.af.f()
+                    self.registers
+                        .af
+                        .f()
                         .with_z(result == 0)
                         .with_n(false)
                         .with_h(false)
-                        .with_c(false)
+                        .with_c(false),
                 );
                 self.registers.pc += 1;
-            },
+            }
             CpR { x } => {
                 let a = self.registers.af.a();
                 let r8 = self.r8(x);
 
                 self.registers.af.set_f(
-                    self.registers.af.f()
+                    self.registers
+                        .af
+                        .f()
                         .with_z(a - r8 == 0)
                         .with_n(true)
                         .with_h(a & 0x0F < r8 & 0x0F)
-                        .with_c(a < r8)
+                        .with_c(a < r8),
                 );
                 self.registers.pc += 1;
-            },
+            }
 
             // Block 3
             XorN => {
@@ -265,24 +281,28 @@ impl Cpu {
 
                 self.registers.af.set_a(result);
                 self.registers.af.set_f(
-                    self.registers.af.f()
+                    self.registers
+                        .af
+                        .f()
                         .with_z(result == 0)
                         .with_n(false)
                         .with_h(false)
-                        .with_c(false)
+                        .with_c(false),
                 );
                 self.registers.pc += 2;
-            },
+            }
             CpN => {
                 let a = self.registers.af.a();
                 let next_byte = self.memory[pc as usize + 1];
 
                 self.registers.af.set_f(
-                    self.registers.af.f()
+                    self.registers
+                        .af
+                        .f()
                         .with_z(a.wrapping_sub(next_byte) == 0)
                         .with_n(true)
                         .with_h(a & 0x0F < next_byte & 0x0F)
-                        .with_c(a < next_byte)
+                        .with_c(a < next_byte),
                 );
                 self.registers.pc += 2;
             }
@@ -294,7 +314,7 @@ impl Cpu {
                 self.registers.sp += 2;
 
                 self.registers.pc = destination;
-            },
+            }
             CallNn => {
                 // Push the address of the next instruction to the stack.
                 self.registers.sp -= 2;
@@ -337,7 +357,7 @@ impl Cpu {
                 let destination = u16::from_le_bytes([next_byte, 0xFF]);
                 self.memory[destination as usize] = self.registers.af.a();
                 self.registers.pc += 2;
-            },
+            }
             LdNnA => {
                 let next_two_bytes = u16::from_le_bytes([
                     self.memory[pc as usize + 1],
@@ -376,27 +396,31 @@ impl Cpu {
 
                 self.set_r8(x, shifted);
                 self.registers.af.set_f(
-                    self.registers.af.f()
+                    self.registers
+                        .af
+                        .f()
                         .with_z(shifted == 0)
                         .with_n(false)
                         .with_h(false)
-                        .with_c(b7)
+                        .with_c(b7),
                 );
                 self.registers.pc += 2;
-            },
+            }
             BitBR { b: bit_index, x } => {
                 let value = self.r8(x);
                 let nth_bit = value >> bit_index.value() & 1;
                 let nth_bit_set = nth_bit != 0;
 
                 self.registers.af.set_f(
-                    self.registers.af.f()
+                    self.registers
+                        .af
+                        .f()
                         .with_z(!nth_bit_set)
                         .with_n(false)
-                        .with_h(true)
+                        .with_h(true),
                 );
                 self.registers.pc += 2;
-            },
+            }
             prefix_opcode => unimplemented!("prefix opcode: {:?}", prefix_opcode),
         }
     }

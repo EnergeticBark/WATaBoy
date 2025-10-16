@@ -17,7 +17,7 @@ fn main() {
         /* Cycle the LCD Y coordinate so the bootrom doesn't get stuck waiting for a v-blank.
            Once I actually implement the PPU alongside the CPU, I'll want to do this with proper
            timing. See: https://gbdev.io/pandocs/Rendering.html
-         */
+        */
         cpu.memory[0xFF44] = (cpu.memory[0xFF44] + 1) % 154;
         let bytecode = cpu.memory[cpu.registers.pc as usize];
         let opcode = opcodes::decode(bytecode).unwrap();
