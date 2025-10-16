@@ -70,8 +70,8 @@ impl Cpu {
     }
 
     fn check_condition(&self, condition: Condition) -> bool {
-        let flags = self.registers.af.f();
         use Condition::*;
+        let flags = self.registers.af.f();
         match condition {
             Nz => !flags.z(),
             Z => flags.z(),
@@ -84,12 +84,17 @@ impl Cpu {
         self.memory[0..DMG_BOOT_ROM.len()].copy_from_slice(DMG_BOOT_ROM);
     }
 
+    /// # Panics
+    ///
+    /// Will panic if the instruction at the current program counter is unimplemented.
+    #[allow(clippy::too_many_lines)]
     pub fn execute(&mut self) {
+        use opcodes::Opcode::*;
+
         let pc = self.registers.pc;
         let bytecode = self.memory[pc as usize];
         let opcode = opcodes::decode(bytecode).unwrap();
 
-        use opcodes::Opcode::*;
         match opcode {
             // Block 0
             LdRrNn { x } => {
@@ -142,7 +147,7 @@ impl Cpu {
                         .f()
                         .with_z(value == 0)
                         .with_n(false)
-                        .with_h(value & 0x0F == 0),
+                        .with_h(value.trailing_zeros() >= 4),
                 );
                 self.registers.pc += 1;
             }
@@ -156,7 +161,7 @@ impl Cpu {
                         .f()
                         .with_z(value == 0)
                         .with_n(true)
-                        .with_h(value & 0x0F == 0),
+                        .with_h(value.trailing_zeros() >= 4),
                 );
                 self.registers.pc += 1;
             }
@@ -190,13 +195,19 @@ impl Cpu {
             }
             JrE => {
                 let jump_offset = self.memory[pc as usize + 1].cast_signed();
-                self.registers.pc = self.registers.pc.wrapping_add_signed(jump_offset as i16);
+                self.registers.pc = self
+                    .registers
+                    .pc
+                    .wrapping_add_signed(i16::from(jump_offset));
                 self.registers.pc += 2;
             }
             JrCcE { c } => {
                 let jump_offset = self.memory[pc as usize + 1].cast_signed();
                 if self.check_condition(c) {
-                    self.registers.pc = self.registers.pc.wrapping_add_signed(jump_offset as i16);
+                    self.registers.pc = self
+                        .registers
+                        .pc
+                        .wrapping_add_signed(i16::from(jump_offset));
                 }
                 self.registers.pc += 2;
             }
@@ -378,10 +389,11 @@ impl Cpu {
     }
 
     fn execute_prefix(&mut self) {
+        use opcodes::PrefixOpcode::*;
+
         let second_byte = self.memory[self.registers.pc as usize + 1];
         let prefix_opcode = opcodes::decode_prefix(second_byte);
 
-        use opcodes::PrefixOpcode::*;
         match prefix_opcode {
             RlR { x } => {
                 // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
@@ -429,7 +441,7 @@ impl Cpu {
 impl Default for Cpu {
     fn default() -> Self {
         Self {
-            registers: Default::default(),
+            registers: Registers::default(),
             memory: [0; MEM_MAP_SIZE],
         }
     }

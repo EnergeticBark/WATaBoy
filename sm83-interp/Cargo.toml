@@ -7,3 +7,6 @@ edition = "2024"
 bitfield-struct = "0.11.0"
 bitmatch = "0.1.1"
 arbitrary-int = "2.0.0"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }

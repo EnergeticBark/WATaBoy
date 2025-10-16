@@ -1,13 +1,20 @@
 use arbitrary_int::{u2, u3};
 use bitmatch::bitmatch;
 
-use crate::parameters::*;
+use crate::parameters::{Condition, R8, R16, R16Mem, R16Stack};
 
+/// # Errors
+///
+/// Will return an error if `first_byte` is not the first byte of a valid instruction.
+/// The complete list of invalid first byte values is:
+/// `0xD3`, `0xDB`, `0xDD`, `0xE3`, `0xE4`, `0xEB`, `0xEC`, `0xED`, `0xF4`, `0xFC`, and `0xFD`.
+#[allow(clippy::too_many_lines)]
 #[bitmatch]
 pub fn decode(first_byte: u8) -> Result<Opcode, String> {
+    use Opcode::*;
+
     let invalid_instruction_error = Err(String::from("Invalid instruction"));
 
-    use Opcode::*;
     let op = #[bitmatch]
     match first_byte {
         // Block 0
@@ -237,6 +244,7 @@ pub enum Opcode {
     Prefix, // Prefix opcode
 }
 
+#[must_use]
 #[bitmatch]
 pub fn decode_prefix(second_byte: u8) -> PrefixOpcode {
     use PrefixOpcode::*;

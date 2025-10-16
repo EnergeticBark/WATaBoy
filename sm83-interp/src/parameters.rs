@@ -29,7 +29,7 @@ impl R8 {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum R16 {
     Bc = 0,
@@ -50,7 +50,7 @@ impl R16 {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum R16Stack {
     Bc = 0,
@@ -71,7 +71,7 @@ impl R16Stack {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum R16Mem {
     Bc = 0,
@@ -92,7 +92,7 @@ impl R16Mem {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Condition {
     Nz = 0,

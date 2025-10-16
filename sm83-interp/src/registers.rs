@@ -1,5 +1,6 @@
-use crate::parameters::{R16, R16Stack};
 use bitfield_struct::bitfield;
+
+use crate::parameters::{R16, R16Stack};
 
 #[bitfield(u8, order = Lsb)]
 pub struct Flags {
