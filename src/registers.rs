@@ -30,9 +30,10 @@ fn draw_registers_body(body: TableBody<'_>, dmg_state: &Cpu) {
         ("PC", dmg_state.registers.pc),
     ];
 
-    let formatted: Vec<_> = reg_names_and_values.into_iter().map(|(name, value)| {
-        (name, format!("{value:#06X}"))
-    }).collect();
+    let formatted: Vec<_> = reg_names_and_values
+        .into_iter()
+        .map(|(name, value)| (name, format!("{value:#06X}")))
+        .collect();
 
     body.rows(18.0, reg_names_and_values.len(), |mut row| {
         let row_index = row.index();

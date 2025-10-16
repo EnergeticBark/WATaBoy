@@ -17,8 +17,9 @@ impl Default for PPUViewApp {
             dmg_state: {
                 let mut cpu = Cpu::default();
                 cpu.memory[0x0104..0x0134].copy_from_slice(NINTENDO_LOGO);
-                /* Our rom header is all zeros, so just hardcode the checksum of those zeros to make the bootrom
-                   happy. See: https://gbdev.io/pandocs/The_Cartridge_Header.html#014d--header-checksum
+                /* Our rom header is all zeros, so just hardcode the checksum of those zeros to make
+                   the bootrom happy.
+                   See: https://gbdev.io/pandocs/The_Cartridge_Header.html#014d--header-checksum
                 */
                 cpu.memory[0x014D] = 0xE7;
                 cpu
@@ -30,6 +31,7 @@ impl Default for PPUViewApp {
 
 impl PPUViewApp {
     /// Called once before the first frame.
+    #[must_use]
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
@@ -44,7 +46,7 @@ impl eframe::App for PPUViewApp {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("File", |ui| {
-                    if ui.button("Load Bootrom (dmg0.bin)").clicked() {
+                    if ui.button("Load Bootrom (dmg.bin)").clicked() {
                         self.dmg_state.load_boot_rom();
                     }
                 });
