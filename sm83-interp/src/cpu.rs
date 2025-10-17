@@ -3,11 +3,12 @@ use crate::registers::Registers;
 use crate::{opcodes, registers};
 
 const DMG_BOOT_ROM: &[u8] = include_bytes!("../dmg.bin");
-const MEM_MAP_SIZE: usize = u16::MAX as usize;
+const MEM_MAP_SIZE: usize = 0x10000;
 
 pub struct Cpu {
     pub registers: Registers,
     pub memory: [u8; MEM_MAP_SIZE],
+    ime: bool, // Interrupt master enable flag
 }
 
 impl Cpu {
@@ -84,19 +85,22 @@ impl Cpu {
         self.memory[0..DMG_BOOT_ROM.len()].copy_from_slice(DMG_BOOT_ROM);
     }
 
-    /// # Panics
+    /// # Errors
     ///
-    /// Will panic if the instruction at the current program counter is unimplemented.
+    /// Will return an error if the instruction at the current program counter is unimplemented.
     #[allow(clippy::too_many_lines)]
-    pub fn execute(&mut self) {
+    pub fn execute(&mut self) -> Result<(), String> {
         use opcodes::Opcode::*;
 
         let pc = self.registers.pc;
         let bytecode = self.memory[pc as usize];
-        let opcode = opcodes::decode(bytecode).unwrap();
+        let opcode = opcodes::decode(bytecode)?;
 
         match opcode {
             // Block 0
+            Nop => {
+                self.registers.pc += 1;
+            }
             LdRrNn { x } => {
                 let next_two_bytes = u16::from_le_bytes([
                     self.memory[pc as usize + 1],
@@ -117,6 +121,10 @@ impl Cpu {
             }
             IncRr { x } => {
                 *self.registers.r16_mut(x) += 1;
+                self.registers.pc += 1;
+            }
+            DecRr { x } => {
+                *self.registers.r16_mut(x) -= 1;
                 self.registers.pc += 1;
             }
             AddHlRr { x } => {
@@ -193,6 +201,15 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
+            Cpl => {
+                let flipped = !self.registers.af.a();
+
+                self.registers.af.set_a(flipped);
+                self.registers
+                    .af
+                    .set_f(self.registers.af.f().with_n(true).with_h(true));
+                self.registers.pc += 1;
+            }
             JrE => {
                 let jump_offset = self.memory[pc as usize + 1].cast_signed();
                 self.registers.pc = self
@@ -254,8 +271,38 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
+            AndR { x } => {
+                let result = self.registers.af.a() & self.r8(x);
+
+                self.registers.af.set_a(result);
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(result == 0)
+                        .with_n(false)
+                        .with_h(true)
+                        .with_c(false),
+                );
+                self.registers.pc += 1;
+            }
             XorR { x } => {
                 let result = self.registers.af.a() ^ self.r8(x);
+
+                self.registers.af.set_a(result);
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(result == 0)
+                        .with_n(false)
+                        .with_h(false)
+                        .with_c(false),
+                );
+                self.registers.pc += 1;
+            }
+            OrR { x } => {
+                let result = self.registers.af.a() | self.r8(x);
 
                 self.registers.af.set_a(result);
                 self.registers.af.set_f(
@@ -286,6 +333,22 @@ impl Cpu {
             }
 
             // Block 3
+            AndN => {
+                let next_byte = self.memory[pc as usize + 1];
+                let result = self.registers.af.a() & next_byte;
+
+                self.registers.af.set_a(result);
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(result == 0)
+                        .with_n(false)
+                        .with_h(true)
+                        .with_c(false),
+                );
+                self.registers.pc += 2;
+            }
             XorN => {
                 let next_byte = self.memory[pc as usize + 1];
                 let result = self.registers.af.a() ^ next_byte;
@@ -326,6 +389,16 @@ impl Cpu {
 
                 self.registers.pc = destination;
             }
+            JpNn => {
+                let destination = u16::from_le_bytes([
+                    self.memory[pc as usize + 1],
+                    self.memory[pc as usize + 2],
+                ]);
+                self.registers.pc = destination;
+            }
+            JpHl => {
+                self.registers.pc = self.registers.hl.into_bits();
+            }
             CallNn => {
                 // Push the address of the next instruction to the stack.
                 self.registers.sp -= 2;
@@ -336,6 +409,20 @@ impl Cpu {
                 let destination = u16::from_le_bytes([
                     self.memory[pc as usize + 1],
                     self.memory[pc as usize + 2],
+                ]);
+                self.registers.pc = destination;
+            }
+            RstN { x } => {
+                // Push the address of the next instruction to the stack.
+                self.registers.sp -= 2;
+                let [low, high] = (pc + 1).to_le_bytes();
+                self.memory[self.registers.sp as usize] = low;
+                self.memory[self.registers.sp as usize + 1] = high;
+
+                let destination = u16::from_le_bytes([
+                    // Rst's parameter is pre-divided by 8, so we multiply it by 8 here.
+                    x.value() * 8,
+                    0x00,
                 ]);
                 self.registers.pc = destination;
             }
@@ -384,8 +471,19 @@ impl Cpu {
                 self.registers.af.set_a(value);
                 self.registers.pc += 2;
             }
-            opcode => unimplemented!("opcode: {:?}", opcode),
+            Di => {
+                self.ime = false;
+                self.registers.pc += 1;
+            }
+            Ei => {
+                // TODO: For accuracy, wait until the next instruction to actually enable interrupts
+                // See: https://rgbds.gbdev.io/docs/v0.9.4/gbz80.7#EI
+                self.ime = true;
+                self.registers.pc += 1;
+            }
+            opcode => Err(format!("unimplemented opcode: {opcode:?}"))?,
         }
+        Ok(())
     }
 
     fn execute_prefix(&mut self) {
@@ -418,6 +516,24 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
+            SwapR { x } => {
+                // input:  [b7][b6][b5][b4][b3][b2][b1][b0]
+                // output: [b3][b2][b1][b0][b7][b6][b5][b4]
+                let value = self.r8(x);
+                let swapped = value.rotate_right(4);
+
+                self.set_r8(x, swapped);
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(swapped == 0)
+                        .with_n(false)
+                        .with_h(false)
+                        .with_c(false),
+                );
+                self.registers.pc += 2;
+            }
             BitBR { b: bit_index, x } => {
                 let value = self.r8(x);
                 let nth_bit = value >> bit_index.value() & 1;
@@ -433,6 +549,14 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
+            ResBR { b: bit_index, x } => {
+                let value = self.r8(x);
+                let mask = !(1 << bit_index.value());
+                let result = value & mask;
+
+                self.set_r8(x, result);
+                self.registers.pc += 2;
+            }
             prefix_opcode => unimplemented!("prefix opcode: {:?}", prefix_opcode),
         }
     }
@@ -443,6 +567,7 @@ impl Default for Cpu {
         Self {
             registers: Registers::default(),
             memory: [0; MEM_MAP_SIZE],
+            ime: false,
         }
     }
 }
@@ -455,7 +580,7 @@ mod tests {
     fn first_bootrom_instruction() {
         let mut cpu = Cpu::default();
         cpu.load_boot_rom();
-        cpu.execute();
+        cpu.execute().unwrap();
         assert_eq!(cpu.registers.sp, 0xFFFE);
     }
 }
