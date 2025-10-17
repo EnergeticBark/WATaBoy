@@ -1,7 +1,7 @@
 use crate::memory::draw_memory_table;
 use crate::registers::draw_register_table;
-use crate::tiles::draw_tile_table;
 use crate::tile_map::draw_tile_map;
+use crate::tiles::draw_tile_table;
 use egui::TextureHandle;
 use sm83_interp::cpu::Cpu;
 

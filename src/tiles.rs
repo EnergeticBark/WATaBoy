@@ -24,7 +24,7 @@ pub fn draw_tile_table(
         });
 }
 
-fn greyscale_from_tile(tile: &[u8; 16]) -> Vec<u8> {
+pub fn greyscale_from_tile(tile: &[u8; 16]) -> Vec<u8> {
     tiles::tile_to_palette_indices(tile)
         .into_iter()
         // Bring the range of values from 0-3 to 0-255.
@@ -55,10 +55,7 @@ fn draw_tiles_body(
 
                 let tile_data = tiles::unsigned_nth_tile(&dmg_state.memory, row_index + i);
                 tile.set(
-                    ColorImage::from_gray(
-                        [TILE_SIZE, TILE_SIZE],
-                        &greyscale_from_tile(tile_data),
-                    ),
+                    ColorImage::from_gray([TILE_SIZE, TILE_SIZE], &greyscale_from_tile(tile_data)),
                     TextureOptions::NEAREST,
                 );
 
