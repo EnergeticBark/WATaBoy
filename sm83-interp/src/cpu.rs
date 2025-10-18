@@ -8,7 +8,7 @@ const MEM_MAP_SIZE: usize = 0x10000;
 pub struct Cpu {
     pub registers: Registers,
     pub memory: [u8; MEM_MAP_SIZE],
-    ime: bool, // Interrupt master enable flag
+    pub ime: bool, // Interrupt master enable flag
 }
 
 impl Cpu {
@@ -44,12 +44,12 @@ impl Cpu {
             R16Mem::De => self.memory[self.registers.de.into_bits() as usize],
             R16Mem::HlInc => {
                 let value = self.memory[self.registers.hl.into_bits() as usize];
-                self.registers.hl = registers::Hl::from_bits(self.registers.hl.into_bits() + 1);
+                self.registers.hl = registers::Hl::from_bits(self.registers.hl.into_bits().wrapping_add(1));
                 value
             }
             R16Mem::HlDec => {
                 let value = self.memory[self.registers.hl.into_bits() as usize];
-                self.registers.hl = registers::Hl::from_bits(self.registers.hl.into_bits() - 1);
+                self.registers.hl = registers::Hl::from_bits(self.registers.hl.into_bits().wrapping_sub(1));
                 value
             }
         }
@@ -61,11 +61,11 @@ impl Cpu {
             R16Mem::De => self.memory[self.registers.de.into_bits() as usize] = value,
             R16Mem::HlInc => {
                 self.memory[self.registers.hl.into_bits() as usize] = value;
-                self.registers.hl = registers::Hl::from_bits(self.registers.hl.into_bits() + 1);
+                self.registers.hl = registers::Hl::from_bits(self.registers.hl.into_bits().wrapping_add(1));
             }
             R16Mem::HlDec => {
                 self.memory[self.registers.hl.into_bits() as usize] = value;
-                self.registers.hl = registers::Hl::from_bits(self.registers.hl.into_bits() - 1);
+                self.registers.hl = registers::Hl::from_bits(self.registers.hl.into_bits().wrapping_sub(1));
             }
         }
     }
@@ -120,7 +120,7 @@ impl Cpu {
                 self.registers.pc += 1;
             }
             IncRr { x } => {
-                *self.registers.r16_mut(x) += 1;
+                *self.registers.r16_mut(x) = self.registers.r16_mut(x).wrapping_add(1);
                 self.registers.pc += 1;
             }
             DecRr { x } => {
@@ -146,7 +146,7 @@ impl Cpu {
                 self.registers.pc += 1;
             }
             IncR { x } => {
-                let value = self.r8(x) + 1;
+                let value = self.r8(x).wrapping_add(1);
                 self.set_r8(x, value);
 
                 self.registers.af.set_f(
@@ -198,6 +198,29 @@ impl Cpu {
                         .with_n(false)
                         .with_h(false)
                         .with_c(b7),
+                );
+                self.registers.pc += 1;
+            }
+            Rra => {
+                // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
+                // output: [b0] [c][b7][b6][b5][b4][b3][b2][b1]
+                let value = self.registers.af.a();
+                let b0 = value & 1 == 1;
+                let mut shifted = value >> 1;
+                // Put the old carry bit in the most significant bit.
+                if self.registers.af.f().c() {
+                    shifted |= 0b1000_0000;
+                }
+
+                self.registers.af.set_a(shifted);
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(false)
+                        .with_n(false)
+                        .with_h(false)
+                        .with_c(b0),
                 );
                 self.registers.pc += 1;
             }
@@ -319,12 +342,13 @@ impl Cpu {
             CpR { x } => {
                 let a = self.registers.af.a();
                 let r8 = self.r8(x);
+                let result = a.wrapping_sub(r8);
 
                 self.registers.af.set_f(
                     self.registers
                         .af
                         .f()
-                        .with_z(a - r8 == 0)
+                        .with_z(result == 0)
                         .with_n(true)
                         .with_h(a & 0x0F < r8 & 0x0F)
                         .with_c(a < r8),
@@ -333,6 +357,66 @@ impl Cpu {
             }
 
             // Block 3
+            AddN => {
+                let a = self.registers.af.a();
+                let next_byte = self.memory[pc as usize + 1];
+                let (result, carry) = a.overflowing_add(next_byte);
+                let half_carry = ((a & 0x0f) + (next_byte & 0x0f)) & 0x10 == 0x10;
+
+                self.registers.af.set_a(result);
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(result == 0)
+                        .with_n(false)
+                        .with_h(half_carry)
+                        .with_c(carry),
+                );
+                self.registers.pc += 2;
+            }
+            AdcN => {
+                let a = self.registers.af.a();
+                let next_byte = self.memory[pc as usize + 1];
+                let prev_carry = u8::from(self.registers.af.f().c());
+                let full_result = u16::from(a) + u16::from(next_byte) + u16::from(prev_carry);
+                // Carry if the 9th bit is set.
+                let carry = full_result & 0x0100 == 0x0100;
+                // Keep the lower 8 bits.
+                #[allow(clippy::cast_possible_truncation)]
+                let result = full_result as u8;
+
+                let half_carry = ((a & 0x0f) + (next_byte & 0x0f) + prev_carry) & 0x10 == 0x10;
+
+                self.registers.af.set_a(result);
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(result == 0)
+                        .with_n(false)
+                        .with_h(half_carry)
+                        .with_c(carry),
+                );
+                self.registers.pc += 2;
+            }
+            SubN => {
+                let a = self.registers.af.a();
+                let next_byte = self.memory[pc as usize + 1];
+                let (result, carry) = a.overflowing_sub(next_byte);
+
+                self.registers.af.set_a(result);
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(result == 0)
+                        .with_n(true)
+                        .with_h(a & 0x0F < next_byte & 0x0F)
+                        .with_c(carry),
+                );
+                self.registers.pc += 2;
+            }
             AndN => {
                 let next_byte = self.memory[pc as usize + 1];
                 let result = self.registers.af.a() & next_byte;
@@ -365,6 +449,22 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
+            OrN => {
+                let next_byte = self.memory[pc as usize + 1];
+                let result = self.registers.af.a() | next_byte;
+
+                self.registers.af.set_a(result);
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(result == 0)
+                        .with_n(false)
+                        .with_h(false)
+                        .with_c(false),
+                );
+                self.registers.pc += 2;
+            }
             CpN => {
                 let a = self.registers.af.a();
                 let next_byte = self.memory[pc as usize + 1];
@@ -380,6 +480,18 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
+            RetCc { c } => {
+                self.registers.pc += 1;
+                if self.check_condition(c) {
+                    let destination = u16::from_le_bytes([
+                        self.memory[self.registers.sp as usize],
+                        self.memory[self.registers.sp as usize + 1],
+                    ]);
+                    self.registers.sp += 2;
+
+                    self.registers.pc = destination;
+                }
+            }
             Ret => {
                 let destination = u16::from_le_bytes([
                     self.memory[self.registers.sp as usize],
@@ -388,6 +500,27 @@ impl Cpu {
                 self.registers.sp += 2;
 
                 self.registers.pc = destination;
+            }
+            Reti => {
+                let destination = u16::from_le_bytes([
+                    self.memory[self.registers.sp as usize],
+                    self.memory[self.registers.sp as usize + 1],
+                ]);
+                self.registers.sp += 2;
+
+                self.ime = true;
+                self.registers.pc = destination;
+            }
+            JpCcNn { c } => {
+                let destination = u16::from_le_bytes([
+                    self.memory[pc as usize + 1],
+                    self.memory[pc as usize + 2],
+                ]);
+                self.registers.pc += 3;
+
+                if self.check_condition(c) {
+                    self.registers.pc = destination;
+                }
             }
             JpNn => {
                 let destination = u16::from_le_bytes([
@@ -398,6 +531,24 @@ impl Cpu {
             }
             JpHl => {
                 self.registers.pc = self.registers.hl.into_bits();
+            }
+            CallCcNn {c } => {
+                let destination = u16::from_le_bytes([
+                    self.memory[pc as usize + 1],
+                    self.memory[pc as usize + 2],
+                ]);
+
+                self.registers.pc += 3;
+
+                if self.check_condition(c) {
+                    // Push the address of the next instruction to the stack.
+                    self.registers.sp -= 2;
+                    let [low, high] = (pc + 3).to_le_bytes();
+                    self.memory[self.registers.sp as usize] = low;
+                    self.memory[self.registers.sp as usize + 1] = high;
+
+                    self.registers.pc = destination;
+                }
             }
             CallNn => {
                 // Push the address of the next instruction to the stack.
@@ -471,6 +622,16 @@ impl Cpu {
                 self.registers.af.set_a(value);
                 self.registers.pc += 2;
             }
+            LdANn => {
+                let next_two_bytes = u16::from_le_bytes([
+                    self.memory[pc as usize + 1],
+                    self.memory[pc as usize + 2],
+                ]);
+                let value = self.memory[next_two_bytes as usize];
+
+                self.registers.af.set_a(value);
+                self.registers.pc += 3;
+            }
             Di => {
                 self.ime = false;
                 self.registers.pc += 1;
@@ -516,6 +677,48 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
+            RrR { x } => {
+                // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
+                // output: [b0]  [c][b7][b6][b5][b4][b3][b2][b1]
+                let value = self.r8(x);
+                let b0 = value & 1 == 1;
+                let mut shifted = value >> 1;
+                // Put the old carry bit in the most significant bit.
+                if self.registers.af.f().c() {
+                    shifted |= 0b1000_0000;
+                }
+
+                self.set_r8(x, shifted);
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(shifted == 0)
+                        .with_n(false)
+                        .with_h(false)
+                        .with_c(b0),
+                );
+                self.registers.pc += 2;
+            }
+            SlaR { x } => {
+                // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
+                // output: [b7] [b6][b5][b4][b3][b2][b1][b0][0]
+                let value = self.r8(x);
+                let b7 = value & 0b1000_0000 == 0b1000_0000;
+                let shifted = value << 1;
+
+                self.set_r8(x, shifted);
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(shifted == 0)
+                        .with_n(false)
+                        .with_h(false)
+                        .with_c(b7),
+                );
+                self.registers.pc += 2;
+            }
             SwapR { x } => {
                 // input:  [b7][b6][b5][b4][b3][b2][b1][b0]
                 // output: [b3][b2][b1][b0][b7][b6][b5][b4]
@@ -531,6 +734,25 @@ impl Cpu {
                         .with_n(false)
                         .with_h(false)
                         .with_c(false),
+                );
+                self.registers.pc += 2;
+            }
+            SrlR { x } => {
+                // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
+                // output: [b0] [0][b7][b6][b5][b4][b3][b2][b1]
+                let value = self.r8(x);
+                let b0 = value & 1 == 1;
+                let shifted = value >> 1;
+
+                self.set_r8(x, shifted);
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(shifted == 0)
+                        .with_n(false)
+                        .with_h(false)
+                        .with_c(b0),
                 );
                 self.registers.pc += 2;
             }
