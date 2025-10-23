@@ -1,9 +1,13 @@
+use std::fs;
 use crate::memory::draw_memory_table;
 use crate::registers::draw_register_table;
 use crate::tile_map::draw_tile_map;
 use crate::tiles::draw_tile_table;
-use egui::TextureHandle;
+use egui::{Slider, TextureHandle};
+use log::error;
 use sm83_interp::cpu::Cpu;
+use sm83_interp::opcodes::decode;
+use crate::dnd_rom::handle_dropped_rom;
 
 const NINTENDO_LOGO: &[u8; 48] = include_bytes!("../nintendo_logo.bin");
 
@@ -11,6 +15,8 @@ pub struct PPUViewApp {
     dmg_state: Cpu,
     tiles: Vec<Option<TextureHandle>>,
     tile_map: Option<TextureHandle>,
+    step_by_cycles: u32,
+    step_by_frames: u32
 }
 
 impl Default for PPUViewApp {
@@ -28,6 +34,8 @@ impl Default for PPUViewApp {
             },
             tiles: vec![None; 384],
             tile_map: None,
+            step_by_cycles: 10000,
+            step_by_frames: 1,
         }
     }
 }
@@ -43,6 +51,21 @@ impl PPUViewApp {
     }
 }
 
+fn step_multiple(steps: u32, dmg_state: &mut Cpu) {
+    for _ in 0..steps {
+        /* Cycle the LCD Y coordinate so the bootrom doesn't get stuck waiting for a v-blank.
+          Once I actually implement the PPU alongside the CPU, I'll want to do this with proper
+          timing. See: https://gbdev.io/pandocs/Rendering.html
+        */
+        dmg_state.memory[0xFF44] = (dmg_state.memory[0xFF44] + 1) % 154;
+        // Set joypad value such that no buttons are held.
+        dmg_state.memory[0xFF00] = 0x0F;
+        if let Err(message) =dmg_state.execute() {
+            error!("{message}");
+        }
+    }
+}
+
 impl eframe::App for PPUViewApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -51,6 +74,10 @@ impl eframe::App for PPUViewApp {
                 ui.menu_button("File", |ui| {
                     if ui.button("Load Bootrom (dmg.bin)").clicked() {
                         self.dmg_state.load_boot_rom();
+                    }
+
+                    if ui.button("Reset").clicked() {
+                        self.dmg_state = Cpu::default();
                     }
                 });
             });
@@ -75,30 +102,49 @@ impl eframe::App for PPUViewApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             draw_tile_map(ui, ctx, &mut self.tile_map, &self.dmg_state);
 
-            if ui.button("Step").clicked() {
-                self.dmg_state.execute();
-            }
-
-            if ui.button("Step 1000x").clicked() {
-                for _ in 0..1000 {
-                    /* Cycle the LCD Y coordinate so the bootrom doesn't get stuck waiting for a v-blank.
-                      Once I actually implement the PPU alongside the CPU, I'll want to do this with proper
-                      timing. See: https://gbdev.io/pandocs/Rendering.html
-                    */
-                    self.dmg_state.memory[0xFF44] = (self.dmg_state.memory[0xFF44] + 1) % 154;
-                    self.dmg_state.execute();
+            if ui.button("Step once").clicked() {
+                println!("{:?}", decode(self.dmg_state.memory[self.dmg_state.registers.pc as usize]));
+                if let Err(message) =self.dmg_state.execute() {
+                    error!("{message}");
                 }
             }
 
-            if ui.button("Step 10,000x").clicked() {
-                for _ in 0..10000 {
-                    /* Cycle the LCD Y coordinate so the bootrom doesn't get stuck waiting for a v-blank.
-                      Once I actually implement the PPU alongside the CPU, I'll want to do this with proper
-                      timing. See: https://gbdev.io/pandocs/Rendering.html
-                    */
-                    self.dmg_state.memory[0xFF44] = (self.dmg_state.memory[0xFF44] + 1) % 154;
-                    self.dmg_state.execute();
+            ui.horizontal(|ui| {
+                if ui.button("Step multiple").clicked() {
+                    step_multiple(self.step_by_cycles, &mut self.dmg_state);
                 }
+
+                ui.add(Slider::new(&mut self.step_by_cycles, 0..=100_000));
+            });
+
+            ui.horizontal(|ui| {
+                if ui.button("VBlank and step multiple").clicked() {
+                    for _ in 0..self.step_by_frames {
+                        if self.dmg_state.memory[0xFFFF] & 1 == 1 && self.dmg_state.ime {
+                            // Run the VBlank interrupt routine
+                            self.dmg_state.memory[0xFF0F] &= !1;
+                            self.dmg_state.ime = false;
+
+                            self.dmg_state.registers.sp -= 2;
+                            let [low, high] = (self.dmg_state.registers.pc).to_le_bytes();
+                            self.dmg_state.memory[self.dmg_state.registers.sp as usize] = low;
+                            self.dmg_state.memory[self.dmg_state.registers.sp as usize + 1] = high;
+
+                            self.dmg_state.registers.pc = 0x0040;
+
+                            step_multiple(self.step_by_cycles, &mut self.dmg_state);
+                        }
+                    }
+                }
+
+                ui.add(Slider::new(&mut self.step_by_frames, 0..=100));
+            });
+        });
+
+        ctx.input(|i| {
+            if !i.raw.dropped_files.is_empty() {
+                let dropped_file = i.raw.dropped_files.first().unwrap().clone();
+                handle_dropped_rom(dropped_file, &mut self.dmg_state);
             }
         });
     }
