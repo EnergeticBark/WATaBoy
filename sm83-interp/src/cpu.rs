@@ -1,7 +1,7 @@
 use crate::parameters::{Condition, R8, R16, R16Mem};
 use crate::registers::Registers;
 use crate::{opcodes, registers};
-use crate::opcodes::Opcode::SubN;
+use crate::opcodes::Opcode::{LdNnA, SubN};
 
 const DMG_BOOT_ROM: &[u8] = include_bytes!("../dmg.bin");
 const MEM_MAP_SIZE: usize = 0x10000;
@@ -729,6 +729,15 @@ impl Cpu {
                 ]);
                 self.memory[next_two_bytes as usize] = self.registers.af.a();
                 self.registers.pc += 3;
+            }
+            LdhAC => {
+                let address = u16::from_le_bytes([
+                    self.registers.bc.c(),
+                    0xFF,
+                ]);
+                let value = self.memory[address as usize];
+                self.set_r8(R8::A, value);
+                self.registers.pc += 1;
             }
             LdhAN => {
                 let next_byte = self.memory[pc as usize + 1];
