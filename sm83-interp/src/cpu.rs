@@ -1,7 +1,6 @@
 use crate::parameters::{Condition, R8, R16, R16Mem};
 use crate::registers::Registers;
 use crate::{opcodes, registers};
-use crate::opcodes::Opcode::{LdNnA, SubN};
 
 const DMG_BOOT_ROM: &[u8] = include_bytes!("../dmg.bin");
 const MEM_MAP_SIZE: usize = 0x10000;
@@ -160,30 +159,32 @@ impl Cpu {
                 self.registers.pc += 1;
             }
             IncR { x } => {
-                let value = self.r8(x).wrapping_add(1);
-                self.set_r8(x, value);
+                let r8 = self.r8(x);
+                let result = r8.wrapping_add(1);
+                self.set_r8(x, result);
 
                 self.registers.af.set_f(
                     self.registers
                         .af
                         .f()
-                        .with_z(value == 0)
+                        .with_z(result == 0)
                         .with_n(false)
-                        .with_h(value.trailing_zeros() >= 4),
+                        .with_h(result.trailing_zeros() >= 4),
                 );
                 self.registers.pc += 1;
             }
             DecR { x } => {
-                let value = self.r8(x).wrapping_sub(1);
-                self.set_r8(x, value);
+                let r8 = self.r8(x);
+                let result = r8.wrapping_sub(1);
+                self.set_r8(x, result);
 
                 self.registers.af.set_f(
                     self.registers
                         .af
                         .f()
-                        .with_z(value == 0)
+                        .with_z(result == 0)
                         .with_n(true)
-                        .with_h(value.trailing_zeros() >= 4),
+                        .with_h(r8.trailing_zeros() >= 4),
                 );
                 self.registers.pc += 1;
             }
@@ -208,6 +209,25 @@ impl Cpu {
                         .with_n(false)
                         .with_h(false)
                         .with_c(b7),
+                );
+                self.registers.pc += 1;
+            }
+            Rrca => {
+                // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
+                // output: [b0] [b0][b7][b6][b5][b4][b3][b2][b1]
+                let value = self.registers.af.a();
+                let b0 = value & 1 == 1;
+                let rotated = value.rotate_right(1);
+
+                self.registers.af.set_a(rotated);
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(false)
+                        .with_n(false)
+                        .with_h(false)
+                        .with_c(b0),
                 );
                 self.registers.pc += 1;
             }
@@ -367,6 +387,31 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
+            AdcR { x } => {
+                let a = self.registers.af.a();
+                let r8 = self.r8(x);
+                let prev_carry = u8::from(self.registers.af.f().c());
+                let full_result = u16::from(a) + u16::from(r8) + u16::from(prev_carry);
+                // Carry if the 9th bit is set.
+                let carry = full_result & 0x0100 == 0x0100;
+                // Keep the lower 8 bits.
+                #[allow(clippy::cast_possible_truncation)]
+                let result = full_result as u8;
+
+                let half_carry = ((a & 0x0f) + (r8 & 0x0f) + prev_carry) & 0x10 == 0x10;
+
+                self.registers.af.set_a(result);
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(result == 0)
+                        .with_n(false)
+                        .with_h(half_carry)
+                        .with_c(carry),
+                );
+                self.registers.pc += 1;
+            }
             SubR { x } => {
                 let a = self.registers.af.a();
                 let r8 = self.r8(x);
@@ -380,6 +425,31 @@ impl Cpu {
                         .with_z(result == 0)
                         .with_n(true)
                         .with_h(a & 0x0F < r8 & 0x0F)
+                        .with_c(carry),
+                );
+                self.registers.pc += 1;
+            }
+            SbcR { x } => {
+                let a = self.registers.af.a();
+                let r8 = self.r8(x);
+                let prev_carry = u8::from(self.registers.af.f().c());
+
+                let (first_diff, first_carry) = a.overflowing_sub(r8);
+                let (result, second_carry) = first_diff.overflowing_sub(prev_carry);
+
+                // Carry if the 9th bit is set.
+                let carry = first_carry | second_carry;
+
+                let half_carry = ((a & 0x0f) < (r8 & 0x0f)) | (first_diff & 0x0f < prev_carry);
+
+                self.registers.af.set_a(result);
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(result == 0)
+                        .with_n(true)
+                        .with_h(half_carry)
                         .with_c(carry),
                 );
                 self.registers.pc += 1;
@@ -823,6 +893,44 @@ impl Cpu {
         let prefix_opcode = opcodes::decode_prefix(second_byte);
 
         match prefix_opcode {
+            RlcR { x } => {
+                // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
+                // output: [b7] [b6][b5][b4][b3][b2][b1][b0][b7]
+                let value = self.r8(x);
+                let b7 = value & 0b1000_0000 == 0b1000_0000;
+                let shifted = value.rotate_left(1);
+
+                self.set_r8(x, shifted);
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(shifted == 0)
+                        .with_n(false)
+                        .with_h(false)
+                        .with_c(b7),
+                );
+                self.registers.pc += 2;
+            }
+            RrcR { x } => {
+                // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
+                // output: [b0] [b0][b7][b6][b5][b4][b3][b2][b1]
+                let value = self.r8(x);
+                let b0 = value & 1 == 1;
+                let shifted = value.rotate_right(1);
+
+                self.set_r8(x, shifted);
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(shifted == 0)
+                        .with_n(false)
+                        .with_h(false)
+                        .with_c(b0),
+                );
+                self.registers.pc += 2;
+            }
             RlR { x } => {
                 // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
                 // output: [b7] [b6][b5][b4][b3][b2][b1][b0][c]
@@ -885,6 +993,26 @@ impl Cpu {
                         .with_n(false)
                         .with_h(false)
                         .with_c(b7),
+                );
+                self.registers.pc += 2;
+            }
+            SraR { x } => {
+                // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
+                // output: [b0] [b7][b7][b6][b5][b4][b3][b2][b1]
+                // Rust only arithmetically shifts signed integers, so cast r8 signed.
+                let value = self.r8(x).cast_signed();
+                let b0 = value & 1 == 1;
+                let shifted = (value >> 1).cast_unsigned();
+
+                self.set_r8(x, shifted);
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(shifted == 0)
+                        .with_n(false)
+                        .with_h(false)
+                        .with_c(b0),
                 );
                 self.registers.pc += 2;
             }
@@ -956,7 +1084,6 @@ impl Cpu {
                 self.set_r8(x, result);
                 self.registers.pc += 2;
             }
-            prefix_opcode => unimplemented!("prefix opcode: {:?}", prefix_opcode),
         }
     }
 }
