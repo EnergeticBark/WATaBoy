@@ -1,6 +1,7 @@
 use crate::parameters::{Condition, R8, R16, R16Mem};
 use crate::registers::Registers;
 use crate::{opcodes, registers};
+use crate::opcodes::Opcode::SubN;
 
 const DMG_BOOT_ROM: &[u8] = include_bytes!("../dmg.bin");
 const MEM_MAP_SIZE: usize = 0x10000;
@@ -502,6 +503,31 @@ impl Cpu {
                         .with_z(result == 0)
                         .with_n(true)
                         .with_h(a & 0x0F < next_byte & 0x0F)
+                        .with_c(carry),
+                );
+                self.registers.pc += 2;
+            }
+            SbcN => {
+                let a = self.registers.af.a();
+                let next_byte = self.memory[pc as usize + 1];
+                let prev_carry = u8::from(self.registers.af.f().c());
+
+                let (first_diff, first_carry) = a.overflowing_sub(next_byte);
+                let (result, second_carry) = first_diff.overflowing_sub(prev_carry);
+
+                // Carry if the 9th bit is set.
+                let carry = first_carry | second_carry;
+
+                let half_carry = ((a & 0x0f) < (next_byte & 0x0f)) | (first_diff & 0x0f < prev_carry);
+
+                self.registers.af.set_a(result);
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(result == 0)
+                        .with_n(true)
+                        .with_h(half_carry)
                         .with_c(carry),
                 );
                 self.registers.pc += 2;
