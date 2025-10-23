@@ -136,7 +136,8 @@ impl Cpu {
                 self.registers.pc += 1;
             }
             DecRr { x } => {
-                *self.registers.r16_mut(x) -= 1;
+                let result = self.registers.r16_mut(x).wrapping_sub(1);
+                *self.registers.r16_mut(x) = result;
                 self.registers.pc += 1;
             }
             AddHlRr { x } => {
@@ -720,6 +721,46 @@ impl Cpu {
                 self.registers.af.set_a(value);
                 self.registers.pc += 3;
             }
+            AddSpE => {
+                let next_byte = self.memory[pc as usize + 1];
+                let e = next_byte.cast_signed();
+                let result = self.registers.sp.wrapping_add_signed(i16::from(e));
+
+                let carry = ((self.registers.sp & 0xff) + u16::from(next_byte)) & 0x0100 == 0x0100;
+                let half_carry = (((self.registers.sp & 0x0f) as u8) + (next_byte & 0x0f)) & 0x10 == 0x10;
+
+                self.registers.sp = result;
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(false)
+                        .with_n(false)
+                        .with_h(half_carry)
+                        .with_c(carry),
+                );
+                self.registers.pc += 2;
+            }
+            LdHlSpPlusE => {
+                let next_byte = self.memory[pc as usize + 1];
+                let e = next_byte.cast_signed();
+                let result = self.registers.sp.wrapping_add_signed(i16::from(e));
+
+                let carry = ((self.registers.sp & 0xff) + u16::from(next_byte)) & 0x0100 == 0x0100;
+                let half_carry = (((self.registers.sp & 0x0f) as u8) + (next_byte & 0x0f)) & 0x10 == 0x10;
+
+                *self.registers.r16_mut(R16::Hl) = result;
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(false)
+                        .with_n(false)
+                        .with_h(half_carry)
+                        .with_c(carry),
+                );
+                self.registers.pc += 2;
+            }
             LdSpHl => {
                 self.registers.sp = self.registers.hl.into_bits();
                 self.registers.pc += 1;
@@ -739,6 +780,7 @@ impl Cpu {
         Ok(())
     }
 
+    #[allow(clippy::too_many_lines)]
     fn execute_prefix(&mut self) {
         use opcodes::PrefixOpcode::*;
 
