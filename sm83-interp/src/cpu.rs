@@ -119,6 +119,18 @@ impl Cpu {
                 self.registers.af.set_a(value);
                 self.registers.pc += 1;
             }
+            LdNnSp => {
+                let [low_sp, high_sp] = self.registers.sp.to_le_bytes();
+
+                let destination = u16::from_le_bytes([
+                    self.memory[pc as usize + 1],
+                    self.memory[pc as usize + 2],
+                ]);
+
+                self.memory[destination as usize] = low_sp;
+                self.memory[destination as usize + 1] = high_sp;
+                self.registers.pc += 3;
+            }
             IncRr { x } => {
                 *self.registers.r16_mut(x) = self.registers.r16_mut(x).wrapping_add(1);
                 self.registers.pc += 1;
@@ -178,6 +190,25 @@ impl Cpu {
                 self.set_r8(x, next_byte);
                 self.registers.pc += 2;
             }
+            Rlca => {
+                // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
+                // output: [b7] [b6][b5][b4][b3][b2][b1][b0][b7]
+                let value = self.registers.af.a();
+                let b7 = value & 0b1000_0000 == 0b1000_0000;
+                let rotated = value.rotate_left(1);
+
+                self.registers.af.set_a(rotated);
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(false)
+                        .with_n(false)
+                        .with_h(false)
+                        .with_c(b7),
+                );
+                self.registers.pc += 1;
+            }
             Rla => {
                 // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
                 // output: [b7] [b6][b5][b4][b3][b2][b1][b0][c]
@@ -224,6 +255,44 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
+            Daa => {
+                // A surprisingly complicated instruction. This implementation is largely based on:
+                // https://rgbds.gbdev.io/docs/v0.9.4/gbz80.7#DAA
+                let a = self.registers.af.a();
+                let mut adjustment = 0;
+                let mut new_carry = false;
+
+                let result = if self.registers.af.f().n() {
+                    if self.registers.af.f().h() {
+                        adjustment += 0x06;
+                    }
+                    if self.registers.af.f().c() {
+                        adjustment += 0x60;
+                        new_carry = true;
+                    }
+                    a.wrapping_sub(adjustment)
+                } else {
+                    if self.registers.af.f().h() || a & 0x0f > 0x09 {
+                        adjustment += 0x06;
+                    }
+                    if self.registers.af.f().c() || a > 0x99 {
+                        adjustment += 0x60;
+                        new_carry = true;
+                    }
+                    a.wrapping_add(adjustment)
+                };
+
+                self.registers.af.set_a(result);
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(result == 0)
+                        .with_h(false)
+                        .with_c(new_carry),
+                );
+                self.registers.pc += 1;
+            }
             Cpl => {
                 let flipped = !self.registers.af.a();
 
@@ -231,6 +300,25 @@ impl Cpu {
                 self.registers
                     .af
                     .set_f(self.registers.af.f().with_n(true).with_h(true));
+                self.registers.pc += 1;
+            }
+            Scf => {
+                self.registers.af.set_f(
+                    self.registers.af.f()
+                        .with_n(false)
+                        .with_h(false)
+                        .with_c(true)
+                );
+                self.registers.pc += 1;
+            }
+            Ccf => {
+                let carry = !self.registers.af.f().c();
+                self.registers.af.set_f(
+                    self.registers.af.f()
+                        .with_n(false)
+                        .with_h(false)
+                        .with_c(carry)
+                );
                 self.registers.pc += 1;
             }
             JrE => {
@@ -582,12 +670,12 @@ impl Cpu {
                 let high = self.memory[self.registers.sp as usize + 1];
                 self.registers.sp += 2;
 
-                *self.registers.r16_stack_mut(x) = u16::from_le_bytes([low, high]);
+                self.registers.set_r16_stack(x, u16::from_le_bytes([low, high]));
 
                 self.registers.pc += 1;
             }
             PushRr { x } => {
-                let [low, high] = self.registers.r16_stack_mut(x).to_le_bytes();
+                let [low, high] = self.registers.r16_stack(x).to_le_bytes();
                 // Make room on the stack for a 16-bit value.
                 self.registers.sp -= 2;
                 // Game Boy is little-endian, so load the low byte then the high byte.
@@ -631,6 +719,10 @@ impl Cpu {
 
                 self.registers.af.set_a(value);
                 self.registers.pc += 3;
+            }
+            LdSpHl => {
+                self.registers.sp = self.registers.hl.into_bits();
+                self.registers.pc += 1;
             }
             Di => {
                 self.ime = false;
@@ -775,6 +867,14 @@ impl Cpu {
                 let value = self.r8(x);
                 let mask = !(1 << bit_index.value());
                 let result = value & mask;
+
+                self.set_r8(x, result);
+                self.registers.pc += 2;
+            }
+            SetBR { b: bit_index, x } => {
+                let value = self.r8(x);
+                let bit = 1 << bit_index.value();
+                let result = value | bit;
 
                 self.set_r8(x, result);
                 self.registers.pc += 2;

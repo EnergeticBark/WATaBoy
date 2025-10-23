@@ -2,7 +2,7 @@ use bitfield_struct::bitfield;
 
 use crate::parameters::{R16, R16Stack};
 
-#[bitfield(u8, order = Lsb)]
+#[bitfield(u8, order = Msb)]
 pub struct Flags {
     pub z: bool, // Zero
     pub n: bool, // Subtraction
@@ -55,12 +55,24 @@ impl Registers {
         }
     }
 
-    pub(crate) fn r16_stack_mut(&mut self, r16_stack: R16Stack) -> &mut u16 {
+    pub(crate) fn r16_stack(&mut self, r16_stack: R16Stack) -> u16 {
         match r16_stack {
-            R16Stack::Bc => &mut self.bc.0,
-            R16Stack::De => &mut self.de.0,
-            R16Stack::Hl => &mut self.hl.0,
-            R16Stack::Af => &mut self.af.0,
+            R16Stack::Bc => self.bc.0,
+            R16Stack::De => self.de.0,
+            R16Stack::Hl => self.hl.0,
+            R16Stack::Af => self.af.0,
+        }
+    }
+
+    pub(crate) fn set_r16_stack(&mut self, r16_stack: R16Stack, value: u16) {
+        match r16_stack {
+            R16Stack::Bc => self.bc.0 = value,
+            R16Stack::De => self.de.0 = value,
+            R16Stack::Hl => self.hl.0 = value,
+            R16Stack::Af => {
+                self.af.0 = value;
+                self.af.0 &= 0xFFF0;
+            },
         }
     }
 }
