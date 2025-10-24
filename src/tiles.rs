@@ -53,7 +53,7 @@ fn draw_tiles_body(
                     )
                 });
 
-                let tile_data = tiles::unsigned_nth_tile(&dmg_state.memory, row_index + i);
+                let tile_data = tiles::unsigned_nth_tile(&dmg_state.memory.buffer, row_index + i);
                 tile.set(
                     ColorImage::from_gray([TILE_SIZE, TILE_SIZE], &greyscale_from_tile(tile_data)),
                     TextureOptions::NEAREST,

@@ -1,4 +1,3 @@
-use std::fs;
 use crate::memory::draw_memory_table;
 use crate::registers::draw_register_table;
 use crate::tile_map::draw_tile_map;
@@ -63,6 +62,7 @@ fn step_multiple(steps: u32, dmg_state: &mut Cpu) {
         if let Err(message) =dmg_state.execute() {
             error!("{message}");
         }
+        dmg_state.handle_interrupts();
     }
 }
 
@@ -103,8 +103,8 @@ impl eframe::App for PPUViewApp {
             draw_tile_map(ui, ctx, &mut self.tile_map, &self.dmg_state);
 
             if ui.button("Step once").clicked() {
-                println!("{:?}", decode(self.dmg_state.memory[self.dmg_state.registers.pc as usize]));
-                if let Err(message) =self.dmg_state.execute() {
+                println!("{:?}", decode(self.dmg_state.memory[self.dmg_state.registers.pc]));
+                if let Err(message) = self.dmg_state.execute() {
                     error!("{message}");
                 }
             }
@@ -118,22 +118,20 @@ impl eframe::App for PPUViewApp {
             });
 
             ui.horizontal(|ui| {
-                if ui.button("VBlank and step multiple").clicked() {
+                if ui.button("Request VBlank and step multiple").clicked() {
                     for _ in 0..self.step_by_frames {
-                        if self.dmg_state.memory[0xFFFF] & 1 == 1 && self.dmg_state.ime {
-                            // Run the VBlank interrupt routine
-                            self.dmg_state.memory[0xFF0F] &= !1;
-                            self.dmg_state.ime = false;
+                        self.dmg_state.memory[0xFF0F] |= 0b0000_0001;
+                        step_multiple(self.step_by_cycles, &mut self.dmg_state);
+                    }
+                }
 
-                            self.dmg_state.registers.sp -= 2;
-                            let [low, high] = (self.dmg_state.registers.pc).to_le_bytes();
-                            self.dmg_state.memory[self.dmg_state.registers.sp as usize] = low;
-                            self.dmg_state.memory[self.dmg_state.registers.sp as usize + 1] = high;
-
-                            self.dmg_state.registers.pc = 0x0040;
-
-                            step_multiple(self.step_by_cycles, &mut self.dmg_state);
-                        }
+                ui.add(Slider::new(&mut self.step_by_frames, 0..=100));
+            });
+            ui.horizontal(|ui| {
+                if ui.button("Timer and step multiple").clicked() {
+                    for _ in 0..self.step_by_frames {
+                        self.dmg_state.memory[0xFF0F] |= 0b0000_0100;
+                        step_multiple(self.step_by_cycles, &mut self.dmg_state);
                     }
                 }
 

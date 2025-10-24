@@ -26,8 +26,8 @@ pub fn draw_memory_table(ui: &mut Ui, dmg_state: &Cpu) {
 }
 
 fn draw_memory_body(body: TableBody<'_>, dmg_state: &Cpu) {
-    body.rows(18.0, dmg_state.memory.len() / 16, |mut row| {
-        let row_index = row.index() * 16;
+    body.rows(18.0, 0x10000 / 16, |mut row| {
+        let row_index = row.index() as u16 * 16;
         let row_label = format!("{:03X}0", row_index / 16);
         row.col(|ui| {
             ui.monospace(RichText::from(row_label).strong());
@@ -37,7 +37,7 @@ fn draw_memory_body(body: TableBody<'_>, dmg_state: &Cpu) {
             let formatted_row = format!("{:02X}", dmg_state.memory[row_index + i]);
 
             row.col(|ui| {
-                if row_index + i == dmg_state.registers.pc as usize {
+                if row_index + i == dmg_state.registers.pc {
                     ui.monospace(RichText::from(formatted_row).color(Color32::RED));
                 } else {
                     ui.monospace(formatted_row);

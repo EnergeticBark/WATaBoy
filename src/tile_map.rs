@@ -29,8 +29,12 @@ pub fn draw_tile_map(
 
         for row in 0..32 {
             for column in 0..32 {
-                let tile_id = tiles::tile_map(&dmg_state.memory)[row * 32 + column];
-                let tile_data = tiles::unsigned_nth_tile(&dmg_state.memory, tile_id as usize);
+                let tile_id = tiles::tile_map(&dmg_state.memory.buffer)[row * 32 + column];
+
+                let tile_data = tiles::unsigned_nth_tile(&dmg_state.memory.buffer, tile_id as usize);
+
+                //let tile_data = tiles::signed_nth_tile(&dmg_state.memory, tile_id.cast_signed() as isize);
+
                 let greyscale =
                     ColorImage::from_gray([8, 8], &crate::tiles::greyscale_from_tile(tile_data));
 
