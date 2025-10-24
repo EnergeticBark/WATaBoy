@@ -2,6 +2,7 @@ use arbitrary_int::u2;
 
 const TILE_SIZE: usize = 16;
 const TILE_BLOCK_0_ADDR: usize = 0x8000;
+const TILE_BLOCK_2_ADDR: usize = 0x9000;
 
 const TILE_MAP_SIZE: usize = 0x0400;
 const TILE_MAP_ADDR: usize = 0x9800;
@@ -30,6 +31,13 @@ pub fn tile_to_palette_indices(tile: &[u8; 16]) -> Vec<u2> {
 
 pub fn unsigned_nth_tile(memory: &[u8], tile_id: usize) -> &[u8; TILE_SIZE] {
     let tile_start = TILE_BLOCK_0_ADDR + tile_id * TILE_SIZE;
+    let tile_end = tile_start + TILE_SIZE;
+    memory[tile_start..tile_end].try_into().unwrap()
+}
+
+pub fn signed_nth_tile(memory: &[u8], tile_id: isize) -> &[u8; TILE_SIZE] {
+    let offset = tile_id * TILE_SIZE as isize;
+    let tile_start = TILE_BLOCK_2_ADDR.wrapping_add_signed(offset);
     let tile_end = tile_start + TILE_SIZE;
     memory[tile_start..tile_end].try_into().unwrap()
 }
