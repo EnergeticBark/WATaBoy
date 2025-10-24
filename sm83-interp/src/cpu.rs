@@ -85,6 +85,38 @@ impl Cpu {
         self.memory[0..DMG_BOOT_ROM.len()].copy_from_slice(DMG_BOOT_ROM);
     }
 
+    pub fn handle_interrupts(&mut self) {
+        const IE: usize = 0xFFFF;
+        const IF: usize = 0xFF0F;
+
+        // If an interrupt's enabled and flag bit is set, it needs to be serviced.
+        let to_service = self.memory[IE] & self.memory[IF];
+
+        if self.ime && to_service != 0 {
+            // Interrupts are serviced with a priority in order of least-to-most significant bit.
+            // 0: VBlank, 1: LCD, 2: Timer, 3: Serial, and 4: Joypad.
+            let nth_interrupt = to_service.trailing_zeros();
+
+            // Clear the flag bit of the interrupt we're servicing.
+            let flag_mask = !(0b0000_0001 << nth_interrupt);
+            self.memory[IF] &= flag_mask;
+
+            // Turn off interrupt master enable.
+            self.ime = false;
+
+            // Push the PC to the stack.
+            self.registers.sp -= 2;
+            let [low, high] = (self.registers.pc).to_le_bytes();
+            self.memory[self.registers.sp as usize] = low;
+            self.memory[self.registers.sp as usize + 1] = high;
+
+            // Each interrupt handler is 8 bytes apart in memory, starting at 0x0040.
+            #[allow(clippy::cast_possible_truncation)]
+            let interrupt_handler_offset = 0x0008 * nth_interrupt as u16;
+            self.registers.pc = 0x0040 + interrupt_handler_offset;
+        }
+    }
+
     /// # Errors
     ///
     /// Will return an error if the instruction at the current program counter is unimplemented.
@@ -367,6 +399,10 @@ impl Cpu {
                 self.set_r8(dest, self.r8(src));
                 self.registers.pc += 1;
             }
+            Halt => {
+                // TODO: Correctly interpret this instruction once interrupts are fully implemented.
+                self.registers.pc += 1;
+            },
 
             // Block 2
             AddR { x } => {
