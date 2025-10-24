@@ -19,7 +19,7 @@ fn main() {
            timing. See: https://gbdev.io/pandocs/Rendering.html
         */
         cpu.memory[0xFF44] = (cpu.memory[0xFF44] + 1) % 154;
-        let bytecode = cpu.memory[cpu.registers.pc as usize];
+        let bytecode = cpu.memory[cpu.registers.pc];
         let opcode = opcodes::decode(bytecode).unwrap();
         println!("PC: {}: {:?}", cpu.registers.pc, opcode);
         cpu.execute().unwrap();
