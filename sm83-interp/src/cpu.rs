@@ -16,6 +16,7 @@ pub struct Cpu {
     // Upper 8-bits exposed as the DIV register in memory.
     pub system_clock: u16,
     tima_edge: bool,
+    pub halted: bool,
 }
 
 impl Cpu {
@@ -143,6 +144,10 @@ impl Cpu {
         // If an interrupt's enabled and flag bit is set, it needs to be serviced.
         let to_service = self.memory[IE] & self.memory[IF];
 
+        if !self.ime && to_service != 0 {
+            self.halted = false;
+        }
+
         if self.ime && to_service != 0 {
             // Interrupts are serviced with a priority in order of least-to-most significant bit.
             // 0: VBlank, 1: LCD, 2: Timer, 3: Serial, and 4: Joypad.
@@ -176,6 +181,11 @@ impl Cpu {
     #[allow(clippy::too_many_lines)]
     pub fn execute(&mut self) -> Result<(), String> {
         use opcodes::Opcode::*;
+
+        if self.halted {
+            self.increment_timers(1);
+            return Ok(());
+        }
 
         let pc = self.registers.pc;
         let bytecode = self.memory[pc];
@@ -459,8 +469,8 @@ impl Cpu {
                 self.registers.pc += 1;
             }
             Halt => {
-                // TODO: Correctly interpret this instruction once interrupts are fully implemented.
                 self.registers.pc += 1;
+                self.halted = true;
             },
 
             // Block 2
