@@ -2,6 +2,7 @@ use crate::parameters::{Condition, R8, R16, R16Mem};
 use crate::registers::Registers;
 use crate::{opcodes, registers};
 use crate::bus::AddressBus;
+use crate::cycles::{m_cycles, prefix_m_cycles};
 
 const DMG_BOOT_ROM: &[u8] = include_bytes!("../dmg.bin");
 
@@ -9,7 +10,12 @@ const DMG_BOOT_ROM: &[u8] = include_bytes!("../dmg.bin");
 pub struct Cpu {
     pub registers: Registers,
     pub memory: AddressBus,
-    pub ime: bool, // Interrupt master enable flag
+    // Interrupt master enable flag
+    pub ime: bool,
+    // Clock register incremented every T-Cycle.
+    // Upper 8-bits exposed as the DIV register in memory.
+    pub system_clock: u16,
+    tima_edge: bool,
 }
 
 impl Cpu {
@@ -85,6 +91,49 @@ impl Cpu {
     pub fn load_boot_rom(&mut self) {
         #[allow(clippy::cast_possible_truncation)]
         self.memory[0..DMG_BOOT_ROM.len() as u16].copy_from_slice(DMG_BOOT_ROM);
+    }
+
+    fn increment_timers(&mut self, m_cycles: u16) {
+        // Memory mapped DIV register address
+        const DIV: u16 = 0xFF04;
+        const TIMA: u16 = 0xFF05;
+        const TMA: u16 = 0xFF06;
+        const TAC: u16 = 0xFF07;
+
+        // 1 TCycle = 4 MCycles
+        let t_cycles = m_cycles * 4;
+
+        let tac = self.memory[TAC];
+        let tima_enabled = tac & 0b0000_0100 == 0b0000_0100;
+        let nth_bit = match tac & 0b0000_0011 {
+            0 => 9,
+            1 => 3,
+            2 => 5,
+            3 => 7,
+            _ => unreachable!()
+        };
+        let mask: u16 = 1 << nth_bit;
+
+        for _ in 0..t_cycles {
+            self.system_clock = self.system_clock.wrapping_add(1);
+
+            let next_tima_edge = tima_enabled && self.system_clock & mask == mask;
+            // If there was a falling edge, increment TIMA.
+            if self.tima_edge && !next_tima_edge {
+                let (next_tima, carry) = self.memory[TIMA].overflowing_add(1);
+                self.memory[TIMA] = next_tima;
+
+                // Overflow, set timer counter to the timer modulo and request for a timer interrupt.
+                if carry {
+                    self.memory[TIMA] = self.memory[TMA];
+                    self.memory[0xFF0F] |= 0b0000_0100;
+                }
+            }
+            self.tima_edge = next_tima_edge;
+        }
+
+        let upper_byte = (self.system_clock >> 8) as u8;
+        self.memory[DIV] = upper_byte;
     }
 
     pub fn handle_interrupts(&mut self) {
@@ -389,13 +438,19 @@ impl Cpu {
             }
             JrCcE { c } => {
                 let jump_offset = self.memory[pc + 1].cast_signed();
+
+                let mut m_cycles = 2;
                 if self.check_condition(c) {
                     self.registers.pc = self
                         .registers
                         .pc
                         .wrapping_add_signed(i16::from(jump_offset));
+
+                    m_cycles += 1;
                 }
                 self.registers.pc += 2;
+
+                self.increment_timers(m_cycles);
             }
 
             // Block 1
@@ -405,7 +460,7 @@ impl Cpu {
             }
             Halt => {
                 // TODO: Correctly interpret this instruction once interrupts are fully implemented.
-                //self.registers.pc += 1;
+                self.registers.pc += 1;
             },
 
             // Block 2
@@ -707,6 +762,8 @@ impl Cpu {
             }
             RetCc { c } => {
                 self.registers.pc += 1;
+
+                let mut m_cycles = 2;
                 if self.check_condition(c) {
                     let destination = u16::from_le_bytes([
                         self.memory[self.registers.sp],
@@ -715,7 +772,10 @@ impl Cpu {
                     self.registers.sp += 2;
 
                     self.registers.pc = destination;
+
+                    m_cycles += 3;
                 }
+                self.increment_timers(m_cycles);
             }
             Ret => {
                 let destination = u16::from_le_bytes([
@@ -743,9 +803,13 @@ impl Cpu {
                 ]);
                 self.registers.pc += 3;
 
+                let mut m_cycles = 3;
                 if self.check_condition(c) {
                     self.registers.pc = destination;
+
+                    m_cycles += 1;
                 }
+                self.increment_timers(m_cycles);
             }
             JpNn => {
                 let destination = u16::from_le_bytes([
@@ -765,6 +829,7 @@ impl Cpu {
 
                 self.registers.pc += 3;
 
+                let mut m_cycles = 3;
                 if self.check_condition(c) {
                     // Push the address of the next instruction to the stack.
                     self.registers.sp -= 2;
@@ -773,7 +838,10 @@ impl Cpu {
                     self.memory[self.registers.sp + 1] = high;
 
                     self.registers.pc = destination;
+
+                    m_cycles += 3;
                 }
+                self.increment_timers(m_cycles);
             }
             CallNn => {
                 // Push the address of the next instruction to the stack.
@@ -922,6 +990,8 @@ impl Cpu {
             }
             opcode => Err(format!("unimplemented opcode: {opcode:?}"))?,
         }
+
+        self.increment_timers(m_cycles(opcode));
         Ok(())
     }
 
@@ -1125,6 +1195,8 @@ impl Cpu {
                 self.registers.pc += 2;
             }
         }
+
+        self.increment_timers(prefix_m_cycles(prefix_opcode));
     }
 }
 

@@ -162,14 +162,14 @@ pub fn decode(first_byte: u8) -> Result<Opcode, String> {
   It's up to the emulator to get that literal value from memory, not the opcode parser.
   Opcodes that use 16-bit literals/addresses will be denoted 'Nn'.
 */
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Opcode {
     // 8-bit load instructions.
     // Ld
     LdRR { x: R8, y: R8 }, // LD r, r'
     LdRN { x: R8 },        // LD r, n
-    LdMemA { x: R16Mem },  // LD (BC|DE|HL+|HL-), A
     LdAMem { x: R16Mem },  // LD A, (BC|DE|HL+|HL-)
+    LdMemA { x: R16Mem },  // LD (BC|DE|HL+|HL-), A
     LdANn,                 // LD A, (nn)
     LdNnA,                 // LD (nn), A
     // Ldh
