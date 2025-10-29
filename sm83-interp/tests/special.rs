@@ -3,7 +3,7 @@ mod common;
 use sm83_interp::cpu::Cpu;
 use sm83_interp::registers::Registers;
 
-const SPECIAL_TEST_ROM: &[u8] = include_bytes!("./01-special.gb");
+const SPECIAL_TEST_ROM: &[u8] = include_bytes!("./roms/01-special.gb");
 /* Blargg's test roms will put themselves in an infinite loop after passing or failing.
    We stop and run our assertions once the program counter reaches this looping instruction.
    [We probably want to implement a timeout at some point.]
