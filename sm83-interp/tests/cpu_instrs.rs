@@ -50,6 +50,18 @@ const MISC_INSTRS_08: BlarggTest = BlarggTest {
     rom: include_bytes!("./roms/08-misc instrs.gb"),
     final_pc: 0xCB91,
 };
+const OP_R_R_09: BlarggTest = BlarggTest {
+    rom: include_bytes!("./roms/09-op r,r.gb"),
+    final_pc: 0xCE67,
+};
+const BIT_OPS_10: BlarggTest = BlarggTest {
+    rom: include_bytes!("./roms/10-bit ops.gb"),
+    final_pc: 0xCF58,
+};
+const OP_A_HL_11: BlarggTest = BlarggTest {
+    rom: include_bytes!("./roms/11-op a,(hl).gb"),
+    final_pc: 0xCC62,
+};
 
 #[test]
 fn test_01_special() {
@@ -105,5 +117,26 @@ fn test_07_jr_jp_call_ret_rst() {
 fn test_08_misc_instrs() {
     let mut cpu = Cpu::default();
     let lines = run_blargg_test(&mut cpu, &MISC_INSTRS_08);
+    assert!(lines[3].starts_with("Passed"));
+}
+
+#[test]
+fn test_09_op_r_r() {
+    let mut cpu = Cpu::default();
+    let lines = run_blargg_test(&mut cpu, &OP_R_R_09);
+    assert!(lines[3].starts_with("Passed"));
+}
+
+#[test]
+fn test_10_bit_ops() {
+    let mut cpu = Cpu::default();
+    let lines = run_blargg_test(&mut cpu, &BIT_OPS_10);
+    assert!(lines[3].starts_with("Passed"));
+}
+
+#[test]
+fn test_11_op_a_hl() {
+    let mut cpu = Cpu::default();
+    let lines = run_blargg_test(&mut cpu, &OP_A_HL_11);
     assert!(lines[3].starts_with("Passed"));
 }
