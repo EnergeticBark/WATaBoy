@@ -3,6 +3,7 @@ use crate::registers::Registers;
 use crate::{opcodes, registers};
 use crate::bus::AddressBus;
 use crate::cycles::{m_cycles, prefix_m_cycles};
+use crate::opcodes::{Opcode, PrefixOpcode};
 use crate::timers::Timers;
 
 const DMG_BOOT_ROM: &[u8] = include_bytes!("../dmg.bin");
@@ -140,7 +141,7 @@ impl Cpu {
 
             // Push the PC to the stack.
             self.registers.sp -= 2;
-            let [low, high] = (self.registers.pc).to_le_bytes();
+            let [low, high] = self.registers.pc.to_le_bytes();
             self.memory[self.registers.sp] = low;
             self.memory[self.registers.sp + 1] = high;
 
@@ -151,12 +152,30 @@ impl Cpu {
         }
     }
 
+    fn calculate_m_cycles(&self, opcode: Opcode) -> u16 {
+        match opcode {
+            Opcode::JpCcNn { c } => {
+                if self.check_condition(c) { 4 } else { 3 }
+            }
+            Opcode::JrCcE { c } => {
+                if self.check_condition(c) { 3 } else { 2 }
+            }
+            Opcode::CallCcNn { c } => {
+                if self.check_condition(c) { 6 } else { 3 }
+            }
+            Opcode::RetCc { c } => {
+                if self.check_condition(c) { 5 } else { 2 }
+            }
+            _ => m_cycles(opcode)
+        }
+    }
+
     /// # Errors
     ///
     /// Will return an error if the instruction at the current program counter is unimplemented.
     #[allow(clippy::too_many_lines)]
     pub fn execute(&mut self) -> Result<(), String> {
-        use opcodes::Opcode::*;
+        use Opcode::*;
 
         if self.halted {
             self.increment_timers(1);
@@ -166,6 +185,8 @@ impl Cpu {
         let pc = self.registers.pc;
         let bytecode = self.memory[pc];
         let opcode = opcodes::decode(bytecode)?;
+
+        let m_cycles = self.calculate_m_cycles(opcode);
 
         match opcode {
             // Block 0
@@ -425,18 +446,13 @@ impl Cpu {
             JrCcE { c } => {
                 let jump_offset = self.memory[pc + 1].cast_signed();
 
-                let mut m_cycles = 2;
                 if self.check_condition(c) {
                     self.registers.pc = self
                         .registers
                         .pc
                         .wrapping_add_signed(i16::from(jump_offset));
-
-                    m_cycles += 1;
                 }
                 self.registers.pc += 2;
-
-                self.increment_timers(m_cycles);
             }
 
             // Block 1
@@ -749,7 +765,6 @@ impl Cpu {
             RetCc { c } => {
                 self.registers.pc += 1;
 
-                let mut m_cycles = 2;
                 if self.check_condition(c) {
                     let destination = u16::from_le_bytes([
                         self.memory[self.registers.sp],
@@ -758,10 +773,7 @@ impl Cpu {
                     self.registers.sp += 2;
 
                     self.registers.pc = destination;
-
-                    m_cycles += 3;
                 }
-                self.increment_timers(m_cycles);
             }
             Ret => {
                 let destination = u16::from_le_bytes([
@@ -789,13 +801,9 @@ impl Cpu {
                 ]);
                 self.registers.pc += 3;
 
-                let mut m_cycles = 3;
                 if self.check_condition(c) {
                     self.registers.pc = destination;
-
-                    m_cycles += 1;
                 }
-                self.increment_timers(m_cycles);
             }
             JpNn => {
                 let destination = u16::from_le_bytes([
@@ -815,7 +823,6 @@ impl Cpu {
 
                 self.registers.pc += 3;
 
-                let mut m_cycles = 3;
                 if self.check_condition(c) {
                     // Push the address of the next instruction to the stack.
                     self.registers.sp -= 2;
@@ -824,10 +831,7 @@ impl Cpu {
                     self.memory[self.registers.sp + 1] = high;
 
                     self.registers.pc = destination;
-
-                    m_cycles += 3;
                 }
-                self.increment_timers(m_cycles);
             }
             CallNn => {
                 // Push the address of the next instruction to the stack.
@@ -977,16 +981,18 @@ impl Cpu {
             opcode => Err(format!("unimplemented opcode: {opcode:?}"))?,
         }
 
-        self.increment_timers(m_cycles(opcode));
+        self.increment_timers(m_cycles);
         Ok(())
     }
 
     #[allow(clippy::too_many_lines)]
     fn execute_prefix(&mut self) {
-        use opcodes::PrefixOpcode::*;
+        use PrefixOpcode::*;
 
         let second_byte = self.memory[self.registers.pc + 1];
         let prefix_opcode = opcodes::decode_prefix(second_byte);
+
+        let m_cycles = prefix_m_cycles(prefix_opcode);
 
         match prefix_opcode {
             RlcR { x } => {
@@ -1182,7 +1188,7 @@ impl Cpu {
             }
         }
 
-        self.increment_timers(prefix_m_cycles(prefix_opcode));
+        self.increment_timers(m_cycles);
     }
 }
 

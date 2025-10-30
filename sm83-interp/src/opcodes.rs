@@ -290,7 +290,7 @@ pub fn decode_prefix(second_byte: u8) -> PrefixOpcode {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum PrefixOpcode {
     RlcR { x: R8 },         // RLC r
     RrcR { x: R8 },         // RRC r
