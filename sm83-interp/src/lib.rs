@@ -4,3 +4,4 @@ mod parameters;
 pub mod registers;
 mod bus;
 mod cycles;
+mod timers;

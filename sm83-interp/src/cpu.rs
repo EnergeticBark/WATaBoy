@@ -3,6 +3,7 @@ use crate::registers::Registers;
 use crate::{opcodes, registers};
 use crate::bus::AddressBus;
 use crate::cycles::{m_cycles, prefix_m_cycles};
+use crate::timers::Timers;
 
 const DMG_BOOT_ROM: &[u8] = include_bytes!("../dmg.bin");
 
@@ -12,10 +13,7 @@ pub struct Cpu {
     pub memory: AddressBus,
     // Interrupt master enable flag
     pub ime: bool,
-    // Clock register incremented every T-Cycle.
-    // Upper 8-bits exposed as the DIV register in memory.
-    pub system_clock: u16,
-    tima_edge: bool,
+    timers: Timers,
     pub halted: bool,
 }
 
@@ -95,46 +93,24 @@ impl Cpu {
     }
 
     fn increment_timers(&mut self, m_cycles: u16) {
-        // Memory mapped DIV register address
+        // Memory mapped timer register addresses
         const DIV: u16 = 0xFF04;
         const TIMA: u16 = 0xFF05;
         const TMA: u16 = 0xFF06;
         const TAC: u16 = 0xFF07;
 
-        // 1 TCycle = 4 MCycles
-        let t_cycles = m_cycles * 4;
+        self.timers.update_timer_counter(self.memory[TIMA]);
+        self.timers.update_timer_modulo(self.memory[TMA]);
+        self.timers.update_timer_control(self.memory[TAC]);
 
-        let tac = self.memory[TAC];
-        let tima_enabled = tac & 0b0000_0100 == 0b0000_0100;
-        let nth_bit = match tac & 0b0000_0011 {
-            0 => 9,
-            1 => 3,
-            2 => 5,
-            3 => 7,
-            _ => unreachable!()
-        };
-        let mask: u16 = 1 << nth_bit;
+        self.timers.increment(m_cycles);
 
-        for _ in 0..t_cycles {
-            self.system_clock = self.system_clock.wrapping_add(1);
+        self.memory[DIV] = self.timers.div();
+        self.memory[TIMA] = self.timers.tima();
 
-            let next_tima_edge = tima_enabled && self.system_clock & mask == mask;
-            // If there was a falling edge, increment TIMA.
-            if self.tima_edge && !next_tima_edge {
-                let (next_tima, carry) = self.memory[TIMA].overflowing_add(1);
-                self.memory[TIMA] = next_tima;
-
-                // Overflow, set timer counter to the timer modulo and request for a timer interrupt.
-                if carry {
-                    self.memory[TIMA] = self.memory[TMA];
-                    self.memory[0xFF0F] |= 0b0000_0100;
-                }
-            }
-            self.tima_edge = next_tima_edge;
+        if self.timers.process_interrupt() {
+            self.memory[0xFF0F] |= 0b0000_0100;
         }
-
-        let upper_byte = (self.system_clock >> 8) as u8;
-        self.memory[DIV] = upper_byte;
     }
 
     pub fn handle_interrupts(&mut self) {
