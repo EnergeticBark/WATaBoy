@@ -1,6 +1,6 @@
 use crate::parameters::{Condition, R8, R16, R16Mem};
 use crate::registers::Registers;
-use crate::{opcodes, registers};
+use crate::{hw_addrs, opcodes, registers};
 use crate::bus::AddressBus;
 use crate::cycles::{m_cycles, prefix_m_cycles};
 use crate::opcodes::{Opcode, PrefixOpcode};
@@ -92,11 +92,8 @@ impl Cpu {
     }
 
     pub fn handle_interrupts(&mut self) {
-        const IE: u16 = 0xFFFF;
-        const IF: u16 = 0xFF0F;
-
         // If an interrupt's enabled and flag bit is set, it needs to be serviced.
-        let to_service = self.memory[IE] & self.memory[IF];
+        let to_service = self.memory[hw_addrs::IE] & self.memory[hw_addrs::IF];
 
         if !self.ime && to_service != 0 {
             self.halted = false;
@@ -111,7 +108,7 @@ impl Cpu {
 
             // Clear the flag bit of the interrupt we're servicing.
             let flag_mask = !(0b0000_0001 << nth_interrupt);
-            self.memory.buffer[IF as usize] &= flag_mask;
+            self.memory.buffer[hw_addrs::IF as usize] &= flag_mask;
 
             // Turn off interrupt master enable.
             self.ime = false;
