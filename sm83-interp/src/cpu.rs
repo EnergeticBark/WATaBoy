@@ -16,6 +16,7 @@ pub struct Cpu {
     pub ime: bool,
     timers: Timers,
     pub halted: bool,
+    pub halt_bug: bool,
 }
 
 impl Cpu {
@@ -119,7 +120,7 @@ impl Cpu {
         const IF: u16 = 0xFF0F;
 
         // If an interrupt's enabled and flag bit is set, it needs to be serviced.
-        let to_service = self.memory[IE] & self.memory[IF];
+        let to_service = self.memory[IE] & self.memory[IF] & 0x1F;
 
         if !self.ime && to_service != 0 {
             self.halted = false;
@@ -182,9 +183,15 @@ impl Cpu {
             return Ok(());
         }
 
-        let pc = self.registers.pc;
+        let mut pc = self.registers.pc;
         let bytecode = self.memory[pc];
         let opcode = opcodes::decode(bytecode)?;
+
+        if self.halt_bug {
+            pc -= 1;
+            self.registers.pc -= 1;
+            self.halt_bug = false;
+        }
 
         let m_cycles = self.calculate_m_cycles(opcode);
 
@@ -463,6 +470,15 @@ impl Cpu {
             Halt => {
                 self.registers.pc += 1;
                 self.halted = true;
+
+                const IE: u16 = 0xFFFF;
+                const IF: u16 = 0xFF0F;
+                // If an interrupt's enabled and flag bit is set, it needs to be serviced.
+                let to_service = self.memory[IE] & self.memory[IF] & 0x1F;
+
+                if !self.ime && to_service != 0 {
+                    self.halt_bug = true;
+                }
             },
 
             // Block 2
