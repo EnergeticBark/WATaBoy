@@ -10,7 +10,7 @@ pub fn read_ascii_from_tile_map(cpu: &Cpu) -> Vec<String> {
 }
 
 pub fn load_test_rom(cpu: &mut Cpu, test_rom: &[u8]) {
-    cpu.memory[0..0x8000].copy_from_slice(&test_rom[0..0x8000]);
+    cpu.memory.buffer[0..0x8000].copy_from_slice(&test_rom[0..0x8000]);
     cpu.registers = Registers::after_boot_rom_dmg();
 }
 

@@ -4,7 +4,6 @@ use crate::{opcodes, registers};
 use crate::bus::AddressBus;
 use crate::cycles::{m_cycles, prefix_m_cycles};
 use crate::opcodes::{Opcode, PrefixOpcode};
-use crate::timers::Timers;
 
 const DMG_BOOT_ROM: &[u8] = include_bytes!("../dmg.bin");
 
@@ -14,7 +13,6 @@ pub struct Cpu {
     pub memory: AddressBus,
     // Interrupt master enable flag
     pub ime: bool,
-    timers: Timers,
     pub halted: bool,
 }
 
@@ -40,7 +38,7 @@ impl Cpu {
             R8::E => self.registers.de.set_e(value),
             R8::H => self.registers.hl.set_h(value),
             R8::L => self.registers.hl.set_l(value),
-            R8::IndirectHL => self.memory[self.registers.hl.into_bits()] = value,
+            R8::IndirectHL => self.memory.write_byte(self.registers.hl.into_bits(), value),
             R8::A => self.registers.af.set_a(value),
         }
     }
@@ -64,14 +62,14 @@ impl Cpu {
 
     pub(crate) fn set_r16_mem(&mut self, r16_mem: R16Mem, value: u8) {
         match r16_mem {
-            R16Mem::Bc => self.memory[self.registers.bc.into_bits()] = value,
-            R16Mem::De => self.memory[self.registers.de.into_bits()] = value,
+            R16Mem::Bc => self.memory.write_byte(self.registers.bc.into_bits(), value),
+            R16Mem::De => self.memory.write_byte(self.registers.de.into_bits(), value),
             R16Mem::HlInc => {
-                self.memory[self.registers.hl.into_bits()] = value;
+                self.memory.write_byte(self.registers.hl.into_bits(), value);
                 self.registers.hl = registers::Hl::from_bits(self.registers.hl.into_bits().wrapping_add(1));
             }
             R16Mem::HlDec => {
-                self.memory[self.registers.hl.into_bits()] = value;
+                self.memory.write_byte(self.registers.hl.into_bits(), value);
                 self.registers.hl = registers::Hl::from_bits(self.registers.hl.into_bits().wrapping_sub(1));
             }
         }
@@ -90,28 +88,7 @@ impl Cpu {
 
     pub fn load_boot_rom(&mut self) {
         #[allow(clippy::cast_possible_truncation)]
-        self.memory[0..DMG_BOOT_ROM.len() as u16].copy_from_slice(DMG_BOOT_ROM);
-    }
-
-    fn increment_timers(&mut self, m_cycles: u16) {
-        // Memory mapped timer register addresses
-        const DIV: u16 = 0xFF04;
-        const TIMA: u16 = 0xFF05;
-        const TMA: u16 = 0xFF06;
-        const TAC: u16 = 0xFF07;
-
-        self.timers.update_timer_counter(self.memory[TIMA]);
-        self.timers.update_timer_modulo(self.memory[TMA]);
-        self.timers.update_timer_control(self.memory[TAC]);
-
-        self.timers.increment(m_cycles);
-
-        self.memory[DIV] = self.timers.div();
-        self.memory[TIMA] = self.timers.tima();
-
-        if self.timers.process_interrupt() {
-            self.memory[0xFF0F] |= 0b0000_0100;
-        }
+        self.memory.buffer[0..DMG_BOOT_ROM.len()].copy_from_slice(DMG_BOOT_ROM);
     }
 
     pub fn handle_interrupts(&mut self) {
@@ -134,7 +111,7 @@ impl Cpu {
 
             // Clear the flag bit of the interrupt we're servicing.
             let flag_mask = !(0b0000_0001 << nth_interrupt);
-            self.memory[IF] &= flag_mask;
+            self.memory.buffer[IF as usize] &= flag_mask;
 
             // Turn off interrupt master enable.
             self.ime = false;
@@ -142,8 +119,8 @@ impl Cpu {
             // Push the PC to the stack.
             self.registers.sp -= 2;
             let [low, high] = self.registers.pc.to_le_bytes();
-            self.memory[self.registers.sp] = low;
-            self.memory[self.registers.sp + 1] = high;
+            self.memory.write_byte(self.registers.sp, low);
+            self.memory.write_byte(self.registers.sp + 1, high);
 
             // Each interrupt handler is 8 bytes apart in memory, starting at 0x0040.
             #[allow(clippy::cast_possible_truncation)]
@@ -178,7 +155,7 @@ impl Cpu {
         use Opcode::*;
 
         if self.halted {
-            self.increment_timers(1);
+            self.memory.increment_timers(1);
             return Ok(());
         }
 
@@ -219,8 +196,8 @@ impl Cpu {
                     self.memory[pc + 2],
                 ]);
 
-                self.memory[destination] = low_sp;
-                self.memory[destination + 1] = high_sp;
+                self.memory.write_byte(destination, low_sp);
+                self.memory.write_byte(destination + 1, high_sp);
                 self.registers.pc += 3;
             }
             IncRr { x } => {
@@ -827,8 +804,8 @@ impl Cpu {
                     // Push the address of the next instruction to the stack.
                     self.registers.sp -= 2;
                     let [low, high] = (pc + 3).to_le_bytes();
-                    self.memory[self.registers.sp] = low;
-                    self.memory[self.registers.sp + 1] = high;
+                    self.memory.write_byte(self.registers.sp, low);
+                    self.memory.write_byte(self.registers.sp + 1, high);
 
                     self.registers.pc = destination;
                 }
@@ -837,8 +814,8 @@ impl Cpu {
                 // Push the address of the next instruction to the stack.
                 self.registers.sp -= 2;
                 let [low, high] = (pc + 3).to_le_bytes();
-                self.memory[self.registers.sp] = low;
-                self.memory[self.registers.sp + 1] = high;
+                self.memory.write_byte(self.registers.sp, low);
+                self.memory.write_byte(self.registers.sp + 1, high);
 
                 let destination = u16::from_le_bytes([
                     self.memory[pc + 1],
@@ -850,8 +827,8 @@ impl Cpu {
                 // Push the address of the next instruction to the stack.
                 self.registers.sp -= 2;
                 let [low, high] = (pc + 1).to_le_bytes();
-                self.memory[self.registers.sp] = low;
-                self.memory[self.registers.sp + 1] = high;
+                self.memory.write_byte(self.registers.sp, low);
+                self.memory.write_byte(self.registers.sp + 1, high);
 
                 let destination = u16::from_le_bytes([
                     // Rst's parameter is pre-divided by 8, so we multiply it by 8 here.
@@ -874,20 +851,20 @@ impl Cpu {
                 // Make room on the stack for a 16-bit value.
                 self.registers.sp -= 2;
                 // Game Boy is little-endian, so load the low byte then the high byte.
-                self.memory[self.registers.sp] = low;
-                self.memory[self.registers.sp + 1] = high;
+                self.memory.write_byte(self.registers.sp, low);
+                self.memory.write_byte(self.registers.sp + 1, high);
                 self.registers.pc += 1;
             }
             Prefix => self.execute_prefix(),
             LdhCA => {
                 let destination = u16::from_le_bytes([self.registers.bc.c(), 0xFF]);
-                self.memory[destination] = self.registers.af.a();
+                self.memory.write_byte(destination, self.registers.af.a());
                 self.registers.pc += 1;
             }
             LdhNA => {
                 let next_byte = self.memory[pc + 1];
                 let destination = u16::from_le_bytes([next_byte, 0xFF]);
-                self.memory[destination] = self.registers.af.a();
+                self.memory.write_byte(destination, self.registers.af.a());
                 self.registers.pc += 2;
             }
             LdNnA => {
@@ -895,7 +872,7 @@ impl Cpu {
                     self.memory[pc + 1],
                     self.memory[pc + 2],
                 ]);
-                self.memory[next_two_bytes] = self.registers.af.a();
+                self.memory.write_byte(next_two_bytes, self.registers.af.a());
                 self.registers.pc += 3;
             }
             LdhAC => {
@@ -981,7 +958,7 @@ impl Cpu {
             opcode => Err(format!("unimplemented opcode: {opcode:?}"))?,
         }
 
-        self.increment_timers(m_cycles);
+        self.memory.increment_timers(m_cycles);
         Ok(())
     }
 
@@ -1188,7 +1165,7 @@ impl Cpu {
             }
         }
 
-        self.increment_timers(m_cycles);
+        self.memory.increment_timers(m_cycles);
     }
 }
 

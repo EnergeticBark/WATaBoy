@@ -2,7 +2,7 @@
 pub struct Timers {
     // Clock register incremented every T-Cycle.
     // Upper 8-bits exposed as the DIV register in memory.
-    system_clock: u16,
+    pub system_clock: u16,
     tima: u8,
     tma: u8,
     tima_enabled: bool,
