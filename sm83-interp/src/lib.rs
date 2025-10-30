@@ -6,3 +6,4 @@ mod bus;
 mod cycles;
 mod timers;
 pub mod hw_addrs;
+mod mbc;

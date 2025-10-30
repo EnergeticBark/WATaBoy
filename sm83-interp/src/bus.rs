@@ -1,20 +1,56 @@
 use crate::hw_addrs;
 use crate::timers::Timers;
 use std::ops::{Index, Range};
+use crate::mbc::Mbc;
 
 const MEM_MAP_SIZE: usize = 0x10000;
 
 pub struct AddressBus {
     pub buffer: [u8; MEM_MAP_SIZE],
     pub timers: Timers,
+    pub mbc: Mbc,
 }
 
 impl AddressBus {
+    pub fn load_rom(&mut self, rom: &[u8]) {
+        self.mbc.load_rom(rom);
+    }
+    
     pub fn write_byte(&mut self, index: u16, value: u8) {
         match index {
-            // Ignore writes to ROM address space.
-            // TODO: Emulate bank switching here.
-            0x0000..0x8000 => (),
+            // Handle writes to ROM address space.
+            0x0000..0x2000 => {
+                if value & 0x0F == 0xA {
+                    println!("Enabling ram...");
+                    self.mbc.ram_enabled = true;
+                } else {
+                    println!("Disabling ram...");
+                    self.mbc.ram_enabled = false;
+                }
+            },
+            0x2000..0x4000 => {
+                println!("Switching ROM bank using value: {value}");
+                let bank = self.mbc.nth_rom_bank(value);
+                self.buffer[0x4000..0x8000].clone_from_slice(bank);
+            },
+            0x4000..0x6000 => {
+                println!("Switching RAM bank using value: {value}");
+                if self.mbc.banking_mode {
+                    // Backup old bank... Ew, I know I can do better than this.
+                    self.mbc.write_ram_bank(&self.buffer[0xA000..0xC000].try_into().unwrap());
+
+                    let bank = self.mbc.nth_ram_bank(value);
+                    self.buffer[0xA000..0xC000].clone_from_slice(bank);
+                } else {
+                    println!("Actually no, we're in simple mode!!!");
+                }
+            },
+            0x6000..0x8000 => self.mbc.set_banking_mode(value),
+            0xA000..0xC000 => {
+                if self.mbc.ram_enabled {
+                    self.buffer[index as usize] = value;
+                }
+            }
 
             // Certain I/O addresses only use certain bits. Bits which go unused are pulled high.
             // See Appendix B: https://gekkio.fi/files/gb-docs/gbctr.pdf
@@ -62,6 +98,7 @@ impl Default for AddressBus {
         Self {
             buffer: [0; MEM_MAP_SIZE],
             timers: Timers::default(),
+            mbc: Mbc::default(),
         }
     }
 }
