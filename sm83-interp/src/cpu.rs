@@ -2,6 +2,7 @@ use crate::parameters::{Condition, R8, R16, R16Mem};
 use crate::registers::Registers;
 use crate::{hw_addrs, opcodes, registers};
 use crate::bus::AddressBus;
+use crate::common::post_boot::PostBoot;
 use crate::cycles::{m_cycles, prefix_m_cycles};
 use crate::opcodes::{Opcode, PrefixOpcode};
 
@@ -1163,6 +1164,16 @@ impl Cpu {
         }
 
         self.memory.increment_timers(m_cycles);
+    }
+}
+
+impl PostBoot for Cpu {
+    fn post_boot_dmg() -> Self {
+        Self {
+            registers: Registers::post_boot_dmg(),
+            memory: AddressBus::post_boot_dmg(),
+            ..Self::default()
+        }
     }
 }
 

@@ -1,5 +1,5 @@
 use bitfield_struct::bitfield;
-
+use crate::common::post_boot::PostBoot;
 use crate::parameters::{R16, R16Stack};
 
 #[bitfield(u8, order = Msb)]
@@ -46,34 +46,6 @@ pub struct Registers {
 }
 
 impl Registers {
-    /// Initialize registers to the value they'd be just after executing the DMG boot rom.
-    /// See: <https://gbdev.io/pandocs/Power_Up_Sequence.html#cpu-registers>
-    #[must_use] 
-    pub fn after_boot_rom_dmg() -> Self {
-        Self {
-            af: AccumAndFlags::new()
-                .with_a(0x01)
-                .with_f(
-                    Flags::new()
-                        .with_z(true)
-                        .with_n(false)
-                        .with_h(true)
-                        .with_c(true)
-                ),
-            bc: Bc::new()
-                .with_b(0x00)
-                .with_c(0x13),
-            de: De::new()
-                .with_d(0x00)
-                .with_e(0xD8),
-            hl: Hl::new()
-                .with_h(0x01)
-                .with_l(0x4D),
-            pc: 0x0100,
-            sp: 0xFFFE,
-        }
-    }
-
     pub(crate) fn r16_mut(&mut self, r16: R16) -> &mut u16 {
         match r16 {
             R16::Bc => &mut self.bc.0,
@@ -101,6 +73,35 @@ impl Registers {
                 self.af.0 = value;
                 self.af.0 &= 0xFFF0;
             },
+        }
+    }
+}
+
+impl PostBoot for Registers {
+    /// Initialize registers to the value they'd be just after executing the DMG boot rom.
+    /// See: <https://gbdev.io/pandocs/Power_Up_Sequence.html#cpu-registers>
+    fn post_boot_dmg() -> Self {
+        Self {
+            af: AccumAndFlags::new()
+                .with_a(0x01)
+                .with_f(
+                    Flags::new()
+                        .with_z(true)
+                        .with_n(false)
+                        .with_h(true)
+                        .with_c(true)
+                ),
+            bc: Bc::new()
+                .with_b(0x00)
+                .with_c(0x13),
+            de: De::new()
+                .with_d(0x00)
+                .with_e(0xD8),
+            hl: Hl::new()
+                .with_h(0x01)
+                .with_l(0x4D),
+            pc: 0x0100,
+            sp: 0xFFFE,
         }
     }
 }

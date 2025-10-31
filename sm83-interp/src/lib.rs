@@ -7,3 +7,4 @@ mod cycles;
 mod timers;
 pub mod hw_addrs;
 mod mbc;
+pub mod common;

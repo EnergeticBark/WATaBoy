@@ -1,6 +1,7 @@
 use crate::hw_addrs;
 use crate::timers::Timers;
 use std::ops::{Index, Range};
+use crate::common::post_boot::PostBoot;
 use crate::mbc::Mbc;
 
 const MEM_MAP_SIZE: usize = 0x10000;
@@ -13,6 +14,7 @@ pub struct AddressBus {
 
 impl AddressBus {
     pub fn load_rom(&mut self, rom: &[u8]) {
+        self.buffer[0..0x8000].copy_from_slice(&rom[0..0x8000]);
         self.mbc.load_rom(rom);
     }
     
@@ -99,6 +101,16 @@ impl Default for AddressBus {
             buffer: [0; MEM_MAP_SIZE],
             timers: Timers::default(),
             mbc: Mbc::default(),
+        }
+    }
+}
+
+impl PostBoot for AddressBus {
+    fn post_boot_dmg() -> Self {
+        Self {
+            // TODO: some memory values should be set. Try to pass the mooneye test.
+            timers: Timers::post_boot_dmg(),
+            ..Default::default()
         }
     }
 }

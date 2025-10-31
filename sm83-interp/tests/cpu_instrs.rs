@@ -1,5 +1,6 @@
 mod common;
 
+use sm83_interp::common::post_boot::PostBoot;
 use sm83_interp::cpu::Cpu;
 
 struct BlarggTest {
@@ -65,49 +66,49 @@ const OP_A_HL_11: BlarggTest = BlarggTest {
 
 #[test]
 fn test_01_special() {
-    let mut cpu = Cpu::default();
+    let mut cpu = Cpu::post_boot_dmg();
     let lines = run_blargg_test(&mut cpu, &SPECIAL_01);
     assert!(lines[3].starts_with("Passed"));
 }
 
 #[test]
 fn test_02_interrupts() {
-    let mut cpu = Cpu::default();
+    let mut cpu = Cpu::post_boot_dmg();
     let lines = run_blargg_test(&mut cpu, &INTERRUPTS_02);
     assert!(lines[3].starts_with("Passed"));
 }
 
 #[test]
 fn test_03_op_sp_hl() {
-    let mut cpu = Cpu::default();
+    let mut cpu = Cpu::post_boot_dmg();
     let lines = run_blargg_test(&mut cpu, &OP_SP_HL_03);
     assert!(lines[3].starts_with("Passed"));
 }
 
 #[test]
 fn test_04_op_r_imm() {
-    let mut cpu = Cpu::default();
+    let mut cpu = Cpu::post_boot_dmg();
     let lines = run_blargg_test(&mut cpu, &OP_R_IMM_04);
     assert!(lines[3].starts_with("Passed"));
 }
 
 #[test]
 fn test_05_op_rp() {
-    let mut cpu = Cpu::default();
+    let mut cpu = Cpu::post_boot_dmg();
     let lines = run_blargg_test(&mut cpu, &OP_RP_05);
     assert!(lines[3].starts_with("Passed"));
 }
 
 #[test]
 fn test_06_ld_r_r() {
-    let mut cpu = Cpu::default();
+    let mut cpu = Cpu::post_boot_dmg();
     let lines = run_blargg_test(&mut cpu, &LD_R_R_06);
     assert!(lines[3].starts_with("Passed"));
 }
 
 #[test]
 fn test_07_jr_jp_call_ret_rst() {
-    let mut cpu = Cpu::default();
+    let mut cpu = Cpu::post_boot_dmg();
     let lines = run_blargg_test(&mut cpu, &JR_JP_CALL_RET_RST_07);
     // This test's name is so long that "Passed" ends up on line 4 :)
     assert!(lines[4].starts_with("Passed"));
@@ -115,28 +116,28 @@ fn test_07_jr_jp_call_ret_rst() {
 
 #[test]
 fn test_08_misc_instrs() {
-    let mut cpu = Cpu::default();
+    let mut cpu = Cpu::post_boot_dmg();
     let lines = run_blargg_test(&mut cpu, &MISC_INSTRS_08);
     assert!(lines[3].starts_with("Passed"));
 }
 
 #[test]
 fn test_09_op_r_r() {
-    let mut cpu = Cpu::default();
+    let mut cpu = Cpu::post_boot_dmg();
     let lines = run_blargg_test(&mut cpu, &OP_R_R_09);
     assert!(lines[3].starts_with("Passed"));
 }
 
 #[test]
 fn test_10_bit_ops() {
-    let mut cpu = Cpu::default();
+    let mut cpu = Cpu::post_boot_dmg();
     let lines = run_blargg_test(&mut cpu, &BIT_OPS_10);
     assert!(lines[3].starts_with("Passed"));
 }
 
 #[test]
 fn test_11_op_a_hl() {
-    let mut cpu = Cpu::default();
+    let mut cpu = Cpu::post_boot_dmg();
     let lines = run_blargg_test(&mut cpu, &OP_A_HL_11);
     assert!(lines[3].starts_with("Passed"));
 }
