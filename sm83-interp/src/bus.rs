@@ -22,12 +22,14 @@ impl AddressBus {
         match index {
             // Handle writes to ROM address space.
             0x0000..0x2000 => {
-                if value & 0x0F == 0xA {
-                    println!("Enabling ram...");
-                    self.mbc.ram_enabled = true;
-                } else {
-                    println!("Disabling ram...");
-                    self.mbc.ram_enabled = false;
+                if value & 0x0F == 0xA && !self.mbc.ram_enabled {
+                    let bank = self.mbc.nth_ram_bank(self.mbc.current_ram_bank);
+                    self.buffer[0xA000..0xC000].clone_from_slice(bank);
+                    self.mbc.enable_ram();
+                } else if self.mbc.ram_enabled {
+                    self.mbc.write_ram_bank(&self.buffer[0xA000..0xC000].try_into().unwrap());
+                    self.buffer[0xA000..0xC000].fill(0xFF);
+                    self.mbc.disable_ram();
                 }
             },
             0x2000..0x4000 => {
@@ -108,6 +110,11 @@ impl Default for AddressBus {
 impl PostBoot for AddressBus {
     fn post_boot_dmg() -> Self {
         Self {
+            buffer: {
+                let mut buffer = [0; MEM_MAP_SIZE];
+                buffer[0xA000..0xC000].fill(0xFF);
+                buffer
+            },
             // TODO: some memory values should be set. Try to pass the mooneye test.
             timers: Timers::post_boot_dmg(),
             ..Default::default()

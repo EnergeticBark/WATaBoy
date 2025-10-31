@@ -29,10 +29,18 @@ impl Mbc {
         match self.ram_size() {
             2 => self.ext_ram = vec![0; RAM_BANK_SIZE],
             3 => self.ext_ram = vec![0; RAM_BANK_SIZE * 4],
-            4 => self.ext_ram = vec![0; RAM_BANK_SIZE * 16],
-            5 => self.ext_ram = vec![0; RAM_BANK_SIZE * 8],
             _ => ()
         }
+    }
+
+    pub fn enable_ram(&mut self) {
+        println!("Enabling ram...");
+        self.ram_enabled = true;
+    }
+
+    pub fn disable_ram(&mut self) {
+        println!("Disabling ram...");
+        self.ram_enabled = false;
     }
 
     pub fn nth_rom_bank(&self, bank_number: u8) -> &[u8; 0x4000] {
@@ -48,9 +56,14 @@ impl Mbc {
     }
 
     pub fn nth_ram_bank(&mut self, bank_number: u8) -> &[u8; RAM_BANK_SIZE] {
-        let bank_number = bank_number & 0b0000_0011;
+        let mut bank_number = bank_number & 0b0000_0011;
         println!("Switching to RAM bank #{bank_number}");
-        
+
+        if self.ram_size() == 2 {
+            bank_number = 0;
+            println!("Only 1 bank, constraining to 0...");
+        }
+
         self.current_ram_bank = bank_number;
 
         let start_addr = RAM_BANK_SIZE * bank_number as usize;
