@@ -2,14 +2,14 @@ use crate::hw_addrs;
 use crate::timers::Timers;
 use std::ops::{Index, Range};
 use crate::common::post_boot::PostBoot;
-use crate::mbc::Mbc;
+use crate::mbc::Mbc1;
 
 const MEM_MAP_SIZE: usize = 0x10000;
 
 pub struct AddressBus {
     pub buffer: [u8; MEM_MAP_SIZE],
     pub timers: Timers,
-    pub mbc: Mbc,
+    pub mbc: Mbc1,
 }
 
 impl AddressBus {
@@ -102,7 +102,7 @@ impl Default for AddressBus {
         Self {
             buffer: [0; MEM_MAP_SIZE],
             timers: Timers::default(),
-            mbc: Mbc::default(),
+            mbc: Mbc1::default(),
         }
     }
 }

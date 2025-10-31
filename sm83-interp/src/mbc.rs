@@ -4,7 +4,7 @@ const RAM_SIZE_ADDR: usize = 0x0149;
 const RAM_BANK_SIZE: usize = 0x2000;
 
 #[derive(Default)]
-pub struct Mbc {
+pub struct Mbc1 {
     pub ram_enabled: bool,
     pub rom: Vec<u8>,
     pub ext_ram: Vec<u8>,
@@ -12,7 +12,7 @@ pub struct Mbc {
     pub banking_mode: bool,
 }
 
-impl Mbc {
+impl Mbc1 {
     pub fn rom_size(&self) -> u8 {
         self.rom[ROM_SIZE_ADDR]
     }
