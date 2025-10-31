@@ -11,14 +11,44 @@ fn run_mooneye_test(cpu: &mut Cpu, rom: &[u8]) -> [u8; 6] {
     mooneye::read_bcdehl(cpu)
 }
 
-const BITS_BANK1: &[u8] = include_bytes!("roms/mbc1/bits_bank1.gb");
-
 const FIBONACCI: [u8; 6] = [3, 5, 8, 13, 21, 34];
 
 #[test]
 fn test_bits_bank1() {
     let mut cpu = Cpu::post_boot_dmg();
-    let bcdehl = run_mooneye_test(&mut cpu, BITS_BANK1);
+    let bcdehl = run_mooneye_test(&mut cpu, include_bytes!("roms/mbc1/bits_bank1.gb"));
+
+    assert_eq!(bcdehl, FIBONACCI);
+}
+
+#[test]
+fn test_bits_bank2() {
+    let mut cpu = Cpu::post_boot_dmg();
+    let bcdehl = run_mooneye_test(&mut cpu, include_bytes!("roms/mbc1/bits_bank2.gb"));
+
+    assert_eq!(bcdehl, FIBONACCI);
+}
+
+#[test]
+fn test_bits_mode() {
+    let mut cpu = Cpu::post_boot_dmg();
+    let bcdehl = run_mooneye_test(&mut cpu, include_bytes!("roms/mbc1/bits_mode.gb"));
+
+    assert_eq!(bcdehl, FIBONACCI);
+}
+
+#[test]
+fn test_bits_ramg() {
+    let mut cpu = Cpu::post_boot_dmg();
+    let bcdehl = run_mooneye_test(&mut cpu, include_bytes!("roms/mbc1/bits_ramg.gb"));
+
+    assert_eq!(bcdehl, FIBONACCI);
+}
+
+#[test]
+fn test_ram_64kb() {
+    let mut cpu = Cpu::post_boot_dmg();
+    let bcdehl = run_mooneye_test(&mut cpu, include_bytes!("roms/mbc1/ram_64kb.gb"));
 
     assert_eq!(bcdehl, FIBONACCI);
 }
