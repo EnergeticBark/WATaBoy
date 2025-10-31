@@ -29,7 +29,7 @@ impl Timers {
             1 => 3,
             2 => 5,
             3 => 7,
-            _ => unreachable!()
+            _ => unreachable!(),
         };
     }
 
@@ -69,7 +69,7 @@ impl Timers {
     pub fn process_interrupt(&mut self) -> bool {
         if self.interrupt_queued {
             self.interrupt_queued = false;
-            return true
+            return true;
         }
         false
     }

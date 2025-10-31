@@ -10,7 +10,12 @@ pub fn m_cycles(opcode: Opcode) -> u16 {
     match opcode {
         // 8-bit load instructions.
         // Ld
-        LdRR { x: R8::IndirectHL, .. } | LdRR { y: R8::IndirectHL, .. }  => 2,
+        LdRR {
+            x: R8::IndirectHL, ..
+        }
+        | LdRR {
+            y: R8::IndirectHL, ..
+        } => 2,
         LdRR { .. } => 1,
         LdRN { x: R8::IndirectHL } => 3,
         LdRN { .. } => 2,
@@ -70,13 +75,13 @@ pub fn m_cycles(opcode: Opcode) -> u16 {
         // Control flow instructions
         JpNn => 4,
         JpHl => 1,
-        JpCcNn { .. } => 0,   // CONTEXT DEPENDANT: 4 if condition is true, otherwise 3.
+        JpCcNn { .. } => 0, // CONTEXT DEPENDANT: 4 if condition is true, otherwise 3.
         JrE => 3,
-        JrCcE { .. } => 0,    // CONTEXT DEPENDANT: 3 if condition is true, otherwise 2.
+        JrCcE { .. } => 0, // CONTEXT DEPENDANT: 3 if condition is true, otherwise 2.
         CallNn => 6,
         CallCcNn { .. } => 0, // CONTEXT DEPENDANT: 6 if condition is true, otherwise 3.
         Ret => 4,
-        RetCc { .. } => 0,    // CONTEXT DEPENDANT: 5 if condition is true, otherwise 2.
+        RetCc { .. } => 0, // CONTEXT DEPENDANT: 5 if condition is true, otherwise 2.
         Reti => 4,
         RstN { .. } => 4,
 
@@ -110,11 +115,17 @@ pub fn prefix_m_cycles(opcode: PrefixOpcode) -> u16 {
         SwapR { .. } => 2,
         SrlR { x: R8::IndirectHL } => 4,
         SrlR { .. } => 2,
-        BitBR { x: R8::IndirectHL, .. } => 3,
+        BitBR {
+            x: R8::IndirectHL, ..
+        } => 3,
         BitBR { .. } => 2,
-        ResBR { x: R8::IndirectHL, .. } => 4,
+        ResBR {
+            x: R8::IndirectHL, ..
+        } => 4,
         ResBR { .. } => 2,
-        SetBR { x: R8::IndirectHL, .. } => 4, // SET b, r
+        SetBR {
+            x: R8::IndirectHL, ..
+        } => 4, // SET b, r
         SetBR { .. } => 2,
     }
 }

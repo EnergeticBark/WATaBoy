@@ -1,10 +1,10 @@
+mod bus;
+pub mod common;
 pub mod cpu;
+mod cycles;
+pub mod hw_addrs;
+mod mbc;
 pub mod opcodes;
 pub mod parameters;
 pub mod registers;
-mod bus;
-mod cycles;
 mod timers;
-pub mod hw_addrs;
-mod mbc;
-pub mod common;

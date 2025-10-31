@@ -23,13 +23,17 @@ impl Mbc1 {
 
     pub fn load_rom(&mut self, rom: &[u8]) {
         self.rom = rom.to_vec();
-        println!("ROM size: {}, Banks: {}", self.rom_size(), 2 << self.rom_size());
+        println!(
+            "ROM size: {}, Banks: {}",
+            self.rom_size(),
+            2 << self.rom_size()
+        );
         println!("RAM size: {}", self.ram_size());
 
         match self.ram_size() {
             2 => self.ext_ram = vec![0; RAM_BANK_SIZE],
             3 => self.ext_ram = vec![0; RAM_BANK_SIZE * 4],
-            _ => ()
+            _ => (),
         }
     }
 
