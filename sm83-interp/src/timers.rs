@@ -1,3 +1,5 @@
+use crate::common::post_boot::PostBoot;
+
 #[derive(Default)]
 pub struct Timers {
     // Clock register incremented every T-Cycle.
@@ -27,7 +29,7 @@ impl Timers {
             1 => 3,
             2 => 5,
             3 => 7,
-            _ => unreachable!()
+            _ => unreachable!(),
         };
     }
 
@@ -67,8 +69,17 @@ impl Timers {
     pub fn process_interrupt(&mut self) -> bool {
         if self.interrupt_queued {
             self.interrupt_queued = false;
-            return true
+            return true;
         }
         false
+    }
+}
+
+impl PostBoot for Timers {
+    fn post_boot_dmg() -> Self {
+        Self {
+            system_clock: 0xABD4,
+            ..Self::default()
+        }
     }
 }

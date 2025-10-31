@@ -1,4 +1,6 @@
+use crate::common::post_boot::PostBoot;
 use crate::hw_addrs;
+use crate::mbc::Mbc1;
 use crate::timers::Timers;
 use std::ops::{Index, Range};
 
@@ -7,14 +9,54 @@ const MEM_MAP_SIZE: usize = 0x10000;
 pub struct AddressBus {
     pub buffer: [u8; MEM_MAP_SIZE],
     pub timers: Timers,
+    pub mbc: Mbc1,
 }
 
 impl AddressBus {
+    pub fn load_rom(&mut self, rom: &[u8]) {
+        self.buffer[0..0x8000].copy_from_slice(&rom[0..0x8000]);
+        self.mbc.load_rom(rom);
+    }
+
     pub fn write_byte(&mut self, index: u16, value: u8) {
         match index {
-            // Ignore writes to ROM address space.
-            // TODO: Emulate bank switching here.
-            0x0000..0x8000 => (),
+            // Handle writes to ROM address space.
+            0x0000..0x2000 => {
+                if value & 0x0F == 0xA && !self.mbc.ram_enabled {
+                    let bank = self.mbc.nth_ram_bank(self.mbc.current_ram_bank);
+                    self.buffer[0xA000..0xC000].clone_from_slice(bank);
+                    self.mbc.enable_ram();
+                } else if self.mbc.ram_enabled {
+                    self.mbc
+                        .write_ram_bank(&self.buffer[0xA000..0xC000].try_into().unwrap());
+                    self.buffer[0xA000..0xC000].fill(0xFF);
+                    self.mbc.disable_ram();
+                }
+            }
+            0x2000..0x4000 => {
+                println!("Switching ROM bank using value: {value}");
+                let bank = self.mbc.nth_rom_bank(value);
+                self.buffer[0x4000..0x8000].clone_from_slice(bank);
+            }
+            0x4000..0x6000 => {
+                println!("Switching RAM bank using value: {value}");
+                if self.mbc.banking_mode {
+                    // Backup old bank... Ew, I know I can do better than this.
+                    self.mbc
+                        .write_ram_bank(&self.buffer[0xA000..0xC000].try_into().unwrap());
+
+                    let bank = self.mbc.nth_ram_bank(value);
+                    self.buffer[0xA000..0xC000].clone_from_slice(bank);
+                } else {
+                    println!("Actually no, we're in simple mode!!!");
+                }
+            }
+            0x6000..0x8000 => self.mbc.set_banking_mode(value),
+            0xA000..0xC000 => {
+                if self.mbc.ram_enabled {
+                    self.buffer[index as usize] = value;
+                }
+            }
 
             // Certain I/O addresses only use certain bits. Bits which go unused are pulled high.
             // See Appendix B: https://gekkio.fi/files/gb-docs/gbctr.pdf
@@ -62,6 +104,22 @@ impl Default for AddressBus {
         Self {
             buffer: [0; MEM_MAP_SIZE],
             timers: Timers::default(),
+            mbc: Mbc1::default(),
+        }
+    }
+}
+
+impl PostBoot for AddressBus {
+    fn post_boot_dmg() -> Self {
+        Self {
+            buffer: {
+                let mut buffer = [0; MEM_MAP_SIZE];
+                buffer[0xA000..0xC000].fill(0xFF);
+                buffer
+            },
+            // TODO: some memory values should be set. Try to pass the mooneye test.
+            timers: Timers::post_boot_dmg(),
+            ..Default::default()
         }
     }
 }

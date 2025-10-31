@@ -1,9 +1,10 @@
+use crate::bus::AddressBus;
+use crate::common::post_boot::PostBoot;
+use crate::cycles::{m_cycles, prefix_m_cycles};
+use crate::opcodes::{Opcode, PrefixOpcode};
 use crate::parameters::{Condition, R8, R16, R16Mem};
 use crate::registers::Registers;
 use crate::{hw_addrs, opcodes, registers};
-use crate::bus::AddressBus;
-use crate::cycles::{m_cycles, prefix_m_cycles};
-use crate::opcodes::{Opcode, PrefixOpcode};
 
 const DMG_BOOT_ROM: &[u8] = include_bytes!("../dmg.bin");
 
@@ -49,12 +50,14 @@ impl Cpu {
             R16Mem::De => self.memory[self.registers.de.into_bits()],
             R16Mem::HlInc => {
                 let value = self.memory[self.registers.hl.into_bits()];
-                self.registers.hl = registers::Hl::from_bits(self.registers.hl.into_bits().wrapping_add(1));
+                self.registers.hl =
+                    registers::Hl::from_bits(self.registers.hl.into_bits().wrapping_add(1));
                 value
             }
             R16Mem::HlDec => {
                 let value = self.memory[self.registers.hl.into_bits()];
-                self.registers.hl = registers::Hl::from_bits(self.registers.hl.into_bits().wrapping_sub(1));
+                self.registers.hl =
+                    registers::Hl::from_bits(self.registers.hl.into_bits().wrapping_sub(1));
                 value
             }
         }
@@ -66,11 +69,13 @@ impl Cpu {
             R16Mem::De => self.memory.write_byte(self.registers.de.into_bits(), value),
             R16Mem::HlInc => {
                 self.memory.write_byte(self.registers.hl.into_bits(), value);
-                self.registers.hl = registers::Hl::from_bits(self.registers.hl.into_bits().wrapping_add(1));
+                self.registers.hl =
+                    registers::Hl::from_bits(self.registers.hl.into_bits().wrapping_add(1));
             }
             R16Mem::HlDec => {
                 self.memory.write_byte(self.registers.hl.into_bits(), value);
-                self.registers.hl = registers::Hl::from_bits(self.registers.hl.into_bits().wrapping_sub(1));
+                self.registers.hl =
+                    registers::Hl::from_bits(self.registers.hl.into_bits().wrapping_sub(1));
             }
         }
     }
@@ -129,18 +134,34 @@ impl Cpu {
     fn calculate_m_cycles(&self, opcode: Opcode) -> u16 {
         match opcode {
             Opcode::JpCcNn { c } => {
-                if self.check_condition(c) { 4 } else { 3 }
+                if self.check_condition(c) {
+                    4
+                } else {
+                    3
+                }
             }
             Opcode::JrCcE { c } => {
-                if self.check_condition(c) { 3 } else { 2 }
+                if self.check_condition(c) {
+                    3
+                } else {
+                    2
+                }
             }
             Opcode::CallCcNn { c } => {
-                if self.check_condition(c) { 6 } else { 3 }
+                if self.check_condition(c) {
+                    6
+                } else {
+                    3
+                }
             }
             Opcode::RetCc { c } => {
-                if self.check_condition(c) { 5 } else { 2 }
+                if self.check_condition(c) {
+                    5
+                } else {
+                    2
+                }
             }
-            _ => m_cycles(opcode)
+            _ => m_cycles(opcode),
         }
     }
 
@@ -168,10 +189,7 @@ impl Cpu {
                 self.registers.pc += 1;
             }
             LdRrNn { x } => {
-                let next_two_bytes = u16::from_le_bytes([
-                    self.memory[pc + 1],
-                    self.memory[pc + 2],
-                ]);
+                let next_two_bytes = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
                 *self.registers.r16_mut(x) = next_two_bytes;
 
                 self.registers.pc += 3;
@@ -188,10 +206,7 @@ impl Cpu {
             LdNnSp => {
                 let [low_sp, high_sp] = self.registers.sp.to_le_bytes();
 
-                let destination = u16::from_le_bytes([
-                    self.memory[pc + 1],
-                    self.memory[pc + 2],
-                ]);
+                let destination = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
 
                 self.memory.write_byte(destination, low_sp);
                 self.memory.write_byte(destination + 1, high_sp);
@@ -392,20 +407,24 @@ impl Cpu {
             }
             Scf => {
                 self.registers.af.set_f(
-                    self.registers.af.f()
+                    self.registers
+                        .af
+                        .f()
                         .with_n(false)
                         .with_h(false)
-                        .with_c(true)
+                        .with_c(true),
                 );
                 self.registers.pc += 1;
             }
             Ccf => {
                 let carry = !self.registers.af.f().c();
                 self.registers.af.set_f(
-                    self.registers.af.f()
+                    self.registers
+                        .af
+                        .f()
                         .with_n(false)
                         .with_h(false)
-                        .with_c(carry)
+                        .with_c(carry),
                 );
                 self.registers.pc += 1;
             }
@@ -437,7 +456,7 @@ impl Cpu {
             Halt => {
                 self.registers.pc += 1;
                 self.halted = true;
-            },
+            }
 
             // Block 2
             AddR { x } => {
@@ -659,7 +678,8 @@ impl Cpu {
                 // Carry if the 9th bit is set.
                 let carry = first_carry | second_carry;
 
-                let half_carry = ((a & 0x0f) < (next_byte & 0x0f)) | (first_diff & 0x0f < prev_carry);
+                let half_carry =
+                    ((a & 0x0f) < (next_byte & 0x0f)) | (first_diff & 0x0f < prev_carry);
 
                 self.registers.af.set_a(result);
                 self.registers.af.set_f(
@@ -769,10 +789,7 @@ impl Cpu {
                 self.registers.pc = destination;
             }
             JpCcNn { c } => {
-                let destination = u16::from_le_bytes([
-                    self.memory[pc + 1],
-                    self.memory[pc + 2],
-                ]);
+                let destination = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
                 self.registers.pc += 3;
 
                 if self.check_condition(c) {
@@ -780,20 +797,14 @@ impl Cpu {
                 }
             }
             JpNn => {
-                let destination = u16::from_le_bytes([
-                    self.memory[pc + 1],
-                    self.memory[pc + 2],
-                ]);
+                let destination = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
                 self.registers.pc = destination;
             }
             JpHl => {
                 self.registers.pc = self.registers.hl.into_bits();
             }
-            CallCcNn {c } => {
-                let destination = u16::from_le_bytes([
-                    self.memory[pc + 1],
-                    self.memory[pc + 2],
-                ]);
+            CallCcNn { c } => {
+                let destination = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
 
                 self.registers.pc += 3;
 
@@ -814,10 +825,7 @@ impl Cpu {
                 self.memory.write_byte(self.registers.sp, low);
                 self.memory.write_byte(self.registers.sp + 1, high);
 
-                let destination = u16::from_le_bytes([
-                    self.memory[pc + 1],
-                    self.memory[pc + 2],
-                ]);
+                let destination = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
                 self.registers.pc = destination;
             }
             RstN { x } => {
@@ -839,7 +847,8 @@ impl Cpu {
                 let high = self.memory[self.registers.sp + 1];
                 self.registers.sp += 2;
 
-                self.registers.set_r16_stack(x, u16::from_le_bytes([low, high]));
+                self.registers
+                    .set_r16_stack(x, u16::from_le_bytes([low, high]));
 
                 self.registers.pc += 1;
             }
@@ -865,18 +874,13 @@ impl Cpu {
                 self.registers.pc += 2;
             }
             LdNnA => {
-                let next_two_bytes = u16::from_le_bytes([
-                    self.memory[pc + 1],
-                    self.memory[pc + 2],
-                ]);
-                self.memory.write_byte(next_two_bytes, self.registers.af.a());
+                let next_two_bytes = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
+                self.memory
+                    .write_byte(next_two_bytes, self.registers.af.a());
                 self.registers.pc += 3;
             }
             LdhAC => {
-                let address = u16::from_le_bytes([
-                    self.registers.bc.c(),
-                    0xFF,
-                ]);
+                let address = u16::from_le_bytes([self.registers.bc.c(), 0xFF]);
                 let value = self.memory[address];
                 self.set_r8(R8::A, value);
                 self.registers.pc += 1;
@@ -889,10 +893,7 @@ impl Cpu {
                 self.registers.pc += 2;
             }
             LdANn => {
-                let next_two_bytes = u16::from_le_bytes([
-                    self.memory[pc + 1],
-                    self.memory[pc + 2],
-                ]);
+                let next_two_bytes = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
                 let value = self.memory[next_two_bytes];
 
                 self.registers.af.set_a(value);
@@ -904,7 +905,8 @@ impl Cpu {
                 let result = self.registers.sp.wrapping_add_signed(i16::from(e));
 
                 let carry = ((self.registers.sp & 0xff) + u16::from(next_byte)) & 0x0100 == 0x0100;
-                let half_carry = (((self.registers.sp & 0x0f) as u8) + (next_byte & 0x0f)) & 0x10 == 0x10;
+                let half_carry =
+                    (((self.registers.sp & 0x0f) as u8) + (next_byte & 0x0f)) & 0x10 == 0x10;
 
                 self.registers.sp = result;
                 self.registers.af.set_f(
@@ -924,7 +926,8 @@ impl Cpu {
                 let result = self.registers.sp.wrapping_add_signed(i16::from(e));
 
                 let carry = ((self.registers.sp & 0xff) + u16::from(next_byte)) & 0x0100 == 0x0100;
-                let half_carry = (((self.registers.sp & 0x0f) as u8) + (next_byte & 0x0f)) & 0x10 == 0x10;
+                let half_carry =
+                    (((self.registers.sp & 0x0f) as u8) + (next_byte & 0x0f)) & 0x10 == 0x10;
 
                 *self.registers.r16_mut(R16::Hl) = result;
                 self.registers.af.set_f(
@@ -1163,6 +1166,16 @@ impl Cpu {
         }
 
         self.memory.increment_timers(m_cycles);
+    }
+}
+
+impl PostBoot for Cpu {
+    fn post_boot_dmg() -> Self {
+        Self {
+            registers: Registers::post_boot_dmg(),
+            memory: AddressBus::post_boot_dmg(),
+            ..Self::default()
+        }
     }
 }
 
