@@ -16,7 +16,7 @@ pub fn draw_memory_table(ui: &mut Ui, dmg_state: &Cpu) {
             for column_number in 0..16 {
                 header.col(|ui| {
                     let column_label = format!("{column_number:02X}");
-                    ui.monospace(RichText::from(column_label).strong());
+                    ui.monospace(column_label);
                 });
             }
         })
@@ -30,18 +30,22 @@ fn draw_memory_body(body: TableBody<'_>, dmg_state: &Cpu) {
         let row_index = row.index() as u16 * 16;
         let row_label = format!("{:03X}0", row_index / 16);
         row.col(|ui| {
-            ui.monospace(RichText::from(row_label).strong());
+            ui.monospace(row_label);
         });
 
         for i in 0..16 {
             let formatted_row = format!("{:02X}", dmg_state.memory[row_index + i]);
 
             row.col(|ui| {
-                if row_index + i == dmg_state.registers.pc {
-                    ui.monospace(RichText::from(formatted_row).color(Color32::RED));
+                let label = RichText::from(formatted_row).strong();
+
+                let label = if row_index + i == dmg_state.registers.pc {
+                    label.color(Color32::RED)
                 } else {
-                    ui.monospace(formatted_row);
-                }
+                    label
+                };
+
+                ui.monospace(label);
             });
         }
     });
