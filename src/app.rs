@@ -1,6 +1,6 @@
 use crate::memory::draw_memory_table;
 use crate::registers::draw_register_table;
-use crate::tile_map::draw_tile_map;
+use crate::tile_map::{draw_tile_map_0, draw_tile_map_1};
 use crate::tiles::draw_tile_table;
 use egui::{Slider, TextureHandle};
 use log::error;
@@ -14,7 +14,8 @@ const NINTENDO_LOGO: &[u8; 48] = include_bytes!("../nintendo_logo.bin");
 pub struct PPUViewApp {
     dmg_state: Cpu,
     tiles: Vec<Option<TextureHandle>>,
-    tile_map: Option<TextureHandle>,
+    tile_map_0: Option<TextureHandle>,
+    tile_map_1: Option<TextureHandle>,
     step_by_cycles: u32,
     step_by_frames: u32
 }
@@ -33,7 +34,8 @@ impl Default for PPUViewApp {
                 cpu
             },
             tiles: vec![None; 384],
-            tile_map: None,
+            tile_map_0: None,
+            tile_map_1: None,
             step_by_cycles: 10000,
             step_by_frames: 1,
         }
@@ -101,7 +103,10 @@ impl eframe::App for PPUViewApp {
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            draw_tile_map(ui, ctx, &mut self.tile_map, &self.dmg_state);
+            ui.horizontal(|ui| {
+                draw_tile_map_0(ui, ctx, &mut self.tile_map_0, &self.dmg_state);
+                draw_tile_map_1(ui, ctx, &mut self.tile_map_1, &self.dmg_state);
+            });
 
             if ui.button("Step once").clicked() {
                 println!("{:?}", decode(self.dmg_state.memory[self.dmg_state.registers.pc]));
