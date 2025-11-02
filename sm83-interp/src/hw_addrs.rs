@@ -1,3 +1,5 @@
+pub const OAM: u16 = 0xFE00;
+
 pub const JOYP: u16 = 0xFF00;
 
 pub const SC: u16 = 0xFF02;

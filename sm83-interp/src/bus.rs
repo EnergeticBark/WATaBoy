@@ -58,6 +58,17 @@ impl AddressBus {
                 }
             }
 
+            0xFF46 => {
+                // TODO: Accurately make this take a few cycles.
+                println!("OAM DMA Transfer from 0x{value}00!");
+                let oam_size = 0xA0;
+                let src_start = u16::from_le_bytes([0x00, value]) as usize;
+                let src_end = src_start + oam_size;
+                let dest = hw_addrs::OAM as usize;
+
+                self.buffer.copy_within(src_start..src_end, dest);
+            }
+
             // Certain I/O addresses only use certain bits. Bits which go unused are pulled high.
             // See Appendix B: https://gekkio.fi/files/gb-docs/gbctr.pdf
             hw_addrs::JOYP | hw_addrs::NR41 => self.buffer[index as usize] = value | 0b1100_0000,

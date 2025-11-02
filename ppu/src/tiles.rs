@@ -5,7 +5,8 @@ const TILE_BLOCK_0_ADDR: usize = 0x8000;
 const TILE_BLOCK_2_ADDR: usize = 0x9000;
 
 const TILE_MAP_SIZE: usize = 0x0400;
-const TILE_MAP_ADDR: usize = 0x9800;
+const TILE_MAP_0_ADDR: usize = 0x9800;
+const TILE_MAP_1_ADDR: usize = 0x9C00;
 
 pub fn tile_to_palette_indices(tile: &[u8; 16]) -> Vec<u2> {
     let (chunks, _) = tile.as_chunks::<2>();
@@ -42,8 +43,14 @@ pub fn signed_nth_tile(memory: &[u8], tile_id: isize) -> &[u8; TILE_SIZE] {
     memory[tile_start..tile_end].try_into().unwrap()
 }
 
-pub fn tile_map(memory: &[u8]) -> &[u8; TILE_MAP_SIZE] {
-    let tile_map_start = TILE_MAP_ADDR;
+pub fn tile_map_0(memory: &[u8]) -> &[u8; TILE_MAP_SIZE] {
+    let tile_map_start = TILE_MAP_0_ADDR;
+    let tile_map_end = tile_map_start + TILE_MAP_SIZE;
+    memory[tile_map_start..tile_map_end].try_into().unwrap()
+}
+
+pub fn tile_map_1(memory: &[u8]) -> &[u8; TILE_MAP_SIZE] {
+    let tile_map_start = TILE_MAP_1_ADDR;
     let tile_map_end = tile_map_start + TILE_MAP_SIZE;
     memory[tile_map_start..tile_map_end].try_into().unwrap()
 }
