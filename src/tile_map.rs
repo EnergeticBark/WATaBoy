@@ -33,7 +33,7 @@ pub fn draw_tile_map(
 
                 let tile_data = tiles::unsigned_nth_tile(&dmg_state.memory.buffer, tile_id as usize);
 
-                //let tile_data = tiles::signed_nth_tile(&dmg_state.memory, tile_id.cast_signed() as isize);
+                //let tile_data = tiles::signed_nth_tile(&dmg_state.memory.buffer, tile_id.cast_signed() as isize);
 
                 let greyscale =
                     ColorImage::from_gray([8, 8], &crate::tiles::greyscale_from_tile(tile_data));

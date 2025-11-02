@@ -4,6 +4,7 @@ use crate::tile_map::draw_tile_map;
 use crate::tiles::draw_tile_table;
 use egui::{Slider, TextureHandle};
 use log::error;
+use sm83_interp::common::post_boot::PostBoot;
 use sm83_interp::cpu::Cpu;
 use sm83_interp::opcodes::decode;
 use crate::dnd_rom::handle_dropped_rom;
@@ -23,12 +24,12 @@ impl Default for PPUViewApp {
         Self {
             dmg_state: {
                 let mut cpu = Cpu::default();
-                cpu.memory[0x0104..0x0134].copy_from_slice(NINTENDO_LOGO);
+                cpu.memory.buffer[0x0104..0x0134].copy_from_slice(NINTENDO_LOGO);
                 /* Our rom header is all zeros, so just hardcode the checksum of those zeros to make
                    the bootrom happy.
                    See: https://gbdev.io/pandocs/The_Cartridge_Header.html#014d--header-checksum
                 */
-                cpu.memory[0x014D] = 0xE7;
+                cpu.memory.buffer[0x014D] = 0xE7;
                 cpu
             },
             tiles: vec![None; 384],
@@ -56,9 +57,9 @@ fn step_multiple(steps: u32, dmg_state: &mut Cpu) {
           Once I actually implement the PPU alongside the CPU, I'll want to do this with proper
           timing. See: https://gbdev.io/pandocs/Rendering.html
         */
-        dmg_state.memory[0xFF44] = (dmg_state.memory[0xFF44] + 1) % 154;
+        dmg_state.memory.buffer[0xFF44] = (dmg_state.memory.buffer[0xFF44] + 1) % 154;
         // Set joypad value such that no buttons are held.
-        dmg_state.memory[0xFF00] = 0x0F;
+        dmg_state.memory.write_byte(0xFF00, 0x0F);
         if let Err(message) =dmg_state.execute() {
             error!("{message}");
         }
@@ -120,17 +121,7 @@ impl eframe::App for PPUViewApp {
             ui.horizontal(|ui| {
                 if ui.button("Request VBlank and step multiple").clicked() {
                     for _ in 0..self.step_by_frames {
-                        self.dmg_state.memory[0xFF0F] |= 0b0000_0001;
-                        step_multiple(self.step_by_cycles, &mut self.dmg_state);
-                    }
-                }
-
-                ui.add(Slider::new(&mut self.step_by_frames, 0..=100));
-            });
-            ui.horizontal(|ui| {
-                if ui.button("Timer and step multiple").clicked() {
-                    for _ in 0..self.step_by_frames {
-                        self.dmg_state.memory[0xFF0F] |= 0b0000_0100;
+                        self.dmg_state.memory.buffer[0xFF0F] |= 0b0000_0001;
                         step_multiple(self.step_by_cycles, &mut self.dmg_state);
                     }
                 }
@@ -142,6 +133,7 @@ impl eframe::App for PPUViewApp {
         ctx.input(|i| {
             if !i.raw.dropped_files.is_empty() {
                 let dropped_file = i.raw.dropped_files.first().unwrap().clone();
+                self.dmg_state = Cpu::post_boot_dmg();
                 handle_dropped_rom(dropped_file, &mut self.dmg_state);
             }
         });
