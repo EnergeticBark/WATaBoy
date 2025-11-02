@@ -19,9 +19,11 @@ fn draw_tile_map(
         for column in 0..32 {
             let tile_id = tile_map[row * 32 + column];
 
-            //let tile_data = tiles::unsigned_nth_tile(&dmg_state.memory.buffer, tile_id as usize);
-
-            let tile_data = tiles::signed_nth_tile(&dmg_state.memory.buffer, tile_id.cast_signed() as isize);
+            let tile_data = if lcd::bg_and_window_tiles(&dmg_state.memory.buffer) {
+                tiles::unsigned_nth_tile(&dmg_state.memory.buffer, tile_id as usize)
+            } else {
+                tiles::signed_nth_tile(&dmg_state.memory.buffer, tile_id.cast_signed() as isize)
+            };
 
             let greyscale =
                 ColorImage::from_gray([8, 8], &crate::tiles::greyscale_from_tile(tile_data));
@@ -85,29 +87,33 @@ pub fn draw_tile_map_0(
     tile_map_0_texture: &mut Option<TextureHandle>,
     dmg_state: &Cpu,
 ) {
-    let tile_map = tiles::tile_map_0(&dmg_state.memory.buffer);
+    ui.vertical(|ui| {
+        ui.heading("Tile Map 0: 0x9800-0x9C00");
 
-    Frame::canvas(ui.style()).show(ui, |ui| {
-        let (_, rect) = ui.allocate_space(Vec2::new(512.0, 512.0));
-        let to_screen = RectTransform::from_to(Rect::from_x_y_ranges(0.0..=255.0, 0.0..=255.0), rect);
+        let tile_map = tiles::tile_map_0(&dmg_state.memory.buffer);
 
-        let tile_map_0_texture = tile_map_0_texture.get_or_insert_with(|| {
-            ctx.load_texture(
-                "Tile Map 0",
-                ColorImage::filled([TILE_MAP_SIZE, TILE_MAP_SIZE], Color32::BLACK),
-                TextureOptions::NEAREST,
-            )
+        Frame::canvas(ui.style()).show(ui, |ui| {
+            let (_, rect) = ui.allocate_space(Vec2::new(512.0, 512.0));
+            let to_screen = RectTransform::from_to(Rect::from_x_y_ranges(0.0..=255.0, 0.0..=255.0), rect);
+
+            let tile_map_0_texture = tile_map_0_texture.get_or_insert_with(|| {
+                ctx.load_texture(
+                    "Tile Map 0",
+                    ColorImage::filled([TILE_MAP_SIZE, TILE_MAP_SIZE], Color32::BLACK),
+                    TextureOptions::NEAREST,
+                )
+            });
+
+            draw_tile_map(ui, rect, tile_map_0_texture, tile_map, dmg_state);
+
+            if !lcd::bg_tile_map(&dmg_state.memory.buffer) {
+                highlight_background(ui, to_screen, dmg_state);
+            }
+
+            if !lcd::window_tile_map(&dmg_state.memory.buffer) {
+                highlight_window(ui, to_screen, dmg_state);
+            }
         });
-
-        draw_tile_map(ui, rect, tile_map_0_texture, tile_map, dmg_state);
-
-        if !lcd::bg_tile_map(&dmg_state.memory.buffer) {
-            highlight_background(ui, to_screen, dmg_state);
-        }
-
-        if !lcd::window_tile_map(&dmg_state.memory.buffer) {
-            highlight_window(ui, to_screen, dmg_state);
-        }
     });
 }
 
@@ -117,27 +123,31 @@ pub fn draw_tile_map_1(
     tile_map_1_texture: &mut Option<TextureHandle>,
     dmg_state: &Cpu,
 ) {
-    let tile_map = tiles::tile_map_1(&dmg_state.memory.buffer);
+    ui.vertical(|ui| {
+        ui.heading("Tile Map 1: 0x9C00-0xA000");
 
-    Frame::canvas(ui.style()).show(ui, |ui| {
-        let (_, rect) = ui.allocate_space(Vec2::new(512.0, 512.0));
-        let to_screen = RectTransform::from_to(Rect::from_x_y_ranges(0.0..=255.0, 0.0..=255.0), rect);
+        let tile_map = tiles::tile_map_1(&dmg_state.memory.buffer);
 
-        let tile_map_1_texture = tile_map_1_texture.get_or_insert_with(|| {
-            ctx.load_texture(
-                "Tile Map 1",
-                ColorImage::filled([TILE_MAP_SIZE, TILE_MAP_SIZE], Color32::BLACK),
-                TextureOptions::NEAREST,
-            )
+        Frame::canvas(ui.style()).show(ui, |ui| {
+            let (_, rect) = ui.allocate_space(Vec2::new(512.0, 512.0));
+            let to_screen = RectTransform::from_to(Rect::from_x_y_ranges(0.0..=255.0, 0.0..=255.0), rect);
+
+            let tile_map_1_texture = tile_map_1_texture.get_or_insert_with(|| {
+                ctx.load_texture(
+                    "Tile Map 1",
+                    ColorImage::filled([TILE_MAP_SIZE, TILE_MAP_SIZE], Color32::BLACK),
+                    TextureOptions::NEAREST,
+                )
+            });
+
+            draw_tile_map(ui, rect, tile_map_1_texture, tile_map, dmg_state);
+
+            if lcd::bg_tile_map(&dmg_state.memory.buffer) {
+                highlight_background(ui, to_screen, dmg_state);
+            }
+            if lcd::window_tile_map(&dmg_state.memory.buffer) {
+                highlight_window(ui, to_screen, dmg_state);
+            }
         });
-
-        draw_tile_map(ui, rect, tile_map_1_texture, tile_map, dmg_state);
-
-        if lcd::bg_tile_map(&dmg_state.memory.buffer) {
-            highlight_background(ui, to_screen, dmg_state);
-        }
-        if lcd::window_tile_map(&dmg_state.memory.buffer) {
-            highlight_window(ui, to_screen, dmg_state);
-        }
     });
 }
