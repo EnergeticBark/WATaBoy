@@ -519,15 +519,10 @@ impl Cpu {
             SbcR { x } => {
                 let a = self.registers.af.a();
                 let r8 = self.r8(x);
-                let prev_carry = u8::from(self.registers.af.f().c());
+                let prev_carry = self.registers.af.f().c();
 
-                let (first_diff, first_carry) = a.overflowing_sub(r8);
-                let (result, second_carry) = first_diff.overflowing_sub(prev_carry);
-
-                // Carry if the 9th bit is set.
-                let carry = first_carry | second_carry;
-
-                let half_carry = ((a & 0x0f) < (r8 & 0x0f)) | (first_diff & 0x0f < prev_carry);
+                let (result, carry) = a.borrowing_sub(r8, prev_carry);
+                let (_, half_carry) = (a & 0x0f).borrowing_sub(r8 & 0x0f, prev_carry);
 
                 self.registers.af.set_a(result);
                 self.registers.af.set_f(
@@ -664,16 +659,10 @@ impl Cpu {
             SbcN => {
                 let a = self.registers.af.a();
                 let next_byte = self.memory[pc + 1];
-                let prev_carry = u8::from(self.registers.af.f().c());
+                let prev_carry = self.registers.af.f().c();
 
-                let (first_diff, first_carry) = a.overflowing_sub(next_byte);
-                let (result, second_carry) = first_diff.overflowing_sub(prev_carry);
-
-                // Carry if the 9th bit is set.
-                let carry = first_carry | second_carry;
-
-                let half_carry =
-                    ((a & 0x0f) < (next_byte & 0x0f)) | (first_diff & 0x0f < prev_carry);
+                let (result, carry) = a.borrowing_sub(next_byte, prev_carry);
+                let (_, half_carry) = (a & 0x0f).borrowing_sub(next_byte & 0x0f, prev_carry);
 
                 self.registers.af.set_a(result);
                 self.registers.af.set_f(
