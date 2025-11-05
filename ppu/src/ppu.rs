@@ -21,6 +21,7 @@ pub struct Ppu {
     mode: PpuMode,
     dot_counter: usize,
     x: u8,
+    pixels_to_drop: u8,
     window_y: u8,
     fetcher: PixelFetcher,
     //object_fifo: VecDeque<u8>,
@@ -28,7 +29,7 @@ pub struct Ppu {
 }
 
 fn drawing_window(memory: &[u8], x: u8, y: u8) -> bool {
-    lcd::window_enabled(memory) && lcd::bg_and_window_enabled(memory) && (x + 7) >= memory[WX] && y >= memory[WY]
+    lcd::window_enabled(memory) && x + 7 == memory[WX] && y >= memory[WY]
 }
 
 impl Ppu {
@@ -42,6 +43,7 @@ impl Ppu {
             PpuMode::OamScan => {
                 self.dot_counter += 1;
                 if self.dot_counter % DOTS_PER_SCANLINE >= 80 {
+                    self.pixels_to_drop = 8 + (memory[SCX] & 7);
                     self.mode = PpuMode::Drawing;
                 }
             },
@@ -49,11 +51,12 @@ impl Ppu {
                 self.dot_counter += 1;
 
                 self.fetcher.tick(memory, self.ly() as u8, self.window_y);
-                let pixels_to_drop = 8 + (memory[SCX] & 7);
 
                 if let Some(pixel) = self.fetcher.shift_out() {
-                    if self.x >= pixels_to_drop {
-                        let funny_index = self.ly() * 160 + self.x as usize - pixels_to_drop as usize;
+                    if self.pixels_to_drop > 0 {
+                        self.pixels_to_drop -= 1
+                    } else {
+                        let funny_index = self.ly() * 160 + self.x as usize;
                         let mut funny_greyscale = 0;
                         if pixel.low {
                             funny_greyscale |= 0b0000_0001;
@@ -62,18 +65,20 @@ impl Ppu {
                             funny_greyscale |= 0b0000_0010;
                         }
                         self.funny_buffer_test[funny_index] = funny_greyscale * 64;
-                    }
 
-                    self.x += 1;
+                        self.x += 1;
+                    }
                 }
 
+
                 if drawing_window(memory, self.x, self.ly() as u8) && !self.fetcher.drawing_window {
-                    self.window_y += 1;
+                    self.window_y = self.window_y.wrapping_add(1);
+                    self.pixels_to_drop = 8;
                     self.fetcher = PixelFetcher::default();
                     self.fetcher.drawing_window = true;
                 }
 
-                if self.x >= 160 + pixels_to_drop {
+                if self.x >= 160 {
                     self.x = 0;
                     self.fetcher = PixelFetcher::default();
                     self.mode = PpuMode::HBlank;
@@ -93,8 +98,8 @@ impl Ppu {
                 self.dot_counter += 1;
                 if self.dot_counter == DOTS_PER_FRAME {
                     self.dot_counter = 0;
-                    self.window_y = 0;
-                    self.mode = PpuMode::HBlank;
+                    self.window_y = 255;
+                    self.mode = PpuMode::OamScan;
                 }
             },
         }
@@ -107,7 +112,8 @@ impl Default for Ppu {
             mode: PpuMode::OamScan,
             dot_counter: 0,
             x: 0,
-            window_y: 0,
+            pixels_to_drop: 0,
+            window_y: 255,
             fetcher: PixelFetcher::default(),
             funny_buffer_test: vec![0; 160 * 144],
         }
