@@ -28,7 +28,7 @@ pub struct Ppu {
 }
 
 fn drawing_window(memory: &[u8], x: u8, y: u8) -> bool {
-    lcd::window_enabled(memory) && lcd::bg_and_window_enabled(memory) && x >= memory[WX] && y >= memory[WY]
+    lcd::window_enabled(memory) && lcd::bg_and_window_enabled(memory) && (x + 7) >= memory[WX] && y >= memory[WY]
 }
 
 impl Ppu {
@@ -48,7 +48,7 @@ impl Ppu {
             PpuMode::Drawing => {
                 self.dot_counter += 1;
 
-                self.fetcher.tick(memory, self.x, self.ly() as u8, self.window_y);
+                self.fetcher.tick(memory, self.ly() as u8, self.window_y);
                 let pixels_to_drop = 8 + (memory[SCX] & 7);
 
                 if let Some(pixel) = self.fetcher.shift_out() {

@@ -5,8 +5,6 @@ use crate::lcd::{bg_tile_map, window_tile_map};
 const SCY: usize = 0xFF42;
 const SCX: usize = 0xFF43;
 
-const WX: usize = 0xFF4B;
-
 pub struct Pixel {
     pub low: bool,
     pub high: bool,
@@ -33,6 +31,11 @@ pub struct PixelFetcher {
     tile_data_high: u8,
 }
 
+/* The PixelFetcher has no "clear" or "reset" method as it stands right now.
+   When a fresh FIFO queue is needed just make a whole new PixelFetcher. As far as I can tell none
+   of the state gets carried over anyway. Write some good comments if anything ends up contradicting
+   this.
+ */
 impl PixelFetcher {
     // Shift out a pixel from the background FIFO, if it contains more than 8 pixels.
     pub fn shift_out(&mut self) -> Option<Pixel> {
@@ -60,17 +63,13 @@ impl PixelFetcher {
         true
     }
 
-    pub fn clear(&mut self) {
-        self.bg_fifo.clear();
-    }
-
-    fn get_tile(&mut self, memory: &[u8], x_coord: u8, current_scanline: u8, window_y: u8) {
+    fn get_tile(&mut self, memory: &[u8], current_scanline: u8, window_y: u8) {
         let bg_second_tile_map = bg_tile_map(memory) && !self.drawing_window;
         let window_second_tile_map = window_tile_map(memory) && self.drawing_window;
         self.second_tile_map = bg_second_tile_map || window_second_tile_map;
 
         let tile_x = if self.drawing_window {
-            (x_coord - memory[WX]) / 8
+            self.tile_x
         } else {
             ((memory[SCX] / 8) + self.tile_x) & 0x1F
         };
@@ -95,27 +94,25 @@ impl PixelFetcher {
         // TODO: If VRAM is blocked tile index is 0xFF...
     }
 
-    fn get_tile_data_low(&mut self, memory: &[u8]) {
-        let tile = if lcd::bg_and_window_tiles(memory) {
+    fn current_tile<'a>(&self, memory: &'a [u8]) -> &'a [u8; 16] {
+        if lcd::bg_and_window_tiles(memory) {
             tiles::unsigned_nth_tile(memory, self.tile_id as usize)
         } else {
             tiles::signed_nth_tile(memory, self.tile_id.cast_signed() as isize)
-        };
+        }
+    }
 
+    fn get_tile_data_low(&mut self, memory: &[u8]) {
+        let tile = self.current_tile(memory);
         self.tile_data_low = tile[self.tile_line as usize * 2];
     }
 
     fn get_tile_data_high(&mut self, memory: &[u8]) {
-        let tile = if lcd::bg_and_window_tiles(memory) {
-            tiles::unsigned_nth_tile(memory, self.tile_id as usize)
-        } else {
-            tiles::signed_nth_tile(memory, self.tile_id.cast_signed() as isize)
-        };
-
+        let tile = self.current_tile(memory);
         self.tile_data_high = tile[self.tile_line as usize * 2 + 1];
     }
 
-    pub fn tick(&mut self, memory: &[u8], x_coord: u8, current_scanline: u8, window_y: u8) {
+    pub fn tick(&mut self, memory: &[u8], current_scanline: u8, window_y: u8) {
         self.ticks += 1;
         if self.ticks < 2 {
             return;
@@ -124,7 +121,7 @@ impl PixelFetcher {
 
         match self.state {
             FetcherState::GetTile => {
-                self.get_tile(memory, x_coord, current_scanline, window_y);
+                self.get_tile(memory, current_scanline, window_y);
                 self.state = FetcherState::GetTileDataLow;
             }
             FetcherState::GetTileDataLow => {
