@@ -27,6 +27,7 @@ pub struct PixelFetcher {
     bg_fifo: VecDeque<Pixel>,
     tile_id: u8,
     tile_line: u8,
+    tile_x: u8,
     second_tile_map: bool,
     tile_data_low: u8,
     tile_data_high: u8,
@@ -71,7 +72,7 @@ impl PixelFetcher {
         let tile_x = if self.drawing_window {
             (x_coord - memory[WX]) / 8
         } else {
-            ((memory[SCX] / 8) + (x_coord / 8)) & 0x1F
+            ((memory[SCX] / 8) + self.tile_x) & 0x1F
         };
 
         let ly = if self.drawing_window {
@@ -89,6 +90,7 @@ impl PixelFetcher {
 
         self.tile_id = tile_map[tile_y as usize * 32 + tile_x as usize];
         self.tile_line = ly % 8;
+        self.tile_x += 1;
 
         // TODO: If VRAM is blocked tile index is 0xFF...
     }
@@ -127,11 +129,11 @@ impl PixelFetcher {
             }
             FetcherState::GetTileDataLow => {
                 self.get_tile_data_low(memory);
-                self.push();
                 self.state = FetcherState::GetTileDataHigh;
             }
             FetcherState::GetTileDataHigh => {
                 self.get_tile_data_high(memory);
+                self.push();
                 self.state = FetcherState::Sleep;
             }
             FetcherState::Sleep => self.state = FetcherState::Push,
@@ -154,6 +156,7 @@ impl Default for PixelFetcher {
             bg_fifo: VecDeque::with_capacity(16),
             tile_id: 0,
             tile_line: 0,
+            tile_x: 0,
             second_tile_map: false,
             tile_data_low: 0,
             tile_data_high: 0,

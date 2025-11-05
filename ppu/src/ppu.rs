@@ -5,6 +5,8 @@ const SCANLINES_PER_FRAME: usize = 154;
 const DOTS_PER_SCANLINE: usize = 456;
 const DOTS_PER_FRAME: usize = DOTS_PER_SCANLINE * SCANLINES_PER_FRAME;
 
+const SCX: usize = 0xFF43;
+
 const WY: usize = 0xFF4A;
 const WX: usize = 0xFF4B;
 
@@ -47,17 +49,20 @@ impl Ppu {
                 self.dot_counter += 1;
 
                 self.fetcher.tick(memory, self.x, self.ly() as u8, self.window_y);
-                if let Some(pixel) = self.fetcher.shift_out() {
+                let pixels_to_drop = 8 + (memory[SCX] & 7);
 
-                    let funny_index = self.ly() * 160 + self.x as usize;
-                    let mut funny_greyscale = 0;
-                    if pixel.low {
-                        funny_greyscale |= 0b0000_0001;
+                if let Some(pixel) = self.fetcher.shift_out() {
+                    if self.x >= pixels_to_drop {
+                        let funny_index = self.ly() * 160 + self.x as usize - pixels_to_drop as usize;
+                        let mut funny_greyscale = 0;
+                        if pixel.low {
+                            funny_greyscale |= 0b0000_0001;
+                        }
+                        if pixel.high {
+                            funny_greyscale |= 0b0000_0010;
+                        }
+                        self.funny_buffer_test[funny_index] = funny_greyscale * 64;
                     }
-                    if pixel.high {
-                        funny_greyscale |= 0b0000_0010;
-                    }
-                    self.funny_buffer_test[funny_index] = funny_greyscale * 64;
 
                     self.x += 1;
                 }
@@ -68,7 +73,7 @@ impl Ppu {
                     self.fetcher.drawing_window = true;
                 }
 
-                if self.x >= 160 {
+                if self.x >= 160 + pixels_to_drop {
                     self.x = 0;
                     self.fetcher = PixelFetcher::default();
                     self.mode = PpuMode::HBlank;
