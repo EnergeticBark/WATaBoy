@@ -114,32 +114,37 @@ impl PixelFetcher {
 
     pub fn tick(&mut self, memory: &[u8], current_scanline: u8, window_y: u8) {
         self.ticks += 1;
-        if self.ticks < 2 {
-            return;
-        }
-        self.ticks = 0;
 
-        match self.state {
-            FetcherState::GetTile => {
-                self.get_tile(memory, current_scanline, window_y);
-                self.state = FetcherState::GetTileDataLow;
-            }
-            FetcherState::GetTileDataLow => {
-                self.get_tile_data_low(memory);
-                self.state = FetcherState::GetTileDataHigh;
-            }
-            FetcherState::GetTileDataHigh => {
-                self.get_tile_data_high(memory);
-                self.push();
-                self.state = FetcherState::Sleep;
-            }
-            FetcherState::Sleep => self.state = FetcherState::Push,
-            FetcherState::Push => {
-                // TODO: Do this every tick instead of every 2
-                if self.push() {
-                    self.state = FetcherState::GetTile;
+        if self.ticks >= 2 {
+            self.ticks = 0;
+            match self.state {
+                FetcherState::GetTile => {
+                    println!("Getting");
+                    self.get_tile(memory, current_scanline, window_y);
+                    self.state = FetcherState::GetTileDataLow;
                 }
+                FetcherState::GetTileDataLow => {
+                    println!("Low");
+                    self.get_tile_data_low(memory);
+                    self.state = FetcherState::GetTileDataHigh;
+                }
+                FetcherState::GetTileDataHigh => {
+                    println!("High");
+                    self.get_tile_data_high(memory);
+                    if self.push() {
+                        println!("High Pushed");
+                    }
+                    self.state = FetcherState::Sleep;
+                }
+                FetcherState::Sleep => self.state = FetcherState::Push,
+                _ => {},
             }
+        }
+
+        if let FetcherState::Push = self.state && self.push() {
+            println!("Normal Pushed");
+            self.ticks = 0;
+            self.state = FetcherState::GetTile;
         }
     }
 }
