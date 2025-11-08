@@ -14,15 +14,15 @@ enum FetcherState {
     GetTile,
     GetTileDataLow,
     GetTileDataHigh,
-    Sleep,
     Push,
 }
 
 pub struct PixelFetcher {
     state: FetcherState,
     pub drawing_window: bool,
+    pub warmup: bool,
     ticks: u8,
-    bg_fifo: VecDeque<Pixel>,
+    pub bg_fifo: VecDeque<Pixel>,
     tile_id: u8,
     tile_line: u8,
     tile_x: u8,
@@ -39,16 +39,12 @@ pub struct PixelFetcher {
 impl PixelFetcher {
     // Shift out a pixel from the background FIFO, if it contains more than 8 pixels.
     pub fn shift_out(&mut self) -> Option<Pixel> {
-        if self.bg_fifo.len() < 8 {
-            None
-        } else {
-            Some(self.bg_fifo.pop_front()?)
-        }
+        self.bg_fifo.pop_front()
     }
 
     // Push a row of 8 pixels from a tile to the background FIFO, if its empty.
     fn push(&mut self) -> bool {
-        if self.bg_fifo.len() > 8 {
+        if !self.bg_fifo.is_empty() {
             return false;
         }
 
@@ -60,6 +56,7 @@ impl PixelFetcher {
 
             self.bg_fifo.push_back(pixel);
         }
+        self.tile_x += 1;
         true
     }
 
@@ -89,7 +86,6 @@ impl PixelFetcher {
 
         self.tile_id = tile_map[tile_y as usize * 32 + tile_x as usize];
         self.tile_line = ly % 8;
-        self.tile_x += 1;
 
         // TODO: If VRAM is blocked tile index is 0xFF...
     }
@@ -115,36 +111,34 @@ impl PixelFetcher {
     pub fn tick(&mut self, memory: &[u8], current_scanline: u8, window_y: u8) {
         self.ticks += 1;
 
+        if let FetcherState::Push = self.state && self.push() {
+            self.ticks = 0;
+            self.state = FetcherState::GetTile;
+        }
+
         if self.ticks >= 2 {
             self.ticks = 0;
             match self.state {
                 FetcherState::GetTile => {
-                    println!("Getting");
                     self.get_tile(memory, current_scanline, window_y);
                     self.state = FetcherState::GetTileDataLow;
                 }
                 FetcherState::GetTileDataLow => {
-                    println!("Low");
                     self.get_tile_data_low(memory);
                     self.state = FetcherState::GetTileDataHigh;
                 }
                 FetcherState::GetTileDataHigh => {
-                    println!("High");
                     self.get_tile_data_high(memory);
-                    if self.push() {
-                        println!("High Pushed");
+                    // First fetch of the line. Restart and waste six cycles for some reason. :)
+                    if self.warmup {
+                        self.state = FetcherState::GetTile;
+                        self.warmup = false;
+                    } else {
+                        self.state = FetcherState::Push;
                     }
-                    self.state = FetcherState::Sleep;
                 }
-                FetcherState::Sleep => self.state = FetcherState::Push,
                 _ => {},
             }
-        }
-
-        if let FetcherState::Push = self.state && self.push() {
-            println!("Normal Pushed");
-            self.ticks = 0;
-            self.state = FetcherState::GetTile;
         }
     }
 }
@@ -154,6 +148,7 @@ impl Default for PixelFetcher {
         Self {
             state: FetcherState::GetTile,
             drawing_window: false,
+            warmup: true,
             ticks: 0,
             bg_fifo: VecDeque::with_capacity(16),
             tile_id: 0,

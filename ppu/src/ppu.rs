@@ -43,7 +43,7 @@ impl Ppu {
             PpuMode::OamScan => {
                 self.dot_counter += 1;
                 if self.dot_counter % DOTS_PER_SCANLINE >= 80 {
-                    self.pixels_to_drop = 8 + (memory[SCX] & 7);
+                    self.pixels_to_drop = memory[SCX] & 7;
                     self.mode = PpuMode::Drawing;
                 }
             },
@@ -51,6 +51,7 @@ impl Ppu {
                 self.dot_counter += 1;
 
                 self.fetcher.tick(memory, self.ly() as u8, self.window_y);
+                println!("Dot: {}, X: {}, FIFO: {}", (self.dot_counter % DOTS_PER_SCANLINE) - 80, self.x, self.fetcher.bg_fifo.len());
 
                 if let Some(pixel) = self.fetcher.shift_out() {
                     if self.pixels_to_drop > 0 {
@@ -73,12 +74,13 @@ impl Ppu {
 
                 if drawing_window(memory, self.x, self.ly() as u8) && !self.fetcher.drawing_window {
                     self.window_y = self.window_y.wrapping_add(1);
-                    self.pixels_to_drop = 8;
                     self.fetcher = PixelFetcher::default();
+                    self.fetcher.warmup = false;
                     self.fetcher.drawing_window = true;
                 }
 
                 if self.x >= 160 {
+                    println!("Drew for {} dots", (self.dot_counter % DOTS_PER_SCANLINE) - 80);
                     self.x = 0;
                     self.fetcher = PixelFetcher::default();
                     self.mode = PpuMode::HBlank;
