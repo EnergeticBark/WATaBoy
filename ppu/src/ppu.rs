@@ -1,5 +1,5 @@
 use crate::{lcd, oam};
-use crate::bg_fetcher::BackgroundFetcher;
+use crate::bg_fetcher::{BackgroundFetcher, Pixel};
 use crate::oam::Obj;
 use crate::obj_fetcher::ObjectFetcher;
 
@@ -37,6 +37,18 @@ fn drawing_window(memory: &[u8], x: u8, y: u8) -> bool {
     lcd::window_enabled(memory) && x + 7 == memory[WX] && y >= memory[WY]
 }
 
+fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
+    let mut render_bg = false;
+    render_bg |= !(obj_pixel.low || obj_pixel.high);
+    render_bg |= obj_pixel.priority && (bg_pixel.low || bg_pixel.high);
+
+    if render_bg {
+        bg_pixel
+    } else {
+        obj_pixel
+    }
+}
+
 impl Ppu {
     fn ly(&self) -> usize {
         self.dot_counter / DOTS_PER_SCANLINE
@@ -70,31 +82,24 @@ impl Ppu {
                     //println!("Dot: {}, X: {}, FIFO: {}", (self.dot_counter % DOTS_PER_SCANLINE) - OAM_SCAN_DOTS, self.x, self.bg_fetcher.bg_fifo.len());
 
                     // TODO: Combine FIFOs correctly.
-                    if let Some(pixel) = self.bg_fetcher.shift_out() {
+                    if let Some(bg_pixel) = self.bg_fetcher.shift_out() {
                         if self.pixels_to_drop > 0 {
                             self.pixels_to_drop -= 1
                         } else {
+                            let mut pixel_to_render = bg_pixel;
                             if let Some(obj_pixel) = self.obj_fetcher.shift_out() {
-                                let funny_index = self.ly() * 160 + self.x as usize;
-                                let mut funny_greyscale = 0;
-                                if obj_pixel.low {
-                                    funny_greyscale |= 0b0000_0001;
-                                }
-                                if obj_pixel.high {
-                                    funny_greyscale |= 0b0000_0010;
-                                }
-                                self.funny_buffer_test[funny_index] = funny_greyscale * 64;
-                            } else {
-                                let funny_index = self.ly() * 160 + self.x as usize;
-                                let mut funny_greyscale = 0;
-                                if pixel.low {
-                                    funny_greyscale |= 0b0000_0001;
-                                }
-                                if pixel.high {
-                                    funny_greyscale |= 0b0000_0010;
-                                }
-                                self.funny_buffer_test[funny_index] = funny_greyscale * 64;
+                                pixel_to_render = mix_pixels(bg_pixel, obj_pixel);
                             }
+
+                            let funny_index = self.ly() * 160 + self.x as usize;
+                            let mut funny_greyscale = 0;
+                            if pixel_to_render.low {
+                                funny_greyscale |= 0b0000_0001;
+                            }
+                            if pixel_to_render.high {
+                                funny_greyscale |= 0b0000_0010;
+                            }
+                            self.funny_buffer_test[funny_index] = funny_greyscale * 64;
 
                             self.x += 1;
                         }

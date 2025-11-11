@@ -5,9 +5,11 @@ use crate::lcd::{bg_tile_map, window_tile_map};
 const SCY: usize = 0xFF42;
 const SCX: usize = 0xFF43;
 
+#[derive(Copy, Clone)]
 pub struct Pixel {
     pub low: bool,
     pub high: bool,
+    pub priority: bool,
 }
 
 pub enum FetcherState {
@@ -52,6 +54,7 @@ impl BackgroundFetcher {
             let pixel = Pixel {
                 low: (self.tile_data_low >> nth_bit) & 1 == 1,
                 high: (self.tile_data_high >> nth_bit) & 1 == 1,
+                priority: false,
             };
 
             self.bg_fifo.push_back(pixel);

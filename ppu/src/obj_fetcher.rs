@@ -40,6 +40,7 @@ impl ObjectFetcher {
             let pixel = Pixel {
                 low: (self.tile_data_low >> nth_bit) & 1 == 1,
                 high: (self.tile_data_high >> nth_bit) & 1 == 1,
+                priority: self.current_obj.unwrap().priority(),
             };
 
             self.fifo.push_back(pixel);

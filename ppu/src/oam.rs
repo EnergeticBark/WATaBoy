@@ -19,6 +19,10 @@ impl Obj {
         }
     }
 
+    pub fn priority(&self) -> bool {
+        self.attributes & 0b1000_0000 == 0b1000_0000
+    }
+
     pub fn x_flip(&self) -> bool {
         self.attributes & 0b0010_0000 == 0b0010_0000
     }
