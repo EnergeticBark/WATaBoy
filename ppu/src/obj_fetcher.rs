@@ -4,6 +4,8 @@ use crate::tiles;
 use crate::oam::Obj;
 
 pub struct ObjectFetcher {
+    prev_obj: Option<Obj>,
+    pub done: bool,
     pub state: FetcherState,
     ticks: u8,
     pub fifo: VecDeque<Pixel>,
@@ -26,11 +28,9 @@ impl ObjectFetcher {
 
     // Push a row of 8 pixels from a tile to the background FIFO, if its empty.
     fn push(&mut self) -> bool {
-        if !self.fifo.is_empty() {
-            return false;
-        }
+        let space_remaining = self.fifo.capacity() - self.fifo.len();
 
-        for nth_bit in (0..8).rev() {
+        for nth_bit in (0..space_remaining).rev() {
             let pixel = Pixel {
                 low: (self.tile_data_low >> nth_bit) & 1 == 1,
                 high: (self.tile_data_high >> nth_bit) & 1 == 1,
@@ -43,7 +43,7 @@ impl ObjectFetcher {
 
     fn get_tile(&mut self, current_scanline: u8, obj: Obj) {
         self.tile_id = obj.tile_index;
-        self.tile_line = current_scanline % 8;
+        self.tile_line = (current_scanline + 16 - obj.y_pos) % 8;
     }
 
     fn current_tile<'a>(&self, memory: &'a [u8]) -> &'a [u8; 16] {
@@ -61,11 +61,19 @@ impl ObjectFetcher {
     }
 
     pub fn tick(&mut self, memory: &[u8], current_scanline: u8, obj: Obj) {
+        if self.prev_obj.is_none_or(|prev_obj| prev_obj != obj) {
+            self.prev_obj = Some(obj);
+            self.state = FetcherState::GetTile;
+            self.done = false;
+            self.ticks = 0;
+        }
+        if self.done {
+            return;
+        }
         self.ticks += 1;
 
         if let FetcherState::Push = self.state && self.push() {
-            self.ticks = 0;
-            self.state = FetcherState::GetTile;
+            self.done = true;
         }
 
         if self.ticks >= 2 {
@@ -92,6 +100,8 @@ impl ObjectFetcher {
 impl Default for ObjectFetcher {
     fn default() -> Self {
         Self {
+            prev_obj: None,
+            done: false,
             state: FetcherState::GetTile,
             ticks: 0,
             fifo: VecDeque::with_capacity(8),

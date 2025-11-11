@@ -1,5 +1,5 @@
 use crate::{lcd, oam};
-use crate::bg_fetcher::{BackgroundFetcher, FetcherState};
+use crate::bg_fetcher::BackgroundFetcher;
 use crate::oam::Obj;
 use crate::obj_fetcher::ObjectFetcher;
 
@@ -55,8 +55,6 @@ impl Ppu {
                 if self.dot_counter % DOTS_PER_SCANLINE >= OAM_SCAN_DOTS {
                     // This is the last cycle of the OAM scan, so lets actually do the OAM scan.
                     self.obj_buffer = oam::oam_scan(memory, self.ly() as u8);
-                    println!("ly: {}", self.ly());
-                    dbg!(&self.obj_buffer);
 
                     // Prepare for Drawing.
                     self.pixels_to_drop = memory[SCX] & 7;
@@ -66,13 +64,14 @@ impl Ppu {
             PpuMode::Drawing => {
                 if let Some(obj) = self.current_obj() {
                     self.obj_fetcher.tick(memory, self.ly() as u8, obj);
-                    self.bg_paused = !matches!(self.obj_fetcher.state, FetcherState::Push);
+                    self.bg_paused = !self.obj_fetcher.done;
                 }
 
                 if !self.bg_paused {
                     self.bg_fetcher.tick(memory, self.ly() as u8, self.window_y);
                     //println!("Dot: {}, X: {}, FIFO: {}", (self.dot_counter % DOTS_PER_SCANLINE) - OAM_SCAN_DOTS, self.x, self.bg_fetcher.bg_fifo.len());
 
+                    // TODO: Combine FIFOs correctly.
                     if let Some(pixel) = self.bg_fetcher.shift_out() {
                         if self.pixels_to_drop > 0 {
                             self.pixels_to_drop -= 1

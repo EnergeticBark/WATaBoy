@@ -1,7 +1,7 @@
 const OBJ_SIZE: usize = 4;
 const OAM_ADDR: usize = 0xFE00;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Obj {
     pub y_pos: u8,
     pub x_pos: u8,
