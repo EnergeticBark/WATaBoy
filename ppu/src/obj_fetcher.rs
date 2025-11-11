@@ -4,7 +4,7 @@ use crate::tiles;
 use crate::oam::Obj;
 
 pub struct ObjectFetcher {
-    prev_obj: Option<Obj>,
+    current_obj: Option<Obj>,
     pub done: bool,
     pub state: FetcherState,
     ticks: u8,
@@ -27,10 +27,16 @@ impl ObjectFetcher {
     }
 
     // Push a row of 8 pixels from a tile to the background FIFO, if its empty.
-    fn push(&mut self) -> bool {
-        let space_remaining = self.fifo.capacity() - self.fifo.len();
+    fn push(&mut self) {
+        if self.current_obj.unwrap().x_flip() {
+            self.push_bit_range(0..8)
+        } else {
+            self.push_bit_range((0..8).rev())
+        };
+    }
 
-        for nth_bit in (0..space_remaining).rev() {
+    fn push_bit_range<T: Iterator<Item = u8>>(&mut self, bit_range: T) {
+        for nth_bit in bit_range.skip(self.fifo.len()) {
             let pixel = Pixel {
                 low: (self.tile_data_low >> nth_bit) & 1 == 1,
                 high: (self.tile_data_high >> nth_bit) & 1 == 1,
@@ -38,7 +44,6 @@ impl ObjectFetcher {
 
             self.fifo.push_back(pixel);
         }
-        true
     }
 
     fn get_tile(&mut self, current_scanline: u8, obj: Obj) {
@@ -61,8 +66,8 @@ impl ObjectFetcher {
     }
 
     pub fn tick(&mut self, memory: &[u8], current_scanline: u8, obj: Obj) {
-        if self.prev_obj.is_none_or(|prev_obj| prev_obj != obj) {
-            self.prev_obj = Some(obj);
+        if self.current_obj.is_none_or(|prev_obj| prev_obj != obj) {
+            self.current_obj = Some(obj);
             self.state = FetcherState::GetTile;
             self.done = false;
             self.ticks = 0;
@@ -72,7 +77,8 @@ impl ObjectFetcher {
         }
         self.ticks += 1;
 
-        if let FetcherState::Push = self.state && self.push() {
+        if let FetcherState::Push = self.state {
+            self.push();
             self.done = true;
         }
 
@@ -100,7 +106,7 @@ impl ObjectFetcher {
 impl Default for ObjectFetcher {
     fn default() -> Self {
         Self {
-            prev_obj: None,
+            current_obj: None,
             done: true,
             state: FetcherState::GetTile,
             ticks: 0,
