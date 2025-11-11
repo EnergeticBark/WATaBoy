@@ -50,8 +50,8 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
 }
 
 impl Ppu {
-    fn ly(&self) -> usize {
-        self.dot_counter / DOTS_PER_SCANLINE
+    pub fn ly(&self) -> u8 {
+        (self.dot_counter / DOTS_PER_SCANLINE) as u8
     }
 
     fn current_obj(&self) -> Option<Obj> {
@@ -65,7 +65,7 @@ impl Ppu {
             PpuMode::OamScan => {
                 if self.dot_counter % DOTS_PER_SCANLINE >= OAM_SCAN_DOTS {
                     // This is the last cycle of the OAM scan, so lets actually do the OAM scan.
-                    self.obj_buffer = oam::oam_scan(memory, self.ly() as u8);
+                    self.obj_buffer = oam::oam_scan(memory, self.ly());
 
                     // Prepare for Drawing.
                     self.pixels_to_drop = memory[SCX] & 7;
@@ -74,11 +74,11 @@ impl Ppu {
             },
             PpuMode::Drawing => {
                 if let Some(obj) = self.current_obj() {
-                    self.obj_fetcher.tick(memory, self.ly() as u8, obj);
+                    self.obj_fetcher.tick(memory, self.ly(), obj);
                 }
 
                 if self.obj_fetcher.done {
-                    self.bg_fetcher.tick(memory, self.ly() as u8, self.window_y);
+                    self.bg_fetcher.tick(memory, self.ly(), self.window_y);
                     //println!("Dot: {}, X: {}, FIFO: {}", (self.dot_counter % DOTS_PER_SCANLINE) - OAM_SCAN_DOTS, self.x, self.bg_fetcher.bg_fifo.len());
 
                     // TODO: Combine FIFOs correctly.
@@ -91,7 +91,7 @@ impl Ppu {
                                 pixel_to_render = mix_pixels(bg_pixel, obj_pixel);
                             }
 
-                            let funny_index = self.ly() * 160 + self.x as usize;
+                            let funny_index = self.ly() as usize * 160 + self.x as usize;
                             let mut funny_greyscale = 0;
                             if pixel_to_render.low {
                                 funny_greyscale |= 0b0000_0001;
@@ -107,7 +107,7 @@ impl Ppu {
                 }
 
 
-                if drawing_window(memory, self.x, self.ly() as u8) && !self.bg_fetcher.drawing_window {
+                if drawing_window(memory, self.x, self.ly()) && !self.bg_fetcher.drawing_window {
                     self.window_y = self.window_y.wrapping_add(1);
                     self.bg_fetcher = BackgroundFetcher::default();
                     self.bg_fetcher.warmup = false;
