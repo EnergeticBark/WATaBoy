@@ -150,7 +150,7 @@ impl Default for PixelFetcher {
             drawing_window: false,
             warmup: true,
             ticks: 0,
-            bg_fifo: VecDeque::with_capacity(16),
+            bg_fifo: VecDeque::with_capacity(8),
             tile_id: 0,
             tile_line: 0,
             tile_x: 0,
