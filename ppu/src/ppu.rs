@@ -1,5 +1,7 @@
-use crate::lcd;
-use crate::pixel_fetcher::PixelFetcher;
+use crate::{lcd, oam};
+use crate::bg_fetcher::{BackgroundFetcher, FetcherState};
+use crate::oam::Obj;
+use crate::obj_fetcher::ObjectFetcher;
 
 const SCANLINES_PER_FRAME: usize = 154;
 const DOTS_PER_SCANLINE: usize = 456;
@@ -25,8 +27,10 @@ pub struct Ppu {
     x: u8,
     pixels_to_drop: u8,
     window_y: u8,
-    fetcher: PixelFetcher,
-    //object_fifo: VecDeque<u8>,
+    bg_paused: bool,
+    bg_fetcher: BackgroundFetcher,
+    obj_buffer: Vec<Obj>,
+    obj_fetcher: ObjectFetcher,
     pub funny_buffer_test: Vec<u8>,
 }
 
@@ -39,57 +43,84 @@ impl Ppu {
         self.dot_counter / DOTS_PER_SCANLINE
     }
 
+    fn current_obj(&self) -> Option<Obj> {
+        self.obj_buffer.iter().filter(|obj| obj.intersects_x(self.x)).cloned().next()
+    }
+
     // Advance the PPU by 1 dot.
     pub fn tick(&mut self, memory: &[u8]) {
+        self.dot_counter += 1;
         match self.mode {
             PpuMode::OamScan => {
-                self.dot_counter += 1;
                 if self.dot_counter % DOTS_PER_SCANLINE >= OAM_SCAN_DOTS {
+                    // This is the last cycle of the OAM scan, so lets actually do the OAM scan.
+                    self.obj_buffer = oam::oam_scan(memory, self.ly() as u8);
+                    println!("ly: {}", self.ly());
+                    dbg!(&self.obj_buffer);
+
+                    // Prepare for Drawing.
                     self.pixels_to_drop = memory[SCX] & 7;
                     self.mode = PpuMode::Drawing;
                 }
             },
             PpuMode::Drawing => {
-                self.dot_counter += 1;
+                if let Some(obj) = self.current_obj() {
+                    self.obj_fetcher.tick(memory, self.ly() as u8, obj);
+                    self.bg_paused = !matches!(self.obj_fetcher.state, FetcherState::Push);
+                }
 
-                self.fetcher.tick(memory, self.ly() as u8, self.window_y);
-                println!("Dot: {}, X: {}, FIFO: {}", (self.dot_counter % DOTS_PER_SCANLINE) - OAM_SCAN_DOTS, self.x, self.fetcher.bg_fifo.len());
+                if !self.bg_paused {
+                    self.bg_fetcher.tick(memory, self.ly() as u8, self.window_y);
+                    //println!("Dot: {}, X: {}, FIFO: {}", (self.dot_counter % DOTS_PER_SCANLINE) - OAM_SCAN_DOTS, self.x, self.bg_fetcher.bg_fifo.len());
 
-                if let Some(pixel) = self.fetcher.shift_out() {
-                    if self.pixels_to_drop > 0 {
-                        self.pixels_to_drop -= 1
-                    } else {
-                        let funny_index = self.ly() * 160 + self.x as usize;
-                        let mut funny_greyscale = 0;
-                        if pixel.low {
-                            funny_greyscale |= 0b0000_0001;
+                    if let Some(pixel) = self.bg_fetcher.shift_out() {
+                        if self.pixels_to_drop > 0 {
+                            self.pixels_to_drop -= 1
+                        } else {
+                            if let Some(obj_pixel) = self.obj_fetcher.shift_out() {
+                                let funny_index = self.ly() * 160 + self.x as usize;
+                                let mut funny_greyscale = 0;
+                                if obj_pixel.low {
+                                    funny_greyscale |= 0b0000_0001;
+                                }
+                                if obj_pixel.high {
+                                    funny_greyscale |= 0b0000_0010;
+                                }
+                                self.funny_buffer_test[funny_index] = funny_greyscale * 64;
+                            } else {
+                                let funny_index = self.ly() * 160 + self.x as usize;
+                                let mut funny_greyscale = 0;
+                                if pixel.low {
+                                    funny_greyscale |= 0b0000_0001;
+                                }
+                                if pixel.high {
+                                    funny_greyscale |= 0b0000_0010;
+                                }
+                                self.funny_buffer_test[funny_index] = funny_greyscale * 64;
+                            }
+
+                            self.x += 1;
                         }
-                        if pixel.high {
-                            funny_greyscale |= 0b0000_0010;
-                        }
-                        self.funny_buffer_test[funny_index] = funny_greyscale * 64;
-
-                        self.x += 1;
                     }
                 }
 
 
-                if drawing_window(memory, self.x, self.ly() as u8) && !self.fetcher.drawing_window {
+                if drawing_window(memory, self.x, self.ly() as u8) && !self.bg_fetcher.drawing_window {
                     self.window_y = self.window_y.wrapping_add(1);
-                    self.fetcher = PixelFetcher::default();
-                    self.fetcher.warmup = false;
-                    self.fetcher.drawing_window = true;
+                    self.bg_fetcher = BackgroundFetcher::default();
+                    self.bg_fetcher.warmup = false;
+                    self.bg_fetcher.drawing_window = true;
                 }
 
                 if self.x >= 160 {
                     println!("Drew for {} dots", (self.dot_counter % DOTS_PER_SCANLINE) - OAM_SCAN_DOTS);
                     self.x = 0;
-                    self.fetcher = PixelFetcher::default();
+                    self.bg_fetcher = BackgroundFetcher::default();
+                    self.obj_fetcher = ObjectFetcher::default();
                     self.mode = PpuMode::HBlank;
                 }
             },
             PpuMode::HBlank => {
-                self.dot_counter += 1;
                 if self.dot_counter.is_multiple_of(DOTS_PER_SCANLINE) {
                     if self.ly() < 144 {
                         self.mode = PpuMode::OamScan;
@@ -99,7 +130,6 @@ impl Ppu {
                 }
             },
             PpuMode::VBlank => {
-                self.dot_counter += 1;
                 if self.dot_counter == DOTS_PER_FRAME {
                     self.dot_counter = 0;
                     self.window_y = 255;
@@ -118,7 +148,10 @@ impl Default for Ppu {
             x: 0,
             pixels_to_drop: 0,
             window_y: 255,
-            fetcher: PixelFetcher::default(),
+            bg_paused: false,
+            bg_fetcher: BackgroundFetcher::default(),
+            obj_buffer: Vec::with_capacity(10),
+            obj_fetcher: ObjectFetcher::default(),
             funny_buffer_test: vec![0; 160 * 144],
         }
     }

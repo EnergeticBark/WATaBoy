@@ -10,14 +10,14 @@ pub struct Pixel {
     pub high: bool,
 }
 
-enum FetcherState {
+pub enum FetcherState {
     GetTile,
     GetTileDataLow,
     GetTileDataHigh,
     Push,
 }
 
-pub struct PixelFetcher {
+pub struct BackgroundFetcher {
     state: FetcherState,
     pub drawing_window: bool,
     pub warmup: bool,
@@ -31,12 +31,12 @@ pub struct PixelFetcher {
     tile_data_high: u8,
 }
 
-/* The PixelFetcher has no "clear" or "reset" method as it stands right now.
-   When a fresh FIFO queue is needed just make a whole new PixelFetcher. As far as I can tell none
+/* The BackgroundFetcher has no "clear" or "reset" method as it stands right now.
+   When a fresh FIFO queue is needed just make a whole new BackgroundFetcher. As far as I can tell none
    of the state gets carried over anyway. Write some good comments if anything ends up contradicting
    this.
  */
-impl PixelFetcher {
+impl BackgroundFetcher {
     // Shift out a pixel from the background FIFO, if it contains more than 8 pixels.
     pub fn shift_out(&mut self) -> Option<Pixel> {
         self.bg_fifo.pop_front()
@@ -143,7 +143,7 @@ impl PixelFetcher {
     }
 }
 
-impl Default for PixelFetcher {
+impl Default for BackgroundFetcher {
     fn default() -> Self {
         Self {
             state: FetcherState::GetTile,
