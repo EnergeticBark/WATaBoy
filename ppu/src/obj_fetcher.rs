@@ -101,7 +101,7 @@ impl Default for ObjectFetcher {
     fn default() -> Self {
         Self {
             prev_obj: None,
-            done: false,
+            done: true,
             state: FetcherState::GetTile,
             ticks: 0,
             fifo: VecDeque::with_capacity(8),

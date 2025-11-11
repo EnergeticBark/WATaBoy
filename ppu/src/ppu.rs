@@ -27,7 +27,6 @@ pub struct Ppu {
     x: u8,
     pixels_to_drop: u8,
     window_y: u8,
-    bg_paused: bool,
     bg_fetcher: BackgroundFetcher,
     obj_buffer: Vec<Obj>,
     obj_fetcher: ObjectFetcher,
@@ -64,10 +63,9 @@ impl Ppu {
             PpuMode::Drawing => {
                 if let Some(obj) = self.current_obj() {
                     self.obj_fetcher.tick(memory, self.ly() as u8, obj);
-                    self.bg_paused = !self.obj_fetcher.done;
                 }
 
-                if !self.bg_paused {
+                if self.obj_fetcher.done {
                     self.bg_fetcher.tick(memory, self.ly() as u8, self.window_y);
                     //println!("Dot: {}, X: {}, FIFO: {}", (self.dot_counter % DOTS_PER_SCANLINE) - OAM_SCAN_DOTS, self.x, self.bg_fetcher.bg_fifo.len());
 
@@ -147,7 +145,6 @@ impl Default for Ppu {
             x: 0,
             pixels_to_drop: 0,
             window_y: 255,
-            bg_paused: false,
             bg_fetcher: BackgroundFetcher::default(),
             obj_buffer: Vec::with_capacity(10),
             obj_fetcher: ObjectFetcher::default(),
