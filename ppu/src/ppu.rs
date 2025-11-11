@@ -10,9 +10,6 @@ const DOTS_PER_FRAME: usize = DOTS_PER_SCANLINE * SCANLINES_PER_FRAME;
 
 const OAM_SCAN_DOTS: usize = 80;
 
-const WY: usize = 0xFF4A;
-const WX: usize = 0xFF4B;
-
 enum PpuMode {
     HBlank,
     VBlank,
@@ -33,7 +30,7 @@ pub struct Ppu {
 }
 
 fn drawing_window(memory: &[u8], x: u8, y: u8) -> bool {
-    lcd::window_enabled(memory) && x + 7 == memory[WX] && y >= memory[WY]
+    lcd::window_enabled(memory) && x + 7 == memory[io_regs::WX as usize] && y >= memory[io_regs::WY as usize]
 }
 
 fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
@@ -212,10 +209,9 @@ mod tests {
         let mut memory = [0; 0x10000];
 
         // Enable the window.
-        const LCDC: usize = 0xFF40;
-        memory[LCDC] |= 0b0010_0000;
+        memory[io_regs::LCDC as usize] |= 0b0010_0000;
         // Scroll it to x=50px
-        memory[WX] = 50 + 7;
+        memory[io_regs::WX as usize] = 50 + 7;
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
             ppu.tick(&memory);
@@ -238,10 +234,9 @@ mod tests {
         memory[io_regs::SCX as usize] = 7;
 
         // Enable the window.
-        const LCDC: usize = 0xFF40;
-        memory[LCDC] |= 0b0010_0000;
+        memory[io_regs::LCDC as usize] |= 0b0010_0000;
         // Scroll it to x=50px
-        memory[WX] = 50 + 7;
+        memory[io_regs::WX as usize] = 50 + 7;
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
             ppu.tick(&memory);

@@ -1,5 +1,4 @@
 const OBJ_SIZE: usize = 4;
-const OAM_ADDR: usize = 0xFE00;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Obj {
@@ -43,7 +42,7 @@ impl Obj {
 
 pub fn nth_obj(memory: &[u8], index: usize) -> Obj {
     let offset = index * OBJ_SIZE;
-    let obj_start = OAM_ADDR + offset;
+    let obj_start = hw_constants::OAM as usize + offset;
     let obj_end = obj_start + OBJ_SIZE;
     let obj_bytes = memory[obj_start..obj_end].try_into().unwrap();
     Obj::from_bytes(obj_bytes)

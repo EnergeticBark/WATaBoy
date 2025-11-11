@@ -1,9 +1,7 @@
 use std::collections::VecDeque;
+use hw_constants::io_regs;
 use crate::{lcd, tiles};
 use crate::lcd::{bg_tile_map, window_tile_map};
-
-const SCY: usize = 0xFF42;
-const SCX: usize = 0xFF43;
 
 #[derive(Copy, Clone)]
 pub struct Pixel {
@@ -71,13 +69,13 @@ impl BackgroundFetcher {
         let tile_x = if self.drawing_window {
             self.tile_x
         } else {
-            ((memory[SCX] / 8) + self.tile_x) & 0x1F
+            ((memory[io_regs::SCX as usize] / 8) + self.tile_x) & 0x1F
         };
 
         let ly = if self.drawing_window {
             window_y
         } else {
-            current_scanline + memory[SCY]
+            current_scanline + memory[io_regs::SCY as usize]
         };
         let tile_y = ly / 8;
 
