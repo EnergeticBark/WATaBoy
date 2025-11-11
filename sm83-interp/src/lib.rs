@@ -2,7 +2,6 @@ mod bus;
 pub mod common;
 pub mod cpu;
 mod cycles;
-pub mod hw_addrs;
 mod mbc;
 pub mod opcodes;
 pub mod parameters;

@@ -1,3 +1,4 @@
+use hw_constants::io_regs;
 use crate::{lcd, oam};
 use crate::bg_fetcher::{BackgroundFetcher, Pixel};
 use crate::oam::Obj;
@@ -8,8 +9,6 @@ const DOTS_PER_SCANLINE: usize = 456;
 const DOTS_PER_FRAME: usize = DOTS_PER_SCANLINE * SCANLINES_PER_FRAME;
 
 const OAM_SCAN_DOTS: usize = 80;
-
-const SCX: usize = 0xFF43;
 
 const WY: usize = 0xFF4A;
 const WX: usize = 0xFF4B;
@@ -68,7 +67,7 @@ impl Ppu {
                     self.obj_buffer = oam::oam_scan(memory, self.ly());
 
                     // Prepare for Drawing.
-                    self.pixels_to_drop = memory[SCX] & 7;
+                    self.pixels_to_drop = memory[io_regs::SCX as usize] & 7;
                     self.mode = PpuMode::Drawing;
                 }
             },
@@ -191,7 +190,7 @@ mod tests {
     fn test_scrolled_bg_mode_3_dots() {
         let mut ppu = Ppu::default();
         let mut memory = [0; 0x10000];
-        memory[SCX] = 7;
+        memory[io_regs::SCX as usize] = 7;
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
             ppu.tick(&memory);
@@ -236,7 +235,7 @@ mod tests {
     fn test_scrolled_bg_window_mode_3_dots() {
         let mut ppu = Ppu::default();
         let mut memory = [0; 0x10000];
-        memory[SCX] = 7;
+        memory[io_regs::SCX as usize] = 7;
 
         // Enable the window.
         const LCDC: usize = 0xFF40;
