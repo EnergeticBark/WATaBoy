@@ -1,8 +1,9 @@
 mod app;
-mod memory;
-mod registers;
-mod tiles;
-mod tile_map;
 mod dnd_rom;
+mod memory;
+mod oam;
+mod registers;
+mod tile_map;
+mod tiles;
 
 pub use app::PPUViewApp;

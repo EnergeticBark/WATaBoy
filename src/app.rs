@@ -1,27 +1,40 @@
+use crate::dnd_rom::handle_dropped_rom;
 use crate::memory::draw_memory_table;
+use crate::oam::draw_oam_table;
 use crate::registers::draw_register_table;
 use crate::tile_map::{draw_tile_map_0, draw_tile_map_1};
 use crate::tiles::draw_tile_table;
+
+use eframe::epaint::textures::TextureOptions;
+use eframe::epaint::{Color32, ColorImage};
 use egui::{Slider, TextureHandle};
+use hw_constants::io_regs;
 use log::error;
+use ppu::ppu::Ppu;
 use sm83_interp::common::post_boot::PostBoot;
 use sm83_interp::cpu::Cpu;
 use sm83_interp::opcodes::decode;
-use crate::dnd_rom::handle_dropped_rom;
 
 const NINTENDO_LOGO: &[u8; 48] = include_bytes!("../nintendo_logo.bin");
 
 pub struct PPUViewApp {
     dmg_state: Cpu,
-    tiles: Vec<Option<TextureHandle>>,
-    tile_map_0: Option<TextureHandle>,
-    tile_map_1: Option<TextureHandle>,
+    ppu_state: Ppu,
+    tiles: Vec<TextureHandle>,
+    tile_map_0: TextureHandle,
+    tile_map_1: TextureHandle,
+    screen: TextureHandle,
     step_by_cycles: u32,
-    step_by_frames: u32
+    step_by_frames: u32,
 }
 
-impl Default for PPUViewApp {
-    fn default() -> Self {
+impl PPUViewApp {
+    /// Called once before the first frame.
+    #[must_use]
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // This is also where you can customize the look and feel of egui using
+        // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
+
         Self {
             dmg_state: {
                 let mut cpu = Cpu::default();
@@ -33,37 +46,59 @@ impl Default for PPUViewApp {
                 cpu.memory.buffer[0x014D] = 0xE7;
                 cpu
             },
-            tiles: vec![None; 384],
-            tile_map_0: None,
-            tile_map_1: None,
+            ppu_state: Ppu::default(),
+            tiles: (0..384)
+                .map(|tile_index| {
+                    cc.egui_ctx.load_texture(
+                        format!("Tile {tile_index}"),
+                        ColorImage::filled(
+                            [hw_constants::TILE_SIZE, hw_constants::TILE_SIZE],
+                            Color32::BLACK,
+                        ),
+                        TextureOptions::NEAREST,
+                    )
+                })
+                .collect(),
+            tile_map_0: cc.egui_ctx.load_texture(
+                "Tile Map 0",
+                ColorImage::filled(
+                    [hw_constants::TILE_MAP_SIZE, hw_constants::TILE_MAP_SIZE],
+                    Color32::BLACK,
+                ),
+                TextureOptions::NEAREST,
+            ),
+            tile_map_1: cc.egui_ctx.load_texture(
+                "Tile Map 1",
+                ColorImage::filled(
+                    [hw_constants::TILE_MAP_SIZE, hw_constants::TILE_MAP_SIZE],
+                    Color32::BLACK,
+                ),
+                TextureOptions::NEAREST,
+            ),
+            screen: cc.egui_ctx.load_texture(
+                "Screen",
+                ColorImage::filled(
+                    [hw_constants::SCREEN_WIDTH, hw_constants::SCREEN_HEIGHT],
+                    Color32::BLACK,
+                ),
+                TextureOptions::NEAREST,
+            ),
             step_by_cycles: 10000,
             step_by_frames: 1,
         }
     }
 }
 
-impl PPUViewApp {
-    /// Called once before the first frame.
-    #[must_use]
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        // This is also where you can customize the look and feel of egui using
-        // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
-
-        PPUViewApp::default()
-    }
-}
-
-fn step_multiple(steps: u32, dmg_state: &mut Cpu) {
+fn step_multiple(steps: u32, dmg_state: &mut Cpu, ppu_state: &mut Ppu) {
     for _ in 0..steps {
-        /* Cycle the LCD Y coordinate so the bootrom doesn't get stuck waiting for a v-blank.
-          Once I actually implement the PPU alongside the CPU, I'll want to do this with proper
-          timing. See: https://gbdev.io/pandocs/Rendering.html
-        */
-        dmg_state.memory.buffer[0xFF44] = (dmg_state.memory.buffer[0xFF44] + 1) % 154;
         // Set joypad value such that no buttons are held.
-        dmg_state.memory.write_byte(0xFF00, 0x0F);
-        if let Err(message) =dmg_state.execute() {
+        dmg_state.memory.write_byte(io_regs::JOYP, 0x0F);
+        if let Err(message) = dmg_state.execute() {
             error!("{message}");
+        }
+        for _ in 0..4 {
+            ppu_state.tick(&dmg_state.memory.buffer);
+            dmg_state.memory.buffer[io_regs::LY as usize] = ppu_state.ly();
         }
         dmg_state.handle_interrupts();
     }
@@ -72,6 +107,18 @@ fn step_multiple(steps: u32, dmg_state: &mut Cpu) {
 impl eframe::App for PPUViewApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::Window::new("THE SCREEN Ahhh :)").show(ctx, |ui| {
+            self.screen.set(
+                ColorImage::from_gray(
+                    [hw_constants::SCREEN_WIDTH, hw_constants::SCREEN_HEIGHT],
+                    &self.ppu_state.funny_buffer_test,
+                ),
+                TextureOptions::NEAREST,
+            );
+
+            ui.add(egui::Image::from_texture(&self.screen).fit_to_original_size(2.0));
+        });
+
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("File", |ui| {
@@ -99,17 +146,20 @@ impl eframe::App for PPUViewApp {
         egui::SidePanel::left("Tiles")
             .min_width(300.0)
             .show(ctx, |ui| {
-                draw_tile_table(ui, ctx, &mut self.tiles, &self.dmg_state);
+                draw_tile_table(ui, &mut self.tiles, &self.dmg_state);
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
-                draw_tile_map_0(ui, ctx, &mut self.tile_map_0, &self.dmg_state);
-                draw_tile_map_1(ui, ctx, &mut self.tile_map_1, &self.dmg_state);
+                draw_tile_map_0(ui, &mut self.tile_map_0, &self.dmg_state);
+                draw_tile_map_1(ui, &mut self.tile_map_1, &self.dmg_state);
             });
 
             if ui.button("Step once").clicked() {
-                println!("{:?}", decode(self.dmg_state.memory[self.dmg_state.registers.pc]));
+                println!(
+                    "{:?}",
+                    decode(self.dmg_state.memory[self.dmg_state.registers.pc])
+                );
                 if let Err(message) = self.dmg_state.execute() {
                     error!("{message}");
                 }
@@ -117,7 +167,11 @@ impl eframe::App for PPUViewApp {
 
             ui.horizontal(|ui| {
                 if ui.button("Step multiple").clicked() {
-                    step_multiple(self.step_by_cycles, &mut self.dmg_state);
+                    step_multiple(
+                        self.step_by_cycles,
+                        &mut self.dmg_state,
+                        &mut self.ppu_state,
+                    );
                 }
 
                 ui.add(Slider::new(&mut self.step_by_cycles, 0..=100_000));
@@ -126,13 +180,19 @@ impl eframe::App for PPUViewApp {
             ui.horizontal(|ui| {
                 if ui.button("Request VBlank and step multiple").clicked() {
                     for _ in 0..self.step_by_frames {
-                        self.dmg_state.memory.buffer[0xFF0F] |= 0b0000_0001;
-                        step_multiple(self.step_by_cycles, &mut self.dmg_state);
+                        self.dmg_state.memory.buffer[io_regs::IF as usize] |= 0b0000_0001;
+                        step_multiple(
+                            self.step_by_cycles,
+                            &mut self.dmg_state,
+                            &mut self.ppu_state,
+                        );
                     }
                 }
 
                 ui.add(Slider::new(&mut self.step_by_frames, 0..=100));
             });
+
+            draw_oam_table(ui, &mut self.tiles, &self.dmg_state);
         });
 
         ctx.input(|i| {
