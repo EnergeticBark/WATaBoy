@@ -8,6 +8,7 @@ use crate::tiles::draw_tile_table;
 use eframe::epaint::textures::TextureOptions;
 use eframe::epaint::{Color32, ColorImage};
 use egui::{Slider, TextureHandle};
+use hw_constants::io_regs;
 use log::error;
 use ppu::ppu::Ppu;
 use sm83_interp::common::post_boot::PostBoot;
@@ -65,13 +66,13 @@ impl PPUViewApp {
 fn step_multiple(steps: u32, dmg_state: &mut Cpu, ppu_state: &mut Ppu) {
     for _ in 0..steps {
         // Set joypad value such that no buttons are held.
-        dmg_state.memory.write_byte(0xFF00, 0x0F);
+        dmg_state.memory.write_byte(io_regs::JOYP, 0x0F);
         if let Err(message) = dmg_state.execute() {
             error!("{message}");
         }
         for _ in 0..4 {
             ppu_state.tick(&dmg_state.memory.buffer);
-            dmg_state.memory.buffer[0xFF44] = ppu_state.ly();
+            dmg_state.memory.buffer[io_regs::LY as usize] = ppu_state.ly();
         }
         dmg_state.handle_interrupts();
     }
@@ -158,7 +159,7 @@ impl eframe::App for PPUViewApp {
             ui.horizontal(|ui| {
                 if ui.button("Request VBlank and step multiple").clicked() {
                     for _ in 0..self.step_by_frames {
-                        self.dmg_state.memory.buffer[0xFF0F] |= 0b0000_0001;
+                        self.dmg_state.memory.buffer[io_regs::IF as usize] |= 0b0000_0001;
                         step_multiple(
                             self.step_by_cycles,
                             &mut self.dmg_state,
