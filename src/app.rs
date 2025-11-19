@@ -4,6 +4,7 @@ use crate::oam::draw_oam_table;
 use crate::registers::draw_register_table;
 use crate::tile_map::{draw_tile_map_0, draw_tile_map_1};
 use crate::tiles::draw_tile_table;
+
 use eframe::epaint::textures::TextureOptions;
 use eframe::epaint::{Color32, ColorImage};
 use egui::{Slider, TextureHandle};
