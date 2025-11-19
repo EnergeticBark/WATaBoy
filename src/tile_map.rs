@@ -3,6 +3,7 @@ use eframe::epaint::textures::TextureOptions;
 use eframe::epaint::{ColorImage, TextureHandle};
 use egui::emath::RectTransform;
 use egui::{Color32, Frame, Stroke, StrokeKind, Ui, Vec2, pos2};
+use hw_constants::io_regs;
 use ppu::{lcd, tiles};
 use sm83_interp::cpu::Cpu;
 
@@ -36,9 +37,11 @@ fn draw_tile_map(
 }
 
 fn highlight_background(ui: &mut Ui, to_screen: RectTransform, dmg_state: &Cpu) {
+    use io_regs::{SCX, SCY};
+
     // Draw a red rectangle around the visible portion of the background tile map.
-    let sc_y = dmg_state.memory[0xFF42];
-    let sc_x = dmg_state.memory[0xFF43];
+    let sc_y = dmg_state.memory[SCY];
+    let sc_x = dmg_state.memory[SCX];
     let bottom = f32::from(sc_y.wrapping_add(143));
     let right = f32::from(sc_x.wrapping_add(159));
     let visible = Rect::from_min_max(
@@ -55,9 +58,11 @@ fn highlight_background(ui: &mut Ui, to_screen: RectTransform, dmg_state: &Cpu) 
 }
 
 fn highlight_window(ui: &mut Ui, to_screen: RectTransform, dmg_state: &Cpu) {
+    use io_regs::{WX, WY};
+
     // Draw a blue rectangle around the visible portion of the window tile map.
-    let wy = dmg_state.memory[0xFF4A];
-    let wx = dmg_state.memory[0xFF4B].wrapping_sub(7);
+    let wy = dmg_state.memory[WY];
+    let wx = dmg_state.memory[WX].wrapping_sub(7);
     let bottom = f32::from(143u8.wrapping_sub(wy));
     let right = f32::from(159u8.wrapping_sub(wx));
     let visible = Rect::from_min_max(
