@@ -481,15 +481,12 @@ impl Cpu {
             AdcR { x } => {
                 let a = self.registers.af.a();
                 let r8 = self.r8(x);
-                let prev_carry = u8::from(self.registers.af.f().c());
-                let full_result = u16::from(a) + u16::from(r8) + u16::from(prev_carry);
-                // Carry if the 9th bit is set.
-                let carry = full_result & 0x0100 == 0x0100;
-                // Keep the lower 8 bits.
-                #[allow(clippy::cast_possible_truncation)]
-                let result = full_result as u8;
+                let prev_carry = self.registers.af.f().c();
 
-                let half_carry = ((a & 0x0f) + (r8 & 0x0f) + prev_carry) & 0x10 == 0x10;
+                let (result, carry) = a.carrying_add(r8, self.registers.af.f().c());
+
+                let (half_result, _) = (a & 0x0f).carrying_add(r8 & 0x0f, prev_carry);
+                let half_carry = half_result & 0x10 == 0x10;
 
                 self.registers.af.set_a(result);
                 self.registers.af.set_f(
@@ -523,15 +520,10 @@ impl Cpu {
             SbcR { x } => {
                 let a = self.registers.af.a();
                 let r8 = self.r8(x);
-                let prev_carry = u8::from(self.registers.af.f().c());
+                let prev_carry = self.registers.af.f().c();
 
-                let (first_diff, first_carry) = a.overflowing_sub(r8);
-                let (result, second_carry) = first_diff.overflowing_sub(prev_carry);
-
-                // Carry if the 9th bit is set.
-                let carry = first_carry | second_carry;
-
-                let half_carry = ((a & 0x0f) < (r8 & 0x0f)) | (first_diff & 0x0f < prev_carry);
+                let (result, carry) = a.borrowing_sub(r8, prev_carry);
+                let (_, half_carry) = (a & 0x0f).borrowing_sub(r8 & 0x0f, prev_carry);
 
                 self.registers.af.set_a(result);
                 self.registers.af.set_f(
@@ -629,15 +621,12 @@ impl Cpu {
             AdcN => {
                 let a = self.registers.af.a();
                 let next_byte = self.memory[pc + 1];
-                let prev_carry = u8::from(self.registers.af.f().c());
-                let full_result = u16::from(a) + u16::from(next_byte) + u16::from(prev_carry);
-                // Carry if the 9th bit is set.
-                let carry = full_result & 0x0100 == 0x0100;
-                // Keep the lower 8 bits.
-                #[allow(clippy::cast_possible_truncation)]
-                let result = full_result as u8;
+                let prev_carry = self.registers.af.f().c();
 
-                let half_carry = ((a & 0x0f) + (next_byte & 0x0f) + prev_carry) & 0x10 == 0x10;
+                let (result, carry) = a.carrying_add(next_byte, prev_carry);
+
+                let (half_result, _) = (a & 0x0f).carrying_add(next_byte & 0x0f, prev_carry);
+                let half_carry = half_result & 0x10 == 0x10;
 
                 self.registers.af.set_a(result);
                 self.registers.af.set_f(
@@ -671,16 +660,10 @@ impl Cpu {
             SbcN => {
                 let a = self.registers.af.a();
                 let next_byte = self.memory[pc + 1];
-                let prev_carry = u8::from(self.registers.af.f().c());
+                let prev_carry = self.registers.af.f().c();
 
-                let (first_diff, first_carry) = a.overflowing_sub(next_byte);
-                let (result, second_carry) = first_diff.overflowing_sub(prev_carry);
-
-                // Carry if the 9th bit is set.
-                let carry = first_carry | second_carry;
-
-                let half_carry =
-                    ((a & 0x0f) < (next_byte & 0x0f)) | (first_diff & 0x0f < prev_carry);
+                let (result, carry) = a.borrowing_sub(next_byte, prev_carry);
+                let (_, half_carry) = (a & 0x0f).borrowing_sub(next_byte & 0x0f, prev_carry);
 
                 self.registers.af.set_a(result);
                 self.registers.af.set_f(
