@@ -1,6 +1,6 @@
-use std::fs;
 use egui::DroppedFile;
 use sm83_interp::cpu::Cpu;
+use std::fs;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn handle_dropped_rom(file: DroppedFile, dmg_state: &mut Cpu) {
@@ -9,7 +9,6 @@ pub fn handle_dropped_rom(file: DroppedFile, dmg_state: &mut Cpu) {
 
     dmg_state.memory.load_rom(&rom);
 }
-
 
 #[cfg(target_arch = "wasm32")]
 pub fn handle_dropped_rom(file: DroppedFile, dmg_state: &mut Cpu) {

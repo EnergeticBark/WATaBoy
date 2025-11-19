@@ -1426,6 +1426,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "hw-constants"
+version = "0.1.0"
+
+[[package]]
 name = "icu_collections"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2374,6 +2378,7 @@ name = "ppu"
 version = "0.1.0"
 dependencies = [
  "arbitrary-int",
+ "hw-constants",
 ]
 
 [[package]]
@@ -2384,6 +2389,7 @@ dependencies = [
  "egui",
  "egui_extras",
  "env_logger",
+ "hw-constants",
  "log",
  "ppu",
  "sm83-interp",
@@ -2691,6 +2697,7 @@ dependencies = [
  "arbitrary-int",
  "bitfield-struct",
  "bitmatch",
+ "hw-constants",
 ]
 
 [[package]]
