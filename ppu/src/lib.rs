@@ -1,6 +1,6 @@
-pub mod tiles;
+mod bg_fetcher;
 pub mod lcd;
 pub mod oam;
-pub mod ppu;
-mod bg_fetcher;
 mod obj_fetcher;
+pub mod ppu;
+pub mod tiles;

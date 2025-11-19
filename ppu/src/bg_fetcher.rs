@@ -1,7 +1,8 @@
-use std::collections::VecDeque;
-use hw_constants::io_regs;
-use crate::{lcd, tiles};
 use crate::lcd::{bg_tile_map, window_tile_map};
+use crate::{lcd, tiles};
+
+use hw_constants::io_regs;
+use std::collections::VecDeque;
 
 #[derive(Copy, Clone)]
 pub struct Pixel {
@@ -35,7 +36,7 @@ pub struct BackgroundFetcher {
    When a fresh FIFO queue is needed just make a whole new BackgroundFetcher. As far as I can tell none
    of the state gets carried over anyway. Write some good comments if anything ends up contradicting
    this.
- */
+*/
 impl BackgroundFetcher {
     // Shift out a pixel from the background FIFO, if it contains more than 8 pixels.
     pub fn shift_out(&mut self) -> Option<Pixel> {
@@ -112,7 +113,9 @@ impl BackgroundFetcher {
     pub fn tick(&mut self, memory: &[u8], current_scanline: u8, window_y: u8) {
         self.ticks += 1;
 
-        if let FetcherState::Push = self.state && self.push() {
+        if let FetcherState::Push = self.state
+            && self.push()
+        {
             self.ticks = 0;
             self.state = FetcherState::GetTile;
         }
@@ -138,7 +141,7 @@ impl BackgroundFetcher {
                         self.state = FetcherState::Push;
                     }
                 }
-                _ => {},
+                _ => {}
             }
         }
     }

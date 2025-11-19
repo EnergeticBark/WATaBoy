@@ -1,7 +1,8 @@
-use std::collections::VecDeque;
 use crate::bg_fetcher::{FetcherState, Pixel};
-use crate::tiles;
 use crate::oam::Obj;
+use crate::tiles;
+
+use std::collections::VecDeque;
 
 pub struct ObjectFetcher {
     current_obj: Option<Obj>,
@@ -19,7 +20,7 @@ pub struct ObjectFetcher {
    When a fresh FIFO queue is needed just make a whole new ObjectFetcher. As far as I can tell none
    of the state gets carried over anyway. Write some good comments if anything ends up contradicting
    this.
- */
+*/
 impl ObjectFetcher {
     // Shift out a pixel from the background FIFO, if it contains more than 8 pixels.
     pub fn shift_out(&mut self) -> Option<Pixel> {
@@ -98,7 +99,7 @@ impl ObjectFetcher {
                     self.get_tile_data_high(memory);
                     self.state = FetcherState::Push;
                 }
-                _ => {},
+                _ => {}
             }
         }
     }

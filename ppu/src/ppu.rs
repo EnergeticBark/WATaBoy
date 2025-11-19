@@ -1,8 +1,9 @@
-use hw_constants::io_regs;
-use crate::{lcd, oam};
 use crate::bg_fetcher::{BackgroundFetcher, Pixel};
 use crate::oam::Obj;
 use crate::obj_fetcher::ObjectFetcher;
+use crate::{lcd, oam};
+
+use hw_constants::io_regs;
 
 const SCANLINES_PER_FRAME: usize = 154;
 const DOTS_PER_SCANLINE: usize = 456;
@@ -30,7 +31,9 @@ pub struct Ppu {
 }
 
 fn drawing_window(memory: &[u8], x: u8, y: u8) -> bool {
-    lcd::window_enabled(memory) && x + 7 == memory[io_regs::WX as usize] && y >= memory[io_regs::WY as usize]
+    lcd::window_enabled(memory)
+        && x + 7 == memory[io_regs::WX as usize]
+        && y >= memory[io_regs::WY as usize]
 }
 
 fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
@@ -38,11 +41,7 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
     render_bg |= !(obj_pixel.low || obj_pixel.high);
     render_bg |= obj_pixel.priority && (bg_pixel.low || bg_pixel.high);
 
-    if render_bg {
-        bg_pixel
-    } else {
-        obj_pixel
-    }
+    if render_bg { bg_pixel } else { obj_pixel }
 }
 
 impl Ppu {
@@ -51,7 +50,11 @@ impl Ppu {
     }
 
     fn current_obj(&self) -> Option<Obj> {
-        self.obj_buffer.iter().filter(|obj| obj.intersects_x(self.x)).cloned().next()
+        self.obj_buffer
+            .iter()
+            .filter(|obj| obj.intersects_x(self.x))
+            .cloned()
+            .next()
     }
 
     // Advance the PPU by 1 dot.
@@ -67,7 +70,7 @@ impl Ppu {
                     self.pixels_to_drop = memory[io_regs::SCX as usize] & 7;
                     self.mode = PpuMode::Drawing;
                 }
-            },
+            }
             PpuMode::Drawing => {
                 if let Some(obj) = self.current_obj() {
                     self.obj_fetcher.tick(memory, self.ly(), obj);
@@ -102,7 +105,6 @@ impl Ppu {
                     }
                 }
 
-
                 if drawing_window(memory, self.x, self.ly()) && !self.bg_fetcher.drawing_window {
                     self.window_y = self.window_y.wrapping_add(1);
                     self.bg_fetcher = BackgroundFetcher::default();
@@ -111,13 +113,16 @@ impl Ppu {
                 }
 
                 if self.x >= 160 {
-                    println!("Drew for {} dots", (self.dot_counter % DOTS_PER_SCANLINE) - OAM_SCAN_DOTS);
+                    println!(
+                        "Drew for {} dots",
+                        (self.dot_counter % DOTS_PER_SCANLINE) - OAM_SCAN_DOTS
+                    );
                     self.x = 0;
                     self.bg_fetcher = BackgroundFetcher::default();
                     self.obj_fetcher = ObjectFetcher::default();
                     self.mode = PpuMode::HBlank;
                 }
-            },
+            }
             PpuMode::HBlank => {
                 if self.dot_counter.is_multiple_of(DOTS_PER_SCANLINE) {
                     if self.ly() < 144 {
@@ -126,14 +131,14 @@ impl Ppu {
                         self.mode = PpuMode::VBlank;
                     }
                 }
-            },
+            }
             PpuMode::VBlank => {
                 if self.dot_counter == DOTS_PER_FRAME {
                     self.dot_counter = 0;
                     self.window_y = 255;
                     self.mode = PpuMode::OamScan;
                 }
-            },
+            }
         }
     }
 }
