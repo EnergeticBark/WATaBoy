@@ -4,7 +4,8 @@ use crate::cycles::{m_cycles, prefix_m_cycles};
 use crate::opcodes::{Opcode, PrefixOpcode};
 use crate::parameters::{Condition, R8, R16, R16Mem};
 use crate::registers::Registers;
-use crate::{hw_addrs, opcodes, registers};
+use crate::{opcodes, registers};
+use hw_constants::io_regs;
 
 const DMG_BOOT_ROM: &[u8] = include_bytes!("../dmg.bin");
 
@@ -98,7 +99,7 @@ impl Cpu {
 
     pub fn handle_interrupts(&mut self) {
         // If an interrupt's enabled and flag bit is set, it needs to be serviced.
-        let to_service = self.memory[hw_addrs::IE] & self.memory[hw_addrs::IF];
+        let to_service = self.memory[hw_constants::IE] & self.memory[io_regs::IF];
 
         if !self.ime && to_service != 0 {
             self.halted = false;
@@ -113,7 +114,7 @@ impl Cpu {
 
             // Clear the flag bit of the interrupt we're servicing.
             let flag_mask = !(0b0000_0001 << nth_interrupt);
-            self.memory.buffer[hw_addrs::IF as usize] &= flag_mask;
+            self.memory.buffer[io_regs::IF as usize] &= flag_mask;
 
             // Turn off interrupt master enable.
             self.ime = false;

@@ -1,4 +1,4 @@
-mod common;
+pub mod common;
 
 use common::mooneye;
 use sm83_interp::common::post_boot::PostBoot;

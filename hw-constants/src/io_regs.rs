@@ -1,5 +1,3 @@
-pub const OAM: u16 = 0xFE00;
-
 pub const JOYP: u16 = 0xFF00;
 
 pub const SC: u16 = 0xFF02;
@@ -19,6 +17,11 @@ pub const NR41: u16 = 0xFF20;
 pub const NR44: u16 = 0xFF23;
 pub const NR52: u16 = 0xFF26;
 
+// LCD
+pub const LCDC: u16 = 0xFF40;
 pub const STAT: u16 = 0xFF41;
-
-pub const IE: u16 = 0xFFFF;
+pub const SCY: u16 = 0xFF42;
+pub const SCX: u16 = 0xFF43;
+pub const LY: u16 = 0xFF44;
+pub const WY: u16 = 0xFF4A;
+pub const WX: u16 = 0xFF4B;

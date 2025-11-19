@@ -1,7 +1,8 @@
 use crate::common::post_boot::PostBoot;
-use crate::hw_addrs;
 use crate::mbc::Mbc1;
 use crate::timers::Timers;
+
+use hw_constants::io_regs;
 use std::ops::{Index, Range};
 
 const MEM_MAP_SIZE: usize = 0x10000;
@@ -64,23 +65,23 @@ impl AddressBus {
                 let oam_size = 0xA0;
                 let src_start = u16::from_le_bytes([0x00, value]) as usize;
                 let src_end = src_start + oam_size;
-                let dest = hw_addrs::OAM as usize;
+                let dest = hw_constants::OAM as usize;
 
                 self.buffer.copy_within(src_start..src_end, dest);
             }
 
             // Certain I/O addresses only use certain bits. Bits which go unused are pulled high.
             // See Appendix B: https://gekkio.fi/files/gb-docs/gbctr.pdf
-            hw_addrs::JOYP | hw_addrs::NR41 => self.buffer[index as usize] = value | 0b1100_0000,
-            hw_addrs::SC => self.buffer[index as usize] = value | 0b0111_1110,
-            hw_addrs::TAC => self.buffer[index as usize] = value | 0b1111_1000,
-            hw_addrs::DIV => self.timers.system_clock = 0,
-            hw_addrs::IF => self.buffer[index as usize] = value | 0b1110_0000,
-            hw_addrs::STAT | hw_addrs::NR10 => self.buffer[index as usize] = value | 0b1000_0000,
-            hw_addrs::NR30 => self.buffer[index as usize] = value | 0b0111_1111,
-            hw_addrs::NR32 => self.buffer[index as usize] = value | 0b1001_1111,
-            hw_addrs::NR44 => self.buffer[index as usize] = value | 0b0011_1111,
-            hw_addrs::NR52 => self.buffer[index as usize] = value | 0b0111_0000,
+            io_regs::JOYP | io_regs::NR41 => self.buffer[index as usize] = value | 0b1100_0000,
+            io_regs::SC => self.buffer[index as usize] = value | 0b0111_1110,
+            io_regs::TAC => self.buffer[index as usize] = value | 0b1111_1000,
+            io_regs::DIV => self.timers.system_clock = 0,
+            io_regs::IF => self.buffer[index as usize] = value | 0b1110_0000,
+            io_regs::STAT | io_regs::NR10 => self.buffer[index as usize] = value | 0b1000_0000,
+            io_regs::NR30 => self.buffer[index as usize] = value | 0b0111_1111,
+            io_regs::NR32 => self.buffer[index as usize] = value | 0b1001_1111,
+            io_regs::NR44 => self.buffer[index as usize] = value | 0b0011_1111,
+            io_regs::NR52 => self.buffer[index as usize] = value | 0b0111_0000,
 
             // There is *nothing* at these addresses, so they don't have names.
             // Their bits are always pulled high.
@@ -93,19 +94,19 @@ impl AddressBus {
 
     pub fn increment_timers(&mut self, m_cycles: u16) {
         self.timers
-            .update_timer_counter(self.buffer[hw_addrs::TIMA as usize]);
+            .update_timer_counter(self.buffer[io_regs::TIMA as usize]);
         self.timers
-            .update_timer_modulo(self.buffer[hw_addrs::TMA as usize]);
+            .update_timer_modulo(self.buffer[io_regs::TMA as usize]);
         self.timers
-            .update_timer_control(self.buffer[hw_addrs::TAC as usize]);
+            .update_timer_control(self.buffer[io_regs::TAC as usize]);
 
         self.timers.increment(m_cycles);
 
-        self.buffer[hw_addrs::DIV as usize] = self.timers.div();
-        self.buffer[hw_addrs::TIMA as usize] = self.timers.tima();
+        self.buffer[io_regs::DIV as usize] = self.timers.div();
+        self.buffer[io_regs::TIMA as usize] = self.timers.tima();
 
         if self.timers.process_interrupt() {
-            self.buffer[hw_addrs::IF as usize] |= 0b0000_0100;
+            self.buffer[io_regs::IF as usize] |= 0b0000_0100;
         }
     }
 }
