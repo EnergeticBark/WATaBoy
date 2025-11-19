@@ -7,8 +7,6 @@ use hw_constants::io_regs;
 use ppu::{lcd, tiles};
 use sm83_interp::cpu::Cpu;
 
-const TILE_MAP_SIZE: usize = 256;
-
 fn draw_tile_map(
     ui: &mut Ui,
     rect: Rect,
@@ -74,12 +72,7 @@ fn highlight_window(ui: &mut Ui, to_screen: RectTransform, dmg_state: &Cpu) {
     );
 }
 
-pub fn draw_tile_map_0(
-    ui: &mut Ui,
-    ctx: &egui::Context,
-    tile_map_0_texture: &mut Option<TextureHandle>,
-    dmg_state: &Cpu,
-) {
+pub fn draw_tile_map_0(ui: &mut Ui, tile_map_0_texture: &mut TextureHandle, dmg_state: &Cpu) {
     ui.vertical(|ui| {
         ui.heading("Tile Map 0: 0x9800-0x9C00");
 
@@ -89,14 +82,6 @@ pub fn draw_tile_map_0(
             let (_, rect) = ui.allocate_space(Vec2::new(512.0, 512.0));
             let to_screen =
                 RectTransform::from_to(Rect::from_x_y_ranges(0.0..=255.0, 0.0..=255.0), rect);
-
-            let tile_map_0_texture = tile_map_0_texture.get_or_insert_with(|| {
-                ctx.load_texture(
-                    "Tile Map 0",
-                    ColorImage::filled([TILE_MAP_SIZE, TILE_MAP_SIZE], Color32::BLACK),
-                    TextureOptions::NEAREST,
-                )
-            });
 
             draw_tile_map(ui, rect, tile_map_0_texture, tile_map, dmg_state);
 
@@ -114,12 +99,7 @@ pub fn draw_tile_map_0(
     });
 }
 
-pub fn draw_tile_map_1(
-    ui: &mut Ui,
-    ctx: &egui::Context,
-    tile_map_1_texture: &mut Option<TextureHandle>,
-    dmg_state: &Cpu,
-) {
+pub fn draw_tile_map_1(ui: &mut Ui, tile_map_1_texture: &mut TextureHandle, dmg_state: &Cpu) {
     ui.vertical(|ui| {
         ui.heading("Tile Map 1: 0x9C00-0xA000");
 
@@ -129,14 +109,6 @@ pub fn draw_tile_map_1(
             let (_, rect) = ui.allocate_space(Vec2::new(512.0, 512.0));
             let to_screen =
                 RectTransform::from_to(Rect::from_x_y_ranges(0.0..=255.0, 0.0..=255.0), rect);
-
-            let tile_map_1_texture = tile_map_1_texture.get_or_insert_with(|| {
-                ctx.load_texture(
-                    "Tile Map 1",
-                    ColorImage::filled([TILE_MAP_SIZE, TILE_MAP_SIZE], Color32::BLACK),
-                    TextureOptions::NEAREST,
-                )
-            });
 
             draw_tile_map(ui, rect, tile_map_1_texture, tile_map, dmg_state);
 

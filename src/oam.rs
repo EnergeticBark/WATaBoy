@@ -1,16 +1,10 @@
-use eframe::epaint::textures::TextureOptions;
-use eframe::epaint::{Color32, ColorImage, TextureHandle};
+use eframe::epaint::TextureHandle;
 use egui::Ui;
 use egui_extras::{Column, TableBody, TableBuilder};
 use ppu::oam;
 use sm83_interp::cpu::Cpu;
 
-pub fn draw_oam_table(
-    ui: &mut Ui,
-    ctx: &egui::Context,
-    tiles: &mut [Option<TextureHandle>],
-    dmg_state: &Cpu,
-) {
+pub fn draw_oam_table(ui: &mut Ui, tiles: &mut [TextureHandle], dmg_state: &Cpu) {
     TableBuilder::new(ui)
         .id_salt("OAM View")
         .striped(true)
@@ -36,16 +30,11 @@ pub fn draw_oam_table(
             });
         })
         .body(|body| {
-            draw_oam_body(body, ctx, tiles, dmg_state);
+            draw_oam_body(body, tiles, dmg_state);
         });
 }
 
-fn draw_oam_body(
-    body: TableBody<'_>,
-    ctx: &egui::Context,
-    tiles: &mut [Option<TextureHandle>],
-    dmg_state: &Cpu,
-) {
+fn draw_oam_body(body: TableBody<'_>, tiles: &mut [TextureHandle], dmg_state: &Cpu) {
     body.rows(18.0, 40, |mut row| {
         let nth_row = row.index();
 
@@ -63,20 +52,13 @@ fn draw_oam_body(
             ui.label(format!("{}", obj.x_pos));
         });
 
-        let tile = tiles[obj.tile_index as usize].get_or_insert_with(|| {
-            ctx.load_texture(
-                format!("Tile {}", obj.tile_index),
-                ColorImage::filled([8, 8], Color32::BLACK),
-                TextureOptions::NEAREST,
-            )
-        });
-
         row.col(|ui| {
             ui.label(format!("{}: ", obj.tile_index));
         });
 
         row.col(|ui| {
-            ui.add(egui::Image::from_texture(&*tile).fit_to_original_size(2.0));
+            let tile = &tiles[obj.tile_index as usize];
+            ui.add(egui::Image::from_texture(tile).fit_to_original_size(2.0));
         });
 
         row.col(|ui| {
