@@ -101,7 +101,7 @@ impl Cpu {
         // If an interrupt's enabled and flag bit is set, it needs to be serviced.
         let to_service = self.memory[hw_constants::IE] & self.memory[io_regs::IF];
 
-        if !self.ime && to_service != 0 {
+        if to_service != 0 {
             self.halted = false;
         }
 
@@ -170,12 +170,12 @@ impl Cpu {
     ///
     /// Will return an error if the instruction at the current program counter is unimplemented.
     #[allow(clippy::too_many_lines)]
-    pub fn execute(&mut self) -> Result<(), String> {
+    pub fn execute(&mut self) -> Result<u16, String> {
         use Opcode::*;
 
         if self.halted {
             self.memory.increment_timers(1);
-            return Ok(());
+            return Ok(1);
         }
 
         let pc = self.registers.pc;
@@ -943,7 +943,7 @@ impl Cpu {
         }
 
         self.memory.increment_timers(m_cycles);
-        Ok(())
+        Ok(m_cycles)
     }
 
     #[allow(clippy::too_many_lines)]

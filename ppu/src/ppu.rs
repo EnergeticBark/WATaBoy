@@ -1,7 +1,7 @@
 use crate::bg_fetcher::{BackgroundFetcher, Pixel};
 use crate::oam::Obj;
 use crate::obj_fetcher::ObjectFetcher;
-use crate::{lcd, oam};
+use crate::{lcd, oam, lcd_status};
 
 use hw_constants::io_regs;
 
@@ -58,10 +58,12 @@ impl Ppu {
     }
 
     // Advance the PPU by 1 dot.
-    pub fn tick(&mut self, memory: &[u8]) {
+    pub fn tick(&mut self, memory: &mut [u8]) {
         self.dot_counter += 1;
         match self.mode {
             PpuMode::OamScan => {
+                lcd_status::set_ppu_mode(memory, 2);
+
                 if self.dot_counter % DOTS_PER_SCANLINE >= OAM_SCAN_DOTS {
                     // This is the last cycle of the OAM scan, so lets actually do the OAM scan.
                     self.obj_buffer = oam::oam_scan(memory, self.ly());
@@ -72,6 +74,8 @@ impl Ppu {
                 }
             }
             PpuMode::Drawing => {
+                lcd_status::set_ppu_mode(memory, 3);
+
                 if let Some(obj) = self.current_obj() {
                     self.obj_fetcher.tick(memory, self.ly(), obj);
                 }
@@ -124,20 +128,42 @@ impl Ppu {
                 }
             }
             PpuMode::HBlank => {
+                lcd_status::set_ppu_mode(memory, 0);
+
                 if self.dot_counter.is_multiple_of(DOTS_PER_SCANLINE) {
                     if self.ly() < 144 {
                         self.mode = PpuMode::OamScan;
                     } else {
                         self.mode = PpuMode::VBlank;
+                        // Request the VBlank interrupt.
+                        memory[io_regs::IF as usize] |= 0b0000_0001;
                     }
                 }
             }
             PpuMode::VBlank => {
+                lcd_status::set_ppu_mode(memory, 1);
+
                 if self.dot_counter == DOTS_PER_FRAME {
                     self.dot_counter = 0;
                     self.window_y = 255;
                     self.mode = PpuMode::OamScan;
                 }
+            }
+        }
+
+        // At the start of every scanline (even offscreen scanlines).
+        if self.dot_counter.is_multiple_of(DOTS_PER_SCANLINE) {
+            // Update LCD Y coordinate.
+            memory[io_regs::LY as usize] = self.ly();
+
+            // Update the LYC == LY bit in the STATUS register.
+            let coincidence = memory[io_regs::LY as usize] == memory[io_regs::LYC as usize];
+            lcd_status::set_coincidence(memory, coincidence);
+            if coincidence && lcd_status::lyc_int_select(memory) {
+                // Request the LCD interrupt.
+                memory[io_regs::IF as usize] |= 0b0000_0010;
+                // TODO: Implement interrupts for Mode 0-2
+                // See: https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status
             }
         }
     }
@@ -172,10 +198,10 @@ mod tests {
     #[test]
     fn test_minimum_bg_mode_3_dots() {
         let mut ppu = Ppu::default();
-        let memory = [0; 0x10000];
+        let mut memory = [0; 0x10000];
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&memory);
+            ppu.tick(&mut memory);
         }
 
         let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
@@ -195,7 +221,7 @@ mod tests {
         memory[io_regs::SCX as usize] = 7;
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&memory);
+            ppu.tick(&mut memory);
         }
 
         let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
@@ -219,7 +245,7 @@ mod tests {
         memory[io_regs::WX as usize] = 50 + 7;
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&memory);
+            ppu.tick(&mut memory);
         }
 
         let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
@@ -244,7 +270,7 @@ mod tests {
         memory[io_regs::WX as usize] = 50 + 7;
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&memory);
+            ppu.tick(&mut memory);
         }
 
         let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
