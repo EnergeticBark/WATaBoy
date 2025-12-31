@@ -58,7 +58,13 @@ impl ObjectFetcher {
 
     fn get_tile(&mut self, current_scanline: u8, obj: Obj) {
         self.tile_id = obj.tile_index;
-        self.tile_line = (current_scanline + 16 - obj.y_pos) % 8;
+        let tile_line = (current_scanline + 16 - obj.y_pos) % 8;
+        // Handle vertical object flipping.
+        if !self.current_obj.unwrap().y_flip() {
+            self.tile_line = tile_line;
+        } else {
+            self.tile_line = 7 - tile_line;
+        }
     }
 
     fn current_tile<'a>(&self, memory: &'a [u8]) -> &'a [u8; 16] {
