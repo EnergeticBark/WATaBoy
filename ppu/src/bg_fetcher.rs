@@ -76,7 +76,7 @@ impl BackgroundFetcher {
         let ly = if self.drawing_window {
             window_y
         } else {
-            current_scanline + memory[io_regs::SCY as usize]
+            current_scanline.wrapping_add(memory[io_regs::SCY as usize])
         };
         let tile_y = ly / 8;
 

@@ -89,7 +89,18 @@ impl Ppu {
                         if self.pixels_to_drop > 0 {
                             self.pixels_to_drop -= 1
                         } else {
-                            let mut pixel_to_render = bg_pixel;
+                            // If the background/window is disabled, use a pixel with a value of 0.
+                            // See: https://gbdev.io/pandocs/pixel_fifo.html#pixel-rendering
+                            let mut pixel_to_render = if lcd::bg_and_window_enabled(memory) {
+                                bg_pixel
+                            } else {
+                                Pixel {
+                                    low: false,
+                                    high: false,
+                                    priority: false,
+                                }
+                            };
+
                             if let Some(obj_pixel) = self.obj_fetcher.shift_out() {
                                 pixel_to_render = mix_pixels(bg_pixel, obj_pixel);
                             }
