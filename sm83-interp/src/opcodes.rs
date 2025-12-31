@@ -1,4 +1,4 @@
-use arbitrary_int::{u2, u3};
+use arbitrary_int::u3;
 use bitmatch::bitmatch;
 
 use crate::parameters::{Condition, R8, R16, R16Mem, R16Stack};
@@ -21,35 +21,35 @@ pub fn decode(first_byte: u8) -> Result<Opcode, String> {
         "0000_0000" => Nop,
 
         "00xx_0001" => LdRrNn {
-            x: R16::from_bits(u2::new(x)),
+            x: R16::from_bits(x),
         },
         "00xx_0010" => LdMemA {
-            x: R16Mem::from_bits(u2::new(x)),
+            x: R16Mem::from_bits(x),
         },
         "00xx_1010" => LdAMem {
-            x: R16Mem::from_bits(u2::new(x)),
+            x: R16Mem::from_bits(x),
         },
         "0000_1000" => LdNnSp,
 
         "00xx_0011" => IncRr {
-            x: R16::from_bits(u2::new(x)),
+            x: R16::from_bits(x),
         },
         "00xx_1011" => DecRr {
-            x: R16::from_bits(u2::new(x)),
+            x: R16::from_bits(x),
         },
         "00xx_1001" => AddHlRr {
-            x: R16::from_bits(u2::new(x)),
+            x: R16::from_bits(x),
         },
 
         "00xx_x100" => IncR {
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
         "00xx_x101" => DecR {
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
 
         "00xx_x110" => LdRN {
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
 
         "0000_0111" => Rlca,
@@ -63,7 +63,7 @@ pub fn decode(first_byte: u8) -> Result<Opcode, String> {
 
         "0001_1000" => JrE,
         "001x_x000" => JrCcE {
-            c: Condition::from_bits(u2::new(x)),
+            c: Condition::from_bits(x),
         },
 
         "0001_0000" => Stop,
@@ -71,34 +71,34 @@ pub fn decode(first_byte: u8) -> Result<Opcode, String> {
         // Block 1
         "0111_0110" => Halt,
         "01xx_xyyy" => LdRR {
-            x: R8::from_bits(u3::new(x)),
-            y: R8::from_bits(u3::new(y)),
+            x: R8::from_bits(x),
+            y: R8::from_bits(y),
         },
 
         // Block 2
         "1000_0xxx" => AddR {
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
         "1000_1xxx" => AdcR {
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
         "1001_0xxx" => SubR {
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
         "1001_1xxx" => SbcR {
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
         "1010_0xxx" => AndR {
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
         "1010_1xxx" => XorR {
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
         "1011_0xxx" => OrR {
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
         "1011_1xxx" => CpR {
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
 
         // Block 3
@@ -112,26 +112,26 @@ pub fn decode(first_byte: u8) -> Result<Opcode, String> {
         "1111_1110" => CpN,
 
         "110x_x000" => RetCc {
-            c: Condition::from_bits(u2::new(x)),
+            c: Condition::from_bits(x),
         },
         "1100_1001" => Ret,
         "1101_1001" => Reti,
         "110x_x010" => JpCcNn {
-            c: Condition::from_bits(u2::new(x)),
+            c: Condition::from_bits(x),
         },
         "1100_0011" => JpNn,
         "1110_1001" => JpHl,
         "110x_x100" => CallCcNn {
-            c: Condition::from_bits(u2::new(x)),
+            c: Condition::from_bits(x),
         },
         "1100_1101" => CallNn,
         "11xx_x111" => RstN { x: u3::new(x) },
 
         "11xx_0001" => PopRr {
-            x: R16Stack::from_bits(u2::new(x)),
+            x: R16Stack::from_bits(x),
         },
         "11xx_0101" => PushRr {
-            x: R16Stack::from_bits(u2::new(x)),
+            x: R16Stack::from_bits(x),
         },
 
         "1100_1011" => Prefix,
@@ -251,41 +251,41 @@ pub fn decode_prefix(second_byte: u8) -> PrefixOpcode {
     #[bitmatch]
     match second_byte {
         "0000_0xxx" => RlcR {
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
         "0000_1xxx" => RrcR {
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
         "0001_0xxx" => RlR {
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
         "0001_1xxx" => RrR {
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
         "0010_0xxx" => SlaR {
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
         "0010_1xxx" => SraR {
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
         "0011_0xxx" => SwapR {
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
         "0011_1xxx" => SrlR {
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
 
         "01bb_bxxx" => BitBR {
             b: u3::new(b),
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
         "10bb_bxxx" => ResBR {
             b: u3::new(b),
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
         "11bb_bxxx" => SetBR {
             b: u3::new(b),
-            x: R8::from_bits(u3::new(x)),
+            x: R8::from_bits(x),
         },
     }
 }
