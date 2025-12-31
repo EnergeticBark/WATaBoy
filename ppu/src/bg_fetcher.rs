@@ -3,11 +3,13 @@ use crate::{lcd, tiles};
 
 use hw_constants::io_regs;
 use std::collections::VecDeque;
+use crate::palette::Palette;
 
 #[derive(Copy, Clone)]
 pub struct Pixel {
     pub low: bool,
     pub high: bool,
+    pub palette: Palette,
     pub priority: bool,
 }
 
@@ -53,6 +55,7 @@ impl BackgroundFetcher {
             let pixel = Pixel {
                 low: (self.tile_data_low >> nth_bit) & 1 == 1,
                 high: (self.tile_data_high >> nth_bit) & 1 == 1,
+                palette: Palette::BGP,
                 priority: false,
             };
 

@@ -5,3 +5,4 @@ mod obj_fetcher;
 pub mod ppu;
 pub mod tiles;
 mod lcd_status;
+mod palette;

@@ -5,4 +5,5 @@ edition = "2024"
 
 [dependencies]
 hw-constants = { path = "../hw-constants" }
+bitfield-struct = "0.12.1"
 arbitrary-int = "2.0.0"

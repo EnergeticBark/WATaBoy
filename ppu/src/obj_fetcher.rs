@@ -3,6 +3,7 @@ use crate::oam::Obj;
 use crate::tiles;
 
 use std::collections::VecDeque;
+use crate::palette::Palette;
 
 pub struct ObjectFetcher {
     current_obj: Option<Obj>,
@@ -41,6 +42,13 @@ impl ObjectFetcher {
             let pixel = Pixel {
                 low: (self.tile_data_low >> nth_bit) & 1 == 1,
                 high: (self.tile_data_high >> nth_bit) & 1 == 1,
+                palette: {
+                    if self.current_obj.unwrap().palette() {
+                        Palette::OBP1
+                    } else {
+                        Palette::OBP0
+                    }
+                },
                 priority: self.current_obj.unwrap().priority(),
             };
 

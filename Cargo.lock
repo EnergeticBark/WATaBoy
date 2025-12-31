@@ -72,6 +72,7 @@ name = "ppu"
 version = "0.1.0"
 dependencies = [
  "arbitrary-int",
+ "bitfield-struct",
  "hw-constants",
 ]
 

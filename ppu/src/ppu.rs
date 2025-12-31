@@ -1,9 +1,10 @@
 use crate::bg_fetcher::{BackgroundFetcher, Pixel};
 use crate::oam::Obj;
 use crate::obj_fetcher::ObjectFetcher;
-use crate::{lcd, oam, lcd_status};
+use crate::{lcd, oam, lcd_status, palette};
 
 use hw_constants::io_regs;
+use crate::palette::Palette;
 
 const SCANLINES_PER_FRAME: usize = 154;
 const DOTS_PER_SCANLINE: usize = 456;
@@ -97,6 +98,7 @@ impl Ppu {
                                 Pixel {
                                     low: false,
                                     high: false,
+                                    palette: Palette::BGP,
                                     priority: false,
                                 }
                             };
@@ -105,7 +107,6 @@ impl Ppu {
                                 pixel_to_render = mix_pixels(bg_pixel, obj_pixel);
                             }
 
-                            let funny_index = self.ly() as usize * 160 + self.x as usize;
                             let mut funny_greyscale = 0;
                             if pixel_to_render.low {
                                 funny_greyscale |= 0b0000_0001;
@@ -113,7 +114,16 @@ impl Ppu {
                             if pixel_to_render.high {
                                 funny_greyscale |= 0b0000_0010;
                             }
-                            self.funny_buffer_test[funny_index] = funny_greyscale * 64;
+
+                            let funny_index = self.ly() as usize * 160 + self.x as usize;
+                            let color = match pixel_to_render.palette {
+                                Palette::BGP => palette::map_to_bgp(memory, funny_greyscale),
+                                Palette::OBP0 => palette::map_to_obp0(memory, funny_greyscale),
+                                Palette::OBP1 => palette::map_to_obp1(memory, funny_greyscale),
+                            };
+                            
+                            // Get the colors in their correct greyscale values.
+                            self.funny_buffer_test[funny_index] = 255 - color.into_bits() * 64;
 
                             self.x += 1;
                         }

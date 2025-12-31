@@ -25,6 +25,9 @@ impl Obj {
     pub fn x_flip(&self) -> bool {
         self.attributes & 0b0010_0000 == 0b0010_0000
     }
+    pub fn palette(&self) -> bool {
+        self.attributes & 0b0001_0000 == 0b0001_0000
+    }
 
     // TODO: handle 8x16 tile mode, this only handles 8x8.
     pub fn intersects_y(&self, y: u8) -> bool {
