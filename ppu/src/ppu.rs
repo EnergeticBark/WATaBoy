@@ -86,7 +86,7 @@ impl Ppu {
                 }
                 self.obj_fetcher.tick(memory, self.ly());
 
-                if self.obj_fetcher.waiting_for_obj() {
+                if self.obj_fetcher.idle_and_empty() {
                     self.bg_fetcher.tick(memory, self.ly(), self.window_y);
                     //println!("Dot: {}, X: {}, FIFO: {}", (self.dot_counter % DOTS_PER_SCANLINE) - OAM_SCAN_DOTS, self.x, self.bg_fetcher.bg_fifo.len());
 
