@@ -19,16 +19,15 @@ const TRANSPARENT: Pixel = Pixel {
 
 enum ObjectFetcherState {
     Idle,
-    GetTile { obj: Obj },
-    GetTileDataLow { obj: Obj, tile_line: u8 },
-    GetTileDataHigh { obj: Obj, tile_line: u8 },
+    GetTile { ticks_remaining: u8, obj: Obj },
+    GetTileDataLow { ticks_remaining: u8, obj: Obj, tile_line: u8 },
+    GetTileDataHigh { ticks_remaining: u8, obj: Obj, tile_line: u8 },
     Push { obj: Obj },
 }
 
 pub struct ObjectFetcher {
     obj_buffer: VecDeque<Obj>,
     state: ObjectFetcherState,
-    ticks: u8,
     fifo: VecDeque<Pixel>,
     tile_data_low: u8,
     tile_data_high: u8,
@@ -115,38 +114,36 @@ impl ObjectFetcher {
     }
 
     pub fn tick(&mut self, memory: &[u8], current_scanline: u8) {
-        if let ObjectFetcherState::Idle = self.state {
-            if let Some(obj) = self.obj_buffer.pop_front() {
-                self.state = ObjectFetcherState::GetTile { obj };
-                self.ticks = 0;
-            } else {
-                return;
+        match self.state {
+            ObjectFetcherState::Idle => {
+                if let Some(obj) = self.obj_buffer.pop_front() {
+                    // This used to be ticks_remaining: 1. But Idle is taking its own tick, so it's
+                    // probably more accurate to use ticks_remaining: 0 so GetTile finishes after
+                    // two ticks instead of three.
+                    self.state = ObjectFetcherState::GetTile { ticks_remaining: 0, obj };
+                }
             }
-        }
-        self.ticks += 1;
-
-        if let ObjectFetcherState::Push { obj } = self.state {
-            self.push(obj);
-            self.state = ObjectFetcherState::Idle;
-        }
-
-        if self.ticks >= 2 {
-            self.ticks = 0;
-            match self.state {
-                ObjectFetcherState::GetTile { obj } => {
-                    let tile_line = self.get_tile(current_scanline, obj);
-                    self.state = ObjectFetcherState::GetTileDataLow { obj, tile_line };
-                }
-                ObjectFetcherState::GetTileDataLow { obj, tile_line } => {
-                    self.get_tile_data_low(memory, obj, tile_line);
-                    self.state = ObjectFetcherState::GetTileDataHigh { obj, tile_line };
-                }
-                ObjectFetcherState::GetTileDataHigh { obj, tile_line } => {
-                    self.get_tile_data_high(memory, obj, tile_line);
-                    self.state = ObjectFetcherState::Push { obj };
-                }
-                _ => {}
+            ObjectFetcherState::GetTile { ticks_remaining: 0, obj } => {
+                let tile_line = self.get_tile(current_scanline, obj);
+                self.state = ObjectFetcherState::GetTileDataLow { ticks_remaining: 1, obj, tile_line };
             }
+            ObjectFetcherState::GetTileDataLow { ticks_remaining: 0, obj, tile_line } => {
+                self.get_tile_data_low(memory, obj, tile_line);
+                self.state = ObjectFetcherState::GetTileDataHigh { ticks_remaining: 1, obj, tile_line };
+            }
+            ObjectFetcherState::GetTileDataHigh { ticks_remaining: 0, obj, tile_line } => {
+                self.get_tile_data_high(memory, obj, tile_line);
+                self.state = ObjectFetcherState::Push { obj };
+            }
+            ObjectFetcherState::Push { obj } => {
+                self.push(obj);
+                self.state = ObjectFetcherState::Idle;
+            }
+
+            // Countdown
+            ObjectFetcherState::GetTile { ref mut ticks_remaining, .. } => *ticks_remaining -= 1,
+            ObjectFetcherState::GetTileDataLow { ref mut ticks_remaining, .. } => *ticks_remaining -= 1,
+            ObjectFetcherState::GetTileDataHigh { ref mut ticks_remaining, .. } => *ticks_remaining -= 1,
         }
     }
 }
@@ -156,7 +153,6 @@ impl Default for ObjectFetcher {
         Self {
             obj_buffer: VecDeque::with_capacity(10),
             state: ObjectFetcherState::Idle,
-            ticks: 0,
             fifo: VecDeque::from([TRANSPARENT; 8]),
             tile_data_low: 0,
             tile_data_high: 0,
