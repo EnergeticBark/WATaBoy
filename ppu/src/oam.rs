@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 const OBJ_SIZE: usize = 4;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -53,12 +55,17 @@ pub fn nth_obj(memory: &[u8], index: usize) -> Obj {
     Obj::from_bytes(obj_bytes)
 }
 
-pub fn oam_scan(memory: &[u8], ly: u8) -> Vec<Obj> {
-    (0..40)
+pub fn oam_scan(memory: &[u8], ly: u8) -> VecDeque<Obj> {
+    let mut first_10: Vec<_> = (0..40)
         .map(|index| nth_obj(memory, index))
         // Only consider objects on screen (y value between 1 and 160).
         .filter(|obj| (1..160).contains(&obj.y_pos))
         .filter(|obj| obj.intersects_y(ly))
         .take(10)
-        .collect()
+        .collect();
+
+    // Make a nice sorted queue so we can pop objects in-order as we draw the scanline.
+    // This sort is stable, so "objects earlier in the OAM should have higher priority" still holds.
+    first_10.sort_by_key(|obj| obj.x_pos);
+    VecDeque::from(first_10)
 }

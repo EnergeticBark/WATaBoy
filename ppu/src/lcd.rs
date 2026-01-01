@@ -20,6 +20,10 @@ pub fn bg_tile_map(memory: &[u8]) -> bool {
     memory[io_regs::LCDC as usize] & 0b0000_1000 == 0b0000_1000
 }
 
+pub fn obj_enabled(memory: &[u8]) -> bool {
+    memory[io_regs::LCDC as usize] & 0b0000_0010 == 0b0000_0010
+}
+
 pub fn bg_and_window_enabled(memory: &[u8]) -> bool {
     memory[io_regs::LCDC as usize] & 0b0000_0001 == 0b0000_0001
 }

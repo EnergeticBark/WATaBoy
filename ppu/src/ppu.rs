@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use crate::bg_fetcher::{BackgroundFetcher, Pixel};
 use crate::oam::Obj;
 use crate::obj_fetcher::ObjectFetcher;
@@ -26,7 +27,11 @@ pub struct Ppu {
     pixels_to_drop: u8,
     window_y: u8,
     bg_fetcher: BackgroundFetcher,
-    obj_buffer: Vec<Obj>,
+    // Why is this here *and* in ObjectFetcher? Because the ObjectFetcher doesn't know the current x
+    // coordinate the LCD is rendering.
+    // The PPU decides *when* to fetch an object, whereas the ObjectFetcher just mindlessly fetches
+    // whatever the PPU puts into its queue.
+    obj_buffer: VecDeque<Obj>,
     obj_fetcher: ObjectFetcher,
     pub funny_buffer_test: Vec<u8>,
 }
@@ -50,12 +55,11 @@ impl Ppu {
         (self.dot_counter / DOTS_PER_SCANLINE) as u8
     }
 
-    fn current_obj(&self) -> Option<Obj> {
-        self.obj_buffer
-            .iter()
-            .filter(|obj| obj.intersects_x(self.x))
-            .cloned()
-            .next()
+    fn pop_next_obj(&mut self) -> Option<Obj> {
+        if self.obj_buffer.front()?.intersects_x(self.x) {
+            return self.obj_buffer.pop_front()
+        }
+        None
     }
 
     // Advance the PPU by 1 dot.
@@ -77,11 +81,12 @@ impl Ppu {
             PpuMode::Drawing => {
                 lcd_status::set_ppu_mode(memory, 3);
 
-                if let Some(obj) = self.current_obj() {
-                    self.obj_fetcher.tick(memory, self.ly(), obj);
+                if let Some(obj) = self.pop_next_obj() {
+                    self.obj_fetcher.push_obj(obj);
                 }
+                self.obj_fetcher.tick(memory, self.ly());
 
-                if self.obj_fetcher.done {
+                if self.obj_fetcher.waiting_for_obj() {
                     self.bg_fetcher.tick(memory, self.ly(), self.window_y);
                     //println!("Dot: {}, X: {}, FIFO: {}", (self.dot_counter % DOTS_PER_SCANLINE) - OAM_SCAN_DOTS, self.x, self.bg_fetcher.bg_fifo.len());
 
@@ -104,7 +109,9 @@ impl Ppu {
                             };
 
                             if let Some(obj_pixel) = self.obj_fetcher.shift_out() {
-                                pixel_to_render = mix_pixels(bg_pixel, obj_pixel);
+                                if lcd::obj_enabled(memory) {
+                                    pixel_to_render = mix_pixels(pixel_to_render, obj_pixel);
+                                }
                             }
 
                             let mut funny_greyscale = 0;
@@ -199,7 +206,7 @@ impl Default for Ppu {
             pixels_to_drop: 0,
             window_y: 255,
             bg_fetcher: BackgroundFetcher::default(),
-            obj_buffer: Vec::with_capacity(10),
+            obj_buffer: VecDeque::with_capacity(10),
             obj_fetcher: ObjectFetcher::default(),
             funny_buffer_test: vec![0; 160 * 144],
         }
