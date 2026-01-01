@@ -19,15 +19,14 @@ const TRANSPARENT: Pixel = Pixel {
 
 enum ObjectFetcherState {
     Idle,
-    GetTile,
-    GetTileDataLow { tile_line: u8 },
-    GetTileDataHigh { tile_line: u8 },
-    Push,
+    GetTile { obj: Obj },
+    GetTileDataLow { obj: Obj, tile_line: u8 },
+    GetTileDataHigh { obj: Obj, tile_line: u8 },
+    Push { obj: Obj },
 }
 
 pub struct ObjectFetcher {
     obj_buffer: VecDeque<Obj>,
-    current_obj: Option<Obj>,
     state: ObjectFetcherState,
     ticks: u8,
     fifo: VecDeque<Pixel>,
@@ -58,28 +57,28 @@ impl ObjectFetcher {
     }
 
     // Push a row of 8 pixels from a tile to the Obj FIFO.
-    fn push(&mut self) {
-        if self.current_obj.unwrap().x_flip() {
-            self.push_bit_range(0..8)
+    fn push(&mut self, obj: Obj) {
+        if obj.x_flip() {
+            self.push_bit_range(0..8, obj)
         } else {
-            self.push_bit_range((0..8).rev())
+            self.push_bit_range((0..8).rev(), obj)
         };
     }
 
-    fn push_bit_range<T: Iterator<Item = u8>>(&mut self, bit_range: T) {
+    fn push_bit_range<T: Iterator<Item = u8>>(&mut self, bit_range: T, obj: Obj) {
         let old_pixels = self.fifo.iter_mut();
         let new_pixels = bit_range.map(|nth_bit| {
             Pixel {
                 low: (self.tile_data_low >> nth_bit) & 1 == 1,
                 high: (self.tile_data_high >> nth_bit) & 1 == 1,
                 palette: {
-                    if self.current_obj.unwrap().palette() {
+                    if obj.palette() {
                         Palette::OBP1
                     } else {
                         Palette::OBP0
                     }
                 },
-                priority: self.current_obj.unwrap().priority(),
+                priority: obj.priority(),
             }
         });
         // Replace any transparent pixels that are currently on the queue with the new pixels.
@@ -91,35 +90,34 @@ impl ObjectFetcher {
     }
 
     // Returns tile_line
-    fn get_tile(&mut self, current_scanline: u8, obj: Obj) -> u8 {
+    fn get_tile(&self, current_scanline: u8, obj: Obj) -> u8 {
         let tile_line = (current_scanline + 16 - obj.y_pos) % 8;
         // Handle vertical object flipping.
-        if !self.current_obj.unwrap().y_flip() {
+        if !obj.y_flip() {
             tile_line
         } else {
             7 - tile_line
         }
     }
 
-    fn current_tile<'a>(&self, memory: &'a [u8]) -> &'a [u8; 16] {
-        tiles::unsigned_nth_tile(memory, self.current_obj.unwrap().tile_index as usize)
+    fn current_tile<'a>(&self, memory: &'a [u8], obj: Obj) -> &'a [u8; 16] {
+        tiles::unsigned_nth_tile(memory, obj.tile_index as usize)
     }
 
-    fn get_tile_data_low(&mut self, memory: &[u8], tile_line: u8) {
-        let tile = self.current_tile(memory);
+    fn get_tile_data_low(&mut self, memory: &[u8], obj: Obj, tile_line: u8) {
+        let tile = self.current_tile(memory, obj);
         self.tile_data_low = tile[tile_line as usize * 2];
     }
 
-    fn get_tile_data_high(&mut self, memory: &[u8], tile_line: u8) {
-        let tile = self.current_tile(memory);
+    fn get_tile_data_high(&mut self, memory: &[u8], obj: Obj, tile_line: u8) {
+        let tile = self.current_tile(memory, obj);
         self.tile_data_high = tile[tile_line as usize * 2 + 1];
     }
 
     pub fn tick(&mut self, memory: &[u8], current_scanline: u8) {
         if let ObjectFetcherState::Idle = self.state {
-            if let Some(next_obj) = self.obj_buffer.pop_front() {
-                self.current_obj = Some(next_obj);
-                self.state = ObjectFetcherState::GetTile;
+            if let Some(obj) = self.obj_buffer.pop_front() {
+                self.state = ObjectFetcherState::GetTile { obj };
                 self.ticks = 0;
             } else {
                 return;
@@ -127,25 +125,25 @@ impl ObjectFetcher {
         }
         self.ticks += 1;
 
-        if let ObjectFetcherState::Push = self.state {
-            self.push();
+        if let ObjectFetcherState::Push { obj } = self.state {
+            self.push(obj);
             self.state = ObjectFetcherState::Idle;
         }
 
         if self.ticks >= 2 {
             self.ticks = 0;
             match self.state {
-                ObjectFetcherState::GetTile => {
-                    let tile_line = self.get_tile(current_scanline, self.current_obj.unwrap());
-                    self.state = ObjectFetcherState::GetTileDataLow { tile_line };
+                ObjectFetcherState::GetTile { obj } => {
+                    let tile_line = self.get_tile(current_scanline, obj);
+                    self.state = ObjectFetcherState::GetTileDataLow { obj, tile_line };
                 }
-                ObjectFetcherState::GetTileDataLow { tile_line } => {
-                    self.get_tile_data_low(memory, tile_line);
-                    self.state = ObjectFetcherState::GetTileDataHigh { tile_line };
+                ObjectFetcherState::GetTileDataLow { obj, tile_line } => {
+                    self.get_tile_data_low(memory, obj, tile_line);
+                    self.state = ObjectFetcherState::GetTileDataHigh { obj, tile_line };
                 }
-                ObjectFetcherState::GetTileDataHigh { tile_line } => {
-                    self.get_tile_data_high(memory, tile_line);
-                    self.state = ObjectFetcherState::Push;
+                ObjectFetcherState::GetTileDataHigh { obj, tile_line } => {
+                    self.get_tile_data_high(memory, obj, tile_line);
+                    self.state = ObjectFetcherState::Push { obj };
                 }
                 _ => {}
             }
@@ -157,7 +155,6 @@ impl Default for ObjectFetcher {
     fn default() -> Self {
         Self {
             obj_buffer: VecDeque::with_capacity(10),
-            current_obj: None,
             state: ObjectFetcherState::Idle,
             ticks: 0,
             fifo: VecDeque::from([TRANSPARENT; 8]),
