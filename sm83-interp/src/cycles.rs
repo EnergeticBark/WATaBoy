@@ -23,7 +23,8 @@ pub fn m_cycles(opcode: Opcode) -> u16 {
         LdANn | LdNnA => 4,
         // Ldh
         LdhAC | LdhCA => 2,
-        LdhAN | LdhNA => 3,
+        LdhAN => 0, // CONTEXT DEPENDANT: May read from timer.
+        LdhNA => 3,
 
         // 16-bit load instructions.
         LdRrNn { .. } => 3,

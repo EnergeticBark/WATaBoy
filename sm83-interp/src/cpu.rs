@@ -871,9 +871,11 @@ impl Cpu {
             }
             LdhAN => {
                 let next_byte = self.memory[pc + 1];
+                self.memory.increment_timers(1);
                 let address = u16::from_le_bytes([next_byte, 0xFF]);
                 let value = self.memory[address];
                 self.registers.af.set_a(value);
+                self.memory.increment_timers(2);
                 self.registers.pc += 2;
             }
             LdANn => {
