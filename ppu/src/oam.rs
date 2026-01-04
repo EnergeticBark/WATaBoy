@@ -45,7 +45,7 @@ impl Obj {
 
     pub fn intersects_x(&self, x: u8) -> bool {
         let x_left = self.x_pos;
-        let x_right = x_left + 8;
+        let x_right = x_left.wrapping_add(8);
         (x_left..x_right).contains(&(x + 8))
     }
 }
