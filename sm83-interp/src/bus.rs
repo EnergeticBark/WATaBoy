@@ -60,6 +60,9 @@ impl AddressBus {
             }
 
             0xFF46 => {
+                // Actually write the value to this address before starting the OAM DMA transfer.
+                self.buffer[index as usize] = value;
+
                 // TODO: Accurately make this take a few cycles.
                 println!("OAM DMA Transfer from 0x{value}00!");
                 let oam_size = 0xA0;

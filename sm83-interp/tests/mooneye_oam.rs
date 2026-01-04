@@ -20,3 +20,11 @@ fn test_basic() {
 
     assert_eq!(bcdehl, FIBONACCI);
 }
+
+#[test]
+fn test_reg_read() {
+    let mut cpu = Cpu::post_boot_dmg();
+    let bcdehl = run_mooneye_test(&mut cpu, include_bytes!("roms/oam/reg_read.gb"));
+
+    assert_eq!(bcdehl, FIBONACCI);
+}
