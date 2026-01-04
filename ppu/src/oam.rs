@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use crate::lcd::obj_size;
 
 const OBJ_SIZE: usize = 4;
 
@@ -34,9 +35,11 @@ impl Obj {
     }
 
     // TODO: handle 8x16 tile mode, this only handles 8x8.
-    pub fn intersects_y(&self, y: u8) -> bool {
+    pub fn intersects_y(&self, y: u8, obj_size: bool) -> bool {
+        let obj_height = if obj_size { 16 } else { 8 };
+
         let y_top = self.y_pos;
-        let y_bottom = y_top + 8;
+        let y_bottom = y_top + obj_height;
         (y_top..y_bottom).contains(&(y + 16))
     }
 
@@ -56,11 +59,13 @@ pub fn nth_obj(memory: &[u8], index: usize) -> Obj {
 }
 
 pub fn oam_scan(memory: &[u8], ly: u8) -> VecDeque<Obj> {
+    let obj_size = obj_size(memory);
+
     let mut first_10: Vec<_> = (0..40)
         .map(|index| nth_obj(memory, index))
         // Only consider objects on screen (y value between 1 and 160).
         .filter(|obj| (1..160).contains(&obj.y_pos))
-        .filter(|obj| obj.intersects_y(ly))
+        .filter(|obj| obj.intersects_y(ly, obj_size))
         .take(10)
         .collect();
 
