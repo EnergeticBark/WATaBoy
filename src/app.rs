@@ -7,12 +7,13 @@ use crate::tiles::draw_tile_table;
 
 use eframe::epaint::textures::TextureOptions;
 use eframe::epaint::{Color32, ColorImage};
-use egui::{Slider, TextureHandle};
+use egui::{Key, Slider, TextureHandle};
 use hw_constants::io_regs;
 use log::error;
 use ppu::ppu::Ppu;
 use sm83_interp::common::post_boot::PostBoot;
 use sm83_interp::cpu::Cpu;
+use sm83_interp::joypad::ButtonsHeld;
 use sm83_interp::opcodes::decode;
 
 const NINTENDO_LOGO: &[u8; 48] = include_bytes!("../nintendo_logo.bin");
@@ -26,6 +27,8 @@ pub struct PPUViewApp {
     screen: TextureHandle,
     step_by_cycles: u32,
     step_by_frames: u32,
+    play: bool,
+    buttons_held: ButtonsHeld,
 }
 
 impl PPUViewApp {
@@ -85,29 +88,53 @@ impl PPUViewApp {
             ),
             step_by_cycles: 10000,
             step_by_frames: 1,
+            play: false,
+            buttons_held: ButtonsHeld::default(),
         }
     }
 }
 
-fn step_multiple(steps: u32, dmg_state: &mut Cpu, ppu_state: &mut Ppu) {
+fn step_multiple(steps: u32, dmg_state: &mut Cpu, ppu_state: &mut Ppu, buttons_held: ButtonsHeld) {
     for _ in 0..steps {
-        // Set joypad value such that no buttons are held.
-        dmg_state.memory.write_byte(io_regs::JOYP, 0x0F);
-        if let Err(message) = dmg_state.execute() {
-            error!("{message}");
-        }
-        for _ in 0..4 {
-            ppu_state.tick(&dmg_state.memory.buffer);
-            dmg_state.memory.buffer[io_regs::LY as usize] = ppu_state.ly();
+        dmg_state.memory.update_joypad(buttons_held);
+        match dmg_state.execute() {
+            Err(message) => error!("{message}"),
+            Ok(m_cycles) => {
+                for _ in 0..m_cycles * 4 {
+                    ppu_state.tick(&mut dmg_state.memory.buffer);
+                }
+            }
         }
         dmg_state.handle_interrupts();
+    }
+}
+
+fn step_vblank(dmg_state: &mut Cpu, ppu_state: &mut Ppu, buttons_held: ButtonsHeld) {
+    loop {
+        dmg_state.memory.update_joypad(buttons_held);
+        match dmg_state.execute() {
+            Err(message) => error!("{message}"),
+            Ok(m_cycles) => {
+                for _ in 0..m_cycles * 4 {
+                    ppu_state.tick(&mut dmg_state.memory.buffer);
+                }
+            }
+        }
+        let vblank_happened = (dmg_state.memory.buffer[io_regs::IF as usize] & 0b0000_0001
+            == 0b0000_0001)
+            && (dmg_state.memory.buffer[hw_constants::IE as usize] & 0b0000_0001 == 0b0000_0001)
+            && dmg_state.ime;
+        dmg_state.handle_interrupts();
+        if vblank_happened {
+            return;
+        }
     }
 }
 
 impl eframe::App for PPUViewApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::Window::new("THE SCREEN Ahhh :)").show(ctx, |ui| {
+        egui::Window::new("PPU Output").show(ctx, |ui| {
             self.screen.set(
                 ColorImage::from_gray(
                     [hw_constants::SCREEN_WIDTH, hw_constants::SCREEN_HEIGHT],
@@ -171,26 +198,29 @@ impl eframe::App for PPUViewApp {
                         self.step_by_cycles,
                         &mut self.dmg_state,
                         &mut self.ppu_state,
+                        self.buttons_held,
                     );
                 }
 
-                ui.add(Slider::new(&mut self.step_by_cycles, 0..=100_000));
+                ui.add(Slider::new(&mut self.step_by_cycles, 0..=1_000_000));
             });
 
             ui.horizontal(|ui| {
-                if ui.button("Request VBlank and step multiple").clicked() {
+                if ui.button("Step vblank").clicked() {
                     for _ in 0..self.step_by_frames {
-                        self.dmg_state.memory.buffer[io_regs::IF as usize] |= 0b0000_0001;
-                        step_multiple(
-                            self.step_by_cycles,
-                            &mut self.dmg_state,
-                            &mut self.ppu_state,
-                        );
+                        step_vblank(&mut self.dmg_state, &mut self.ppu_state, self.buttons_held);
                     }
                 }
 
                 ui.add(Slider::new(&mut self.step_by_frames, 0..=100));
             });
+
+            if ui.button("Play/pause").clicked() {
+                self.play = !self.play;
+            }
+            if self.play {
+                step_vblank(&mut self.dmg_state, &mut self.ppu_state, self.buttons_held);
+            }
 
             draw_oam_table(ui, &mut self.tiles, &self.dmg_state);
         });
@@ -201,6 +231,19 @@ impl eframe::App for PPUViewApp {
                 self.dmg_state = Cpu::post_boot_dmg();
                 handle_dropped_rom(dropped_file, &mut self.dmg_state);
             }
+
+            self.buttons_held = ButtonsHeld {
+                start: i.key_down(Key::Enter),
+                select: i.key_down(Key::Backspace),
+                b: i.key_down(Key::X),
+                a: i.key_down(Key::Z),
+                down: i.key_down(Key::ArrowDown),
+                up: i.key_down(Key::ArrowUp),
+                left: i.key_down(Key::ArrowLeft),
+                right: i.key_down(Key::ArrowRight),
+            }
         });
+
+        ctx.request_repaint();
     }
 }

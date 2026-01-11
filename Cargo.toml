@@ -13,15 +13,15 @@ targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 hw-constants = { path = "../wasmboy/hw-constants" }
 sm83-interp = { path = "../wasmboy/sm83-interp" }
 ppu = { path = "../wasmboy/ppu" }
-egui = "0.33.0"
-egui_extras = "0.33.0"
-eframe = { version = "0.33.0", default-features = false, features = [
-    "accesskit",     # Make egui compatible with screen readers. NOTE: adds a lot of dependencies.
+egui = "0.33.3"
+egui_extras = "0.33.3"
+eframe = { version = "0.33.3", default-features = false, features = [
+    "accesskit", # Make egui compatible with screen readers. NOTE: adds a lot of dependencies.
     "default_fonts", # Embed the default egui fonts.
-    "glow",          # Use the glow rendering backend. Alternative: "wgpu".
-    "persistence",   # Enable restoring app state when restarting the app.
-    "wayland",       # To support Linux (and CI)
-    "x11",           # To support older Linux distributions (restores one of the default features)
+    "glow", # Use the glow rendering backend. Alternative: "wgpu".
+    "persistence", # Enable restoring app state when restarting the app.
+    "wayland", # To support Linux (and CI)
+    "x11", # To support older Linux distributions (restores one of the default features)
 ] }
 log = "0.4.27"
 
