@@ -4,6 +4,7 @@ use crate::timers::Timers;
 
 use hw_constants::io_regs;
 use std::ops::{Index, Range};
+use crate::joypad::{ButtonsHeld, Joyp};
 
 const MEM_MAP_SIZE: usize = 0x10000;
 
@@ -111,6 +112,24 @@ impl AddressBus {
         if self.timers.process_interrupt() {
             self.buffer[io_regs::IF as usize] |= 0b0000_0100;
         }
+    }
+
+    pub fn update_joypad(&mut self, held_buttons: ButtonsHeld) {
+        let mut joypad = Joyp::from_bits(self.buffer[io_regs::JOYP as usize]);
+        if !joypad.select_buttons() {
+            joypad.set_start_down(!held_buttons.start);
+            joypad.set_select_up(!held_buttons.select);
+            joypad.set_b_left(!held_buttons.b);
+            joypad.set_a_right(!held_buttons.a);
+        }
+        if !joypad.select_dpad() {
+            joypad.set_start_down(!held_buttons.down);
+            joypad.set_select_up(!held_buttons.up);
+            joypad.set_b_left(!held_buttons.left);
+            joypad.set_a_right(!held_buttons.right);
+        }
+        // TODO: Fire the joypad interrupt on a high-to-low change
+        self.buffer[io_regs::JOYP as usize] = joypad.into_bits();
     }
 }
 

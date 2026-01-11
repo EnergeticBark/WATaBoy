@@ -7,3 +7,4 @@ pub mod opcodes;
 pub mod parameters;
 pub mod registers;
 mod timers;
+pub mod joypad;
