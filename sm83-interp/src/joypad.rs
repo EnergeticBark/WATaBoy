@@ -16,10 +16,11 @@ pub struct Joyp {
 impl Default for Joyp {
     fn default() -> Self {
         // Set none of the buttons to be held by default.
-        Joyp(0b11111111)
+        Joyp(0b1111_1111)
     }
 }
 
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Copy, Clone, Default)]
 pub struct ButtonsHeld {
     pub start: bool,

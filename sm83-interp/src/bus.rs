@@ -1,10 +1,10 @@
 use crate::common::post_boot::PostBoot;
-use crate::mbc::Mbc1;
 use crate::timers::Timers;
 
 use hw_constants::io_regs;
 use std::ops::{Index, Range};
 use crate::joypad::{ButtonsHeld, Joyp};
+use crate::mbc::Mbc1;
 
 const MEM_MAP_SIZE: usize = 0x10000;
 
