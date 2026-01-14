@@ -1,10 +1,32 @@
+const MBC_TYPE_ADDR: usize = 0x0147;
 const ROM_SIZE_ADDR: usize = 0x0148;
 const RAM_SIZE_ADDR: usize = 0x0149;
 
 const RAM_BANK_SIZE: usize = 0x2000;
 
+
+// TODO: Add the other MBC types.
 #[derive(Default)]
-pub struct Mbc1 {
+enum MbcKind {
+    #[default]
+    Mbc1,
+    Mbc3,
+}
+
+impl MbcKind {
+    fn from_bits(value: u8) -> Self {
+        // Based on this table: https://gbdev.io/pandocs/The_Cartridge_Header.html#0147--cartridge-type
+        match value {
+            0x01 => MbcKind::Mbc1,
+            0x11..0x14 => MbcKind::Mbc3,
+            _ => unimplemented!(),
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct Mbc {
+    kind: MbcKind,
     pub ram_enabled: bool,
     pub rom: Vec<u8>,
     pub ext_ram: Vec<u8>,
@@ -12,7 +34,7 @@ pub struct Mbc1 {
     pub banking_mode: bool,
 }
 
-impl Mbc1 {
+impl Mbc {
     pub fn rom_size(&self) -> u8 {
         self.rom[ROM_SIZE_ADDR]
     }
@@ -23,6 +45,8 @@ impl Mbc1 {
 
     pub fn load_rom(&mut self, rom: &[u8]) {
         self.rom = rom.to_vec();
+        println!("MBC Type: {}", self.rom[MBC_TYPE_ADDR]);
+        self.kind = MbcKind::from_bits(self.rom[MBC_TYPE_ADDR]);
         println!(
             "ROM size: {}, Banks: {}",
             self.rom_size(),
@@ -48,7 +72,14 @@ impl Mbc1 {
     }
 
     pub fn nth_rom_bank(&self, bank_number: u8) -> &[u8; 0x4000] {
-        let mut bank_number = bank_number & 0b0001_1111;
+        let mask = match self.kind {
+            MbcKind::Mbc1 => 0b0001_1111,
+            // For Mbc3, all 7 bits are written directly.
+            // See: https://gbdev.io/pandocs/MBC3.html#2000-3fff---rom-bank-number-write-only
+            MbcKind::Mbc3 => 0b0111_1111,
+        };
+
+        let mut bank_number = bank_number & mask;
         if bank_number == 0 {
             bank_number = 1;
         }

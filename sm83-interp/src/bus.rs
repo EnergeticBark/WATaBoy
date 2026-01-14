@@ -1,17 +1,17 @@
+use crate::mbc::Mbc;
 use crate::common::post_boot::PostBoot;
 use crate::timers::Timers;
 
 use hw_constants::io_regs;
 use std::ops::{Index, Range};
 use crate::joypad::{ButtonsHeld, Joyp};
-use crate::mbc::Mbc1;
 
 const MEM_MAP_SIZE: usize = 0x10000;
 
 pub struct AddressBus {
     pub buffer: [u8; MEM_MAP_SIZE],
     pub timers: Timers,
-    pub mbc: Mbc1,
+    pub mbc: Mbc,
 }
 
 impl AddressBus {
@@ -28,7 +28,7 @@ impl AddressBus {
                     let bank = self.mbc.nth_ram_bank(self.mbc.current_ram_bank);
                     self.buffer[0xA000..0xC000].clone_from_slice(bank);
                     self.mbc.enable_ram();
-                } else if self.mbc.ram_enabled {
+                } else if value & 0x0F != 0xA && self.mbc.ram_enabled {
                     self.mbc
                         .write_ram_bank(&self.buffer[0xA000..0xC000].try_into().unwrap());
                     self.buffer[0xA000..0xC000].fill(0xFF);
@@ -138,7 +138,7 @@ impl Default for AddressBus {
         Self {
             buffer: [0; MEM_MAP_SIZE],
             timers: Timers::default(),
-            mbc: Mbc1::default(),
+            mbc: Mbc::default(),
         }
     }
 }
