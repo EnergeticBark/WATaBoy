@@ -22,44 +22,12 @@ impl AddressBus {
 
     pub fn write_byte(&mut self, index: u16, value: u8) {
         match index {
-            // Handle writes to ROM address space.
-            0x0000..0x2000 => {
-                if value & 0x0F == 0xA && !self.mbc.ram_enabled {
-                    let bank = self.mbc.nth_ram_bank(self.mbc.current_ram_bank);
-                    self.buffer[0xA000..0xC000].clone_from_slice(bank);
-                    self.mbc.enable_ram();
-                } else if value & 0x0F != 0xA && self.mbc.ram_enabled {
-                    self.mbc
-                        .write_ram_bank(&self.buffer[0xA000..0xC000].try_into().unwrap());
-                    self.buffer[0xA000..0xC000].fill(0xFF);
-                    self.mbc.disable_ram();
-                }
+            // Delegate write in the ROM range and the SRAM range to the MBC.
+            0x0000..0x8000 | 0xA000..0xC000 => {
+                self.mbc.write_byte(&mut self.buffer, index, value);
             }
-            0x2000..0x4000 => {
-                println!("Switching ROM bank using value: {value}");
-                let bank = self.mbc.nth_rom_bank(value);
-                self.buffer[0x4000..0x8000].clone_from_slice(bank);
-            }
-            0x4000..0x6000 => {
-                println!("Switching RAM bank using value: {value}");
-                if self.mbc.banking_mode {
-                    // Backup old bank... Ew, I know I can do better than this.
-                    self.mbc
-                        .write_ram_bank(&self.buffer[0xA000..0xC000].try_into().unwrap());
-
-                    let bank = self.mbc.nth_ram_bank(value);
-                    self.buffer[0xA000..0xC000].clone_from_slice(bank);
-                } else {
-                    println!("Actually no, we're in simple mode!!!");
-                }
-            }
-            0x6000..0x8000 => self.mbc.set_banking_mode(value),
-            0xA000..0xC000 => {
-                if self.mbc.ram_enabled {
-                    self.buffer[index as usize] = value;
-                }
-            }
-
+            
+            // Initiate OAM transfer.
             0xFF46 => {
                 // Actually write the value to this address before starting the OAM DMA transfer.
                 self.buffer[index as usize] = value;
