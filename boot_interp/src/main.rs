@@ -1,3 +1,5 @@
+use log::trace;
+
 use sm83_interp::cpu::Cpu;
 use sm83_interp::opcodes;
 
@@ -21,7 +23,7 @@ fn main() {
         cpu.memory.buffer[0xFF44] = (cpu.memory[0xFF44] + 1) % 154;
         let bytecode = cpu.memory[cpu.registers.pc];
         let opcode = opcodes::decode(bytecode).unwrap();
-        println!("PC: {}: {:?}", cpu.registers.pc, opcode);
+        trace!(target: "cpu_opcode", "PC: {}: {:?}", cpu.registers.pc, opcode);
         cpu.execute().unwrap();
     }
 }

@@ -1,3 +1,5 @@
+use log::info;
+
 const MBC_TYPE_ADDR: usize = 0x0147;
 const ROM_SIZE_ADDR: usize = 0x0148;
 const RAM_SIZE_ADDR: usize = 0x0149;
@@ -59,7 +61,7 @@ impl Mbc {
         if bank_number == 0 {
             bank_number = 1;
         }
-        println!("Switching to ROM bank #{bank_number}");
+        info!(target: "mbc_events", "Switching to ROM bank #{bank_number}");
 
         let start_addr = 0x4000 * bank_number as usize;
         let end_addr = start_addr + 0x4000;
@@ -68,11 +70,11 @@ impl Mbc {
 
     fn nth_ram_bank(&mut self, bank_number: u8) -> &[u8; RAM_BANK_SIZE] {
         let mut bank_number = bank_number & 0b0000_0011;
-        println!("Switching to RAM bank #{bank_number}");
+        info!(target: "mbc_events", "Switching to SRAM bank #{bank_number}");
 
         if self.ram_size() == 2 {
             bank_number = 0;
-            println!("Only 1 bank, constraining to 0...");
+            info!(target: "mbc_events", "Only 1 SRAM bank, constraining to 0...");
         }
 
         self.current_ram_bank = bank_number;
@@ -90,20 +92,20 @@ impl Mbc {
 
     fn set_banking_mode(&mut self, banking_mode: u8) {
         let banking_mode = banking_mode & 1 == 1;
-        println!("Switching to banking mode {banking_mode}");
+        info!(target: "mbc_events", "Switching to banking mode {banking_mode}");
 
         self.banking_mode = banking_mode;
     }
 
     pub fn load_rom(&mut self, rom: &[u8]) {
         self.rom = rom.to_vec();
-        println!("MBC Type: {}", self.rom[MBC_TYPE_ADDR]);
-        println!(
+        info!(target: "mbc_events", "MBC Type: {}", self.rom[MBC_TYPE_ADDR]);
+        info!(target: "mbc_events", 
             "ROM size: {}, Banks: {}",
             self.rom_size(),
             2 << self.rom_size()
         );
-        println!("RAM size: {}", self.ram_size());
+        info!(target: "mbc_events", "SRAM size: {}", self.ram_size());
 
         match self.ram_size() {
             2 => self.ext_ram = vec![0; RAM_BANK_SIZE],
@@ -119,24 +121,24 @@ impl Mbc {
                 if value & 0x0F == 0xA && !self.ram_enabled {
                     let bank = self.nth_ram_bank(self.current_ram_bank);
                     memory[0xA000..0xC000].clone_from_slice(bank);
-                    println!("Enabling ram...");
+                    info!(target: "mbc_events", "Enabling SRAM...");
                     self.ram_enabled = true;
                 } else if value & 0x0F != 0xA && self.ram_enabled {
                     self.write_ram_bank(&memory[0xA000..0xC000].try_into().unwrap());
                     memory[0xA000..0xC000].fill(0xFF);
-                    println!("Disabling ram...");
+                    info!(target: "mbc_events", "Disabling SRAM...");
                     self.ram_enabled = false;
                 }
             }
             // MBC1: ROM Bank Number
             0x2000..0x4000 => {
-                println!("Switching ROM bank using value: {value}");
+                info!(target: "mbc_events", "Switching ROM bank using value: {value}");
                 let bank = self.nth_rom_bank(value);
                 memory[0x4000..0x8000].clone_from_slice(bank);
             }
             // MBC1: RAM Bank Number or Upper Bits of ROM bank number
             0x4000..0x6000 => {
-                println!("Switching RAM bank using value: {value}");
+                info!(target: "mbc_events", "Switching SRAM bank using value: {value}");
                 if self.banking_mode {
                     // Backup old bank... Ew, I know I can do better than this.
                     self.write_ram_bank(&memory[0xA000..0xC000].try_into().unwrap());
@@ -144,7 +146,7 @@ impl Mbc {
                     let bank = self.nth_ram_bank(value);
                     memory[0xA000..0xC000].clone_from_slice(bank);
                 } else {
-                    println!("Actually no, we're in simple mode!!!");
+                    info!(target: "mbc_events", "Actually no, we're in simple mode!");
                 }
             }
             // MBC1: Banking Mode Select

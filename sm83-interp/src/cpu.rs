@@ -1,3 +1,5 @@
+use log::info;
+
 use crate::bus::AddressBus;
 use crate::common::post_boot::PostBoot;
 use crate::cycles::{m_cycles, prefix_m_cycles};
@@ -110,7 +112,7 @@ impl Cpu {
             // 0: VBlank, 1: LCD, 2: Timer, 3: Serial, and 4: Joypad.
             let nth_interrupt = to_service.trailing_zeros();
 
-            println!("Now serving {nth_interrupt} :)");
+            info!(target: "cpu_interrupt", "Serving interrupt: {nth_interrupt}");
 
             // Clear the flag bit of the interrupt we're servicing.
             let flag_mask = !(0b0000_0001 << nth_interrupt);

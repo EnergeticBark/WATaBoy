@@ -5,6 +5,7 @@ use crate::obj_fetcher::ObjectFetcher;
 use crate::{lcd, oam, lcd_status, palette};
 
 use hw_constants::io_regs;
+use log::trace;
 use crate::palette::Palette;
 
 const SCANLINES_PER_FRAME: usize = 154;
@@ -145,10 +146,12 @@ impl Ppu {
                 }
 
                 if self.x >= 160 {
-                    println!(
+                    trace!(
+                        target: "ppu_hblank",
                         "Drew for {} dots",
                         (self.dot_counter % DOTS_PER_SCANLINE) - OAM_SCAN_DOTS
                     );
+
                     self.x = 0;
                     self.bg_fetcher = BackgroundFetcher::default();
                     self.obj_fetcher = ObjectFetcher::default();

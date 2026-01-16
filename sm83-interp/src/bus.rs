@@ -4,6 +4,7 @@ use crate::timers::Timers;
 
 use hw_constants::io_regs;
 use std::ops::{Index, Range};
+use log::info;
 use crate::joypad::{ButtonsHeld, Joyp};
 
 const MEM_MAP_SIZE: usize = 0x10000;
@@ -33,7 +34,7 @@ impl AddressBus {
                 self.buffer[index as usize] = value;
 
                 // TODO: Accurately make this take a few cycles.
-                println!("OAM DMA Transfer from 0x{value:X}00!");
+                info!(target: "oam_events", "DMA Transfer from 0x{value:X}00!");
                 let oam_size = 0xA0;
                 let src_start = u16::from_le_bytes([0x00, value]) as usize;
                 let src_end = src_start + oam_size;
