@@ -134,6 +134,11 @@ fn step_vblank(dmg_state: &mut Cpu, ppu_state: &mut Ppu, buttons_held: ButtonsHe
 impl eframe::App for PPUViewApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::Window::new("Log").show(ctx, |ui| {
+            // Draws the logger UI.
+            egui_logger::logger_ui().show(ui);
+        });
+
         egui::Window::new("PPU Output").show(ctx, |ui| {
             self.screen.set(
                 ColorImage::from_gray(
