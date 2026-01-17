@@ -1,5 +1,5 @@
 use log::info;
-
+use rkyv::{Archive, Deserialize, Serialize};
 use crate::bus::AddressBus;
 use crate::common::post_boot::PostBoot;
 use crate::cycles::{m_cycles, prefix_m_cycles};
@@ -11,7 +11,7 @@ use hw_constants::io_regs;
 
 const DMG_BOOT_ROM: &[u8] = include_bytes!("../dmg.bin");
 
-#[derive(Default)]
+#[derive(Default, Archive, Deserialize, Serialize)]
 pub struct Cpu {
     pub registers: Registers,
     pub memory: AddressBus,

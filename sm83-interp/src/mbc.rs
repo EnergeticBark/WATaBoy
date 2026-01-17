@@ -1,4 +1,5 @@
 use log::info;
+use rkyv::{Archive, Deserialize, Serialize};
 
 const MBC_TYPE_ADDR: usize = 0x0147;
 const ROM_SIZE_ADDR: usize = 0x0148;
@@ -27,7 +28,7 @@ impl MbcKind {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Archive, Deserialize, Serialize)]
 pub struct Mbc {
     ram_enabled: bool,
     rom: Vec<u8>,
@@ -100,7 +101,7 @@ impl Mbc {
     pub fn load_rom(&mut self, rom: &[u8]) {
         self.rom = rom.to_vec();
         info!(target: "mbc_events", "MBC Type: {}", self.rom[MBC_TYPE_ADDR]);
-        info!(target: "mbc_events", 
+        info!(target: "mbc_events",
             "ROM size: {}, Banks: {}",
             self.rom_size(),
             2 << self.rom_size()

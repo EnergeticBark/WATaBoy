@@ -1,6 +1,7 @@
+use rkyv::{Archive, Deserialize, Serialize};
 use crate::common::post_boot::PostBoot;
 
-#[derive(Default)]
+#[derive(Default, Archive, Deserialize, Serialize)]
 pub struct Timers {
     // Clock register incremented every T-Cycle.
     // Upper 8-bits exposed as the DIV register in memory.

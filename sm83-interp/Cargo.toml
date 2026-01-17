@@ -9,6 +9,7 @@ bitfield-struct = "0.12.1"
 bitmatch = "0.1.1"
 arbitrary-int = "2.0.0"
 log = "0.4.29"
+rkyv = "0.8.14"
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }

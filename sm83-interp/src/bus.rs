@@ -5,10 +5,12 @@ use crate::timers::Timers;
 use hw_constants::io_regs;
 use std::ops::{Index, Range};
 use log::info;
+use rkyv::{Archive, Deserialize, Serialize};
 use crate::joypad::{ButtonsHeld, Joyp};
 
 const MEM_MAP_SIZE: usize = 0x10000;
 
+#[derive(Archive, Deserialize, Serialize)]
 pub struct AddressBus {
     pub buffer: [u8; MEM_MAP_SIZE],
     pub timers: Timers,

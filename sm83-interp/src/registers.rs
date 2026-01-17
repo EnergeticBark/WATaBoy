@@ -1,8 +1,10 @@
 use crate::common::post_boot::PostBoot;
 use crate::parameters::{R16, R16Stack};
 use bitfield_struct::bitfield;
+use rkyv::{Archive, Deserialize, Serialize};
 
 #[bitfield(u8, order = Msb)]
+#[derive(Archive, Deserialize, Serialize)]
 pub struct Flags {
     pub z: bool, // Zero
     pub n: bool, // Subtraction
@@ -13,6 +15,7 @@ pub struct Flags {
 }
 
 #[bitfield(u16, order = Msb)]
+#[derive(Archive, Deserialize, Serialize)]
 pub struct AccumAndFlags {
     pub a: u8,
     #[bits(8)]
@@ -20,22 +23,25 @@ pub struct AccumAndFlags {
 }
 
 #[bitfield(u16, order = Msb)]
+#[derive(Archive, Deserialize, Serialize)]
 pub struct Bc {
     pub b: u8,
     pub c: u8,
 }
 #[bitfield(u16, order = Msb)]
+#[derive(Archive, Deserialize, Serialize)]
 pub struct De {
     pub d: u8,
     pub e: u8,
 }
 #[bitfield(u16, order = Msb)]
+#[derive(Archive, Deserialize, Serialize)]
 pub struct Hl {
     pub h: u8,
     pub l: u8,
 }
 
-#[derive(Default)]
+#[derive(Default, Archive, Deserialize, Serialize)]
 pub struct Registers {
     pub af: AccumAndFlags,
     pub bc: Bc,
