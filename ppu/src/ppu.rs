@@ -139,10 +139,14 @@ impl Ppu {
                 }
 
                 if drawing_window(memory, self.x, self.ly()) && !self.bg_fetcher.drawing_window {
+                    trace!(target: "ppu_window", "Started drawing window at X {}", self.x);
                     self.window_y = self.window_y.wrapping_add(1);
                     self.bg_fetcher = BackgroundFetcher::default();
                     self.bg_fetcher.warmup = false;
                     self.bg_fetcher.drawing_window = true;
+                    // Prevent the window from being scrolled by the background scroll (SCX).
+                    // https://github.com/Ashiepaws/GBEDG/blob/master/ppu/index.md#scx-at-a-sub-tile-layer
+                    self.pixels_to_drop = 0;
                 }
 
                 if self.x >= 160 {

@@ -34,7 +34,6 @@ impl Obj {
         self.attributes & 0b0001_0000 == 0b0001_0000
     }
 
-    // TODO: handle 8x16 tile mode, this only handles 8x8.
     pub fn intersects_y(&self, y: u8, obj_size: bool) -> bool {
         let obj_height = if obj_size { 16 } else { 8 };
 
