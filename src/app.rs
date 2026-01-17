@@ -4,17 +4,20 @@ use crate::oam::draw_oam_table;
 use crate::registers::draw_register_table;
 use crate::tile_map::{draw_tile_map_0, draw_tile_map_1};
 use crate::tiles::draw_tile_table;
-
 use eframe::epaint::textures::TextureOptions;
 use eframe::epaint::{Color32, ColorImage};
 use egui::{Key, Slider, TextureHandle};
 use hw_constants::io_regs;
 use log::error;
 use ppu::ppu::Ppu;
+use rkyv::deserialize;
+use rkyv::rancor::Error;
 use sm83_interp::common::post_boot::PostBoot;
-use sm83_interp::cpu::Cpu;
+use sm83_interp::cpu::{ArchivedCpu, Cpu};
 use sm83_interp::joypad::ButtonsHeld;
 use sm83_interp::opcodes::decode;
+use std::fs::File;
+use std::io::{Read, Write};
 
 const NINTENDO_LOGO: &[u8; 48] = include_bytes!("../nintendo_logo.bin");
 
@@ -156,6 +159,20 @@ impl eframe::App for PPUViewApp {
                 ui.menu_button("File", |ui| {
                     if ui.button("Load Bootrom (dmg.bin)").clicked() {
                         self.dmg_state.load_boot_rom();
+                    }
+
+                    if ui.button("Load State").clicked() {
+                        let mut file = File::open("./savestate.bin").unwrap();
+                        let mut bytes = Vec::new();
+                        file.read_to_end(&mut bytes).unwrap();
+                        let archived = rkyv::access::<ArchivedCpu, Error>(&bytes).unwrap();
+                        self.dmg_state = deserialize::<Cpu, Error>(archived).unwrap();
+                    }
+
+                    if ui.button("Save State").clicked() {
+                        let bytes = rkyv::to_bytes::<Error>(&self.dmg_state).unwrap();
+                        let mut file = File::create("./savestate.bin").unwrap();
+                        file.write_all(&bytes).unwrap();
                     }
 
                     if ui.button("Reset").clicked() {
