@@ -21,7 +21,7 @@ pub struct Cpu {
 }
 
 impl Cpu {
-    pub(crate) fn r8(&self, r8: R8) -> u8 {
+    fn r8(&mut self, r8: R8) -> u8 {
         match r8 {
             R8::B => self.registers.bc.b(),
             R8::C => self.registers.bc.c(),
@@ -29,12 +29,16 @@ impl Cpu {
             R8::E => self.registers.de.e(),
             R8::H => self.registers.hl.h(),
             R8::L => self.registers.hl.l(),
-            R8::IndirectHL => self.memory[self.registers.hl.into_bits()],
+            R8::IndirectHL => {
+                let value = self.memory[self.registers.hl.into_bits()];
+                self.memory.increment_timers(1);
+                value
+            },
             R8::A => self.registers.af.a(),
         }
     }
 
-    pub(crate) fn set_r8(&mut self, r8: R8, value: u8) {
+    fn set_r8(&mut self, r8: R8, value: u8) {
         match r8 {
             R8::B => self.registers.bc.set_b(value),
             R8::C => self.registers.bc.set_c(value),
@@ -42,7 +46,10 @@ impl Cpu {
             R8::E => self.registers.de.set_e(value),
             R8::H => self.registers.hl.set_h(value),
             R8::L => self.registers.hl.set_l(value),
-            R8::IndirectHL => self.memory.write_byte(self.registers.hl.into_bits(), value),
+            R8::IndirectHL => {
+                self.memory.write_byte(self.registers.hl.into_bits(), value);
+                self.memory.increment_timers(1);
+            },
             R8::A => self.registers.af.set_a(value),
         }
     }
@@ -272,19 +279,14 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
-            LdRN { x: R8::IndirectHL } => {
+            LdRN { x } => {
                 // TICKS MANUALLY
                 let next_byte = self.memory[pc + 1];
                 self.memory.increment_timers(1);
 
-                self.set_r8(R8::IndirectHL, next_byte);
-                self.memory.increment_timers(2);
-
-                self.registers.pc += 2;
-            }
-            LdRN { x } => {
-                let next_byte = self.memory[pc + 1];
                 self.set_r8(x, next_byte);
+                self.memory.increment_timers(1);
+
                 self.registers.pc += 2;
             }
             Rlca => {
@@ -463,7 +465,8 @@ impl Cpu {
 
             // Block 1
             LdRR { x: dest, y: src } => {
-                self.set_r8(dest, self.r8(src));
+                let value = self.r8(src);
+                self.set_r8(dest, value);
                 self.registers.pc += 1;
             }
             Halt => {
@@ -890,9 +893,14 @@ impl Cpu {
                 self.registers.pc += 3;
             }
             LdhAC => {
+                // TICKS MANUALLY
                 let address = u16::from_le_bytes([self.registers.bc.c(), 0xFF]);
                 let value = self.memory[address];
+                self.memory.increment_timers(1);
+
                 self.set_r8(R8::A, value);
+                self.memory.increment_timers(1);
+
                 self.registers.pc += 1;
             }
             LdhAN => {
@@ -990,6 +998,8 @@ impl Cpu {
 
         let second_byte = self.memory[self.registers.pc + 1];
         let prefix_opcode = opcodes::decode_prefix(second_byte);
+        // Decoding the 0xCB instruction took 1 MCycle.
+        self.memory.increment_timers(1);
 
         let m_cycles = prefix_m_cycles(prefix_opcode);
 
@@ -1152,28 +1162,6 @@ impl Cpu {
                         .with_h(false)
                         .with_c(b0),
                 );
-                self.registers.pc += 2;
-            }
-            BitBR { b: bit_index, x: R8::IndirectHL } => {
-                // TICKS MANUALLY
-                // Increment 1 MCycle because of the CB prefix.
-                self.memory.increment_timers(1);
-
-                let value = self.r8(R8::IndirectHL);
-
-                let nth_bit = value >> bit_index.value() & 1;
-                let nth_bit_set = nth_bit != 0;
-
-                self.registers.af.set_f(
-                    self.registers
-                        .af
-                        .f()
-                        .with_z(!nth_bit_set)
-                        .with_n(false)
-                        .with_h(true),
-                );
-                self.memory.increment_timers(2);
-
                 self.registers.pc += 2;
             }
             BitBR { b: bit_index, x } => {

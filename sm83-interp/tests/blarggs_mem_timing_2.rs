@@ -14,6 +14,11 @@ const WRITE_TIMING_02: BlarggTest = BlarggTest {
     final_pc: 0xC87C,
 };
 
+const MODIFY_TIMING_03: BlarggTest = BlarggTest {
+    rom: include_bytes!("roms/blarggs/mem_timing_2/rom_singles/03-modify_timing.gb"),
+    final_pc: 0xC8E4,
+};
+
 #[test]
 fn test_01_read_timing() {
     let mut cpu = Cpu::post_boot_dmg();
@@ -25,5 +30,12 @@ fn test_01_read_timing() {
 fn test_02_read_timing() {
     let mut cpu = Cpu::post_boot_dmg();
     let lines = run_blargg_test(&mut cpu, &WRITE_TIMING_02);
+    assert!(lines[3].starts_with("Passed"));
+}
+
+#[test]
+fn test_03_modify_timing() {
+    let mut cpu = Cpu::post_boot_dmg();
+    let lines = run_blargg_test(&mut cpu, &MODIFY_TIMING_03);
     assert!(lines[3].starts_with("Passed"));
 }
