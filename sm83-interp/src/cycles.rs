@@ -17,14 +17,13 @@ pub fn m_cycles(opcode: Opcode) -> u16 {
             y: R8::IndirectHL, ..
         } => 2,
         LdRR { .. } => 1,
-        LdRN { x: R8::IndirectHL } => 3,
+        LdRN { x: R8::IndirectHL } => 0, // CONTEXT DEPENDANT: May read from timer.
         LdRN { .. } => 2,
         LdAMem { .. } | LdMemA { .. } => 2,
-        LdANn | LdNnA => 4,
+        LdANn | LdNnA => 0, // CONTEXT DEPENDANT: May read from timer.
         // Ldh
         LdhAC | LdhCA => 2,
-        LdhAN => 0, // CONTEXT DEPENDANT: May read from timer.
-        LdhNA => 3,
+        LdhAN | LdhNA => 0, // CONTEXT DEPENDANT: May read from timer.
 
         // 16-bit load instructions.
         LdRrNn { .. } => 3,
@@ -118,7 +117,7 @@ pub fn prefix_m_cycles(opcode: PrefixOpcode) -> u16 {
         SrlR { .. } => 2,
         BitBR {
             x: R8::IndirectHL, ..
-        } => 3,
+        } => 0, // CONTEXT DEPENDANT: May read from timer.
         BitBR { .. } => 2,
         ResBR {
             x: R8::IndirectHL, ..

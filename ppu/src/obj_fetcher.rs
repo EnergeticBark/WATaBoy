@@ -94,13 +94,13 @@ impl ObjectFetcher {
         let obj_line = current_scanline + 16 - obj.y_pos;
         // Handle vertical object flipping.
         if !obj.y_flip() {
-            obj_line
+            return obj_line
+        }
+
+        if !obj_size {
+            7 - obj_line
         } else {
-            if !obj_size {
-                7 - obj_line
-            } else {
-                15 - obj_line
-            }
+            15 - obj_line
         }
     }
 

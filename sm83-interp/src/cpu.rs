@@ -272,6 +272,16 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
+            LdRN { x: R8::IndirectHL } => {
+                // TICKS MANUALLY
+                let next_byte = self.memory[pc + 1];
+                self.memory.increment_timers(1);
+
+                self.set_r8(R8::IndirectHL, next_byte);
+                self.memory.increment_timers(2);
+
+                self.registers.pc += 2;
+            }
             LdRN { x } => {
                 let next_byte = self.memory[pc + 1];
                 self.set_r8(x, next_byte);
@@ -854,15 +864,29 @@ impl Cpu {
                 self.registers.pc += 1;
             }
             LdhNA => {
+                // TICKS MANUALLY
                 let next_byte = self.memory[pc + 1];
+                self.memory.increment_timers(1);
+
                 let destination = u16::from_le_bytes([next_byte, 0xFF]);
                 self.memory.write_byte(destination, self.registers.af.a());
+                self.memory.increment_timers(2);
+
                 self.registers.pc += 2;
             }
             LdNnA => {
-                let next_two_bytes = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
+                // TICKS MANUALLY
+                let first_byte = self.memory[pc + 1];
+                self.memory.increment_timers(1);
+
+                let second_byte = self.memory[pc + 2];
+                self.memory.increment_timers(1);
+
+                let address = u16::from_le_bytes([first_byte, second_byte]);
                 self.memory
-                    .write_byte(next_two_bytes, self.registers.af.a());
+                    .write_byte(address, self.registers.af.a());
+                self.memory.increment_timers(2);
+
                 self.registers.pc += 3;
             }
             LdhAC => {
@@ -872,19 +896,29 @@ impl Cpu {
                 self.registers.pc += 1;
             }
             LdhAN => {
+                // TICKS MANUALLY
                 let next_byte = self.memory[pc + 1];
                 self.memory.increment_timers(1);
+
                 let address = u16::from_le_bytes([next_byte, 0xFF]);
                 let value = self.memory[address];
                 self.registers.af.set_a(value);
                 self.memory.increment_timers(2);
+
                 self.registers.pc += 2;
             }
             LdANn => {
-                let next_two_bytes = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
-                let value = self.memory[next_two_bytes];
+                // TICKS MANUALLY
+                let first_byte = self.memory[pc + 1];
+                self.memory.increment_timers(1);
 
+                let second_byte = self.memory[pc + 2];
+                self.memory.increment_timers(1);
+
+                let value = self.memory[u16::from_le_bytes([first_byte, second_byte])];
                 self.registers.af.set_a(value);
+                self.memory.increment_timers(2);
+
                 self.registers.pc += 3;
             }
             AddSpE => {
@@ -1118,6 +1152,28 @@ impl Cpu {
                         .with_h(false)
                         .with_c(b0),
                 );
+                self.registers.pc += 2;
+            }
+            BitBR { b: bit_index, x: R8::IndirectHL } => {
+                // TICKS MANUALLY
+                // Increment 1 MCycle because of the CB prefix.
+                self.memory.increment_timers(1);
+
+                let value = self.r8(R8::IndirectHL);
+
+                let nth_bit = value >> bit_index.value() & 1;
+                let nth_bit_set = nth_bit != 0;
+
+                self.registers.af.set_f(
+                    self.registers
+                        .af
+                        .f()
+                        .with_z(!nth_bit_set)
+                        .with_n(false)
+                        .with_h(true),
+                );
+                self.memory.increment_timers(2);
+
                 self.registers.pc += 2;
             }
             BitBR { b: bit_index, x } => {
