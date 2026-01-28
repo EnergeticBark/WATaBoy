@@ -14,6 +14,8 @@ fn draw_tile_map(
     tile_map: &[u8; 0x0400],
     dmg_state: &Cpu,
 ) {
+    let mut tile_map_bitmap: Vec<Vec<u8>> = vec![vec![0; 256]; 256];
+
     for row in 0..32 {
         for column in 0..32 {
             let tile_id = tile_map[row * 32 + column];
@@ -24,12 +26,20 @@ fn draw_tile_map(
                 tiles::signed_nth_tile(&dmg_state.memory.buffer, tile_id.cast_signed() as isize)
             };
 
-            let greyscale =
-                ColorImage::from_gray([8, 8], &crate::tiles::greyscale_from_tile(tile_data));
+            let greyscale_tile = crate::tiles::greyscale_from_tile(tile_data);
 
-            tile_map_texture.set_partial([8 * column, 8 * row], greyscale, TextureOptions::NEAREST);
+            for (tile_row, chunk) in greyscale_tile.chunks_exact(8).enumerate() {
+                tile_map_bitmap[row * 8 + tile_row]
+                    .as_mut_array::<256>()
+                    .unwrap()[column * 8..column * 8 + 8]
+                    .copy_from_slice(chunk);
+            }
         }
     }
+    let greyscale_tilemap: Vec<_> = tile_map_bitmap.into_iter().flatten().collect();
+
+    let greyscale = ColorImage::from_gray([256, 256], &greyscale_tilemap);
+    tile_map_texture.set(greyscale, TextureOptions::NEAREST);
 
     egui::Image::from_texture(&*tile_map_texture).paint_at(ui, rect);
 }
