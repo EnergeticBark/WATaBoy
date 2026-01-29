@@ -1,22 +1,13 @@
 pub mod common;
 
-use common::mooneye;
 use sm83_interp::common::post_boot::PostBoot;
 use sm83_interp::cpu::Cpu;
-
-fn run_mooneye_test(cpu: &mut Cpu, rom: &[u8]) -> [u8; 6] {
-    cpu.memory.load_rom(rom);
-    mooneye::execute_until_ld_b_b(cpu);
-
-    mooneye::read_bcdehl(cpu)
-}
-
-const FIBONACCI: [u8; 6] = [3, 5, 8, 13, 21, 34];
+use crate::common::mooneye::{run_mooneye_test, FIBONACCI};
 
 #[test]
 fn test_bits_bank1() {
     let mut cpu = Cpu::post_boot_dmg();
-    let bcdehl = run_mooneye_test(&mut cpu, include_bytes!("roms/mbc1/bits_bank1.gb"));
+    let bcdehl = run_mooneye_test(&mut cpu, include_bytes!("roms/mooneye/mbc1/bits_bank1.gb"));
 
     assert_eq!(bcdehl, FIBONACCI);
 }
@@ -24,7 +15,7 @@ fn test_bits_bank1() {
 #[test]
 fn test_bits_bank2() {
     let mut cpu = Cpu::post_boot_dmg();
-    let bcdehl = run_mooneye_test(&mut cpu, include_bytes!("roms/mbc1/bits_bank2.gb"));
+    let bcdehl = run_mooneye_test(&mut cpu, include_bytes!("roms/mooneye/mbc1/bits_bank2.gb"));
 
     assert_eq!(bcdehl, FIBONACCI);
 }
@@ -32,7 +23,7 @@ fn test_bits_bank2() {
 #[test]
 fn test_bits_mode() {
     let mut cpu = Cpu::post_boot_dmg();
-    let bcdehl = run_mooneye_test(&mut cpu, include_bytes!("roms/mbc1/bits_mode.gb"));
+    let bcdehl = run_mooneye_test(&mut cpu, include_bytes!("roms/mooneye/mbc1/bits_mode.gb"));
 
     assert_eq!(bcdehl, FIBONACCI);
 }
@@ -40,7 +31,7 @@ fn test_bits_mode() {
 #[test]
 fn test_bits_ramg() {
     let mut cpu = Cpu::post_boot_dmg();
-    let bcdehl = run_mooneye_test(&mut cpu, include_bytes!("roms/mbc1/bits_ramg.gb"));
+    let bcdehl = run_mooneye_test(&mut cpu, include_bytes!("roms/mooneye/mbc1/bits_ramg.gb"));
 
     assert_eq!(bcdehl, FIBONACCI);
 }
@@ -48,7 +39,7 @@ fn test_bits_ramg() {
 #[test]
 fn test_ram_64kb() {
     let mut cpu = Cpu::post_boot_dmg();
-    let bcdehl = run_mooneye_test(&mut cpu, include_bytes!("roms/mbc1/ram_64kb.gb"));
+    let bcdehl = run_mooneye_test(&mut cpu, include_bytes!("roms/mooneye/mbc1/ram_64kb.gb"));
 
     assert_eq!(bcdehl, FIBONACCI);
 }

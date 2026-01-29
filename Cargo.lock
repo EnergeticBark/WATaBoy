@@ -290,6 +290,7 @@ dependencies = [
  "bitmatch",
  "hw-constants",
  "log",
+ "ppu",
  "rkyv",
 ]
 

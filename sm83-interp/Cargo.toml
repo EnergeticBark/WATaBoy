@@ -11,5 +11,9 @@ arbitrary-int = "2.0.0"
 log = "0.4.29"
 rkyv = "0.8.14"
 
+# Only included in integration testing.
+[dev-dependencies]
+ppu = { path = "../ppu" }
+
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
