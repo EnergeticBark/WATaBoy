@@ -14,7 +14,7 @@ fn draw_tile_map(
     tile_map: &[u8; 0x0400],
     dmg_state: &Cpu,
 ) {
-    let mut tile_map_bitmap: Vec<Vec<u8>> = vec![vec![0; 256]; 256];
+    let mut tile_map_bitmap: Vec<u8> = vec![0; 256 * 256];
 
     for row in 0..32 {
         for column in 0..32 {
@@ -29,16 +29,13 @@ fn draw_tile_map(
             let greyscale_tile = crate::tiles::greyscale_from_tile(tile_data);
 
             for (tile_row, chunk) in greyscale_tile.chunks_exact(8).enumerate() {
-                tile_map_bitmap[row * 8 + tile_row]
-                    .as_mut_array::<256>()
-                    .unwrap()[column * 8..column * 8 + 8]
-                    .copy_from_slice(chunk);
+                let index = 256 * (row * 8 + tile_row) + column * 8;
+                tile_map_bitmap[index..index + 8].copy_from_slice(chunk);
             }
         }
     }
-    let greyscale_tilemap: Vec<_> = tile_map_bitmap.into_iter().flatten().collect();
 
-    let greyscale = ColorImage::from_gray([256, 256], &greyscale_tilemap);
+    let greyscale = ColorImage::from_gray([256, 256], &tile_map_bitmap);
     tile_map_texture.set(greyscale, TextureOptions::NEAREST);
 
     egui::Image::from_texture(&*tile_map_texture).paint_at(ui, rect);
