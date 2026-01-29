@@ -13,8 +13,10 @@ const MEM_MAP_SIZE: usize = 0x10000;
 #[derive(Archive, Deserialize, Serialize)]
 pub struct AddressBus {
     pub buffer: [u8; MEM_MAP_SIZE],
-    pub timers: Timers,
-    pub mbc: Mbc,
+    timers: Timers,
+    // Number of MCycles the PPU needs to run to catch up with the CPU.
+    ppu_catchup: usize,
+    mbc: Mbc,
 }
 
 impl AddressBus {
@@ -68,6 +70,8 @@ impl AddressBus {
     }
 
     pub fn increment_timers(&mut self, m_cycles: u16) {
+        self.ppu_catchup += m_cycles as usize;
+
         self.timers
             .update_timer_counter(self.buffer[io_regs::TIMA as usize]);
         self.timers
@@ -102,6 +106,13 @@ impl AddressBus {
         // TODO: Fire the joypad interrupt on a high-to-low change
         self.buffer[io_regs::JOYP as usize] = joypad.into_bits();
     }
+    
+    // Get the number of MCycles the PPU needs to run for and reset the counter to 0.
+    pub fn claim_ppu_cycles(&mut self) -> usize {
+        let cycles = self.ppu_catchup;
+        self.ppu_catchup = 0;
+        cycles
+    }
 }
 
 impl Default for AddressBus {
@@ -109,6 +120,7 @@ impl Default for AddressBus {
         Self {
             buffer: [0; MEM_MAP_SIZE],
             timers: Timers::default(),
+            ppu_catchup: 0,
             mbc: Mbc::default(),
         }
     }

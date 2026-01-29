@@ -138,6 +138,10 @@ impl Cpu {
             #[allow(clippy::cast_possible_truncation)]
             let interrupt_handler_offset = 0x0008 * nth_interrupt as u16;
             self.registers.pc = 0x0040 + interrupt_handler_offset;
+
+            // Interrupt handling takes 5 MCycles
+            // See: https://gbdev.io/pandocs/Interrupts.html#interrupt-handling
+            self.memory.increment_timers(5);
         }
     }
 
@@ -179,12 +183,12 @@ impl Cpu {
     ///
     /// Will return an error if the instruction at the current program counter is unimplemented.
     #[allow(clippy::too_many_lines)]
-    pub fn execute(&mut self) -> Result<u16, String> {
+    pub fn execute(&mut self) -> Result<(), String> {
         use Opcode::*;
 
         if self.halted {
             self.memory.increment_timers(1);
-            return Ok(1);
+            return Ok(());
         }
 
         let pc = self.registers.pc;
@@ -989,7 +993,7 @@ impl Cpu {
         }
 
         self.memory.increment_timers(m_cycles);
-        Ok(m_cycles)
+        Ok(())
     }
 
     #[allow(clippy::too_many_lines)]
