@@ -4,6 +4,18 @@ pub fn lyc_int_select(memory: &[u8]) -> bool {
     memory[io_regs::STAT as usize] & 0b0100_0000 == 0b0100_0000
 }
 
+pub fn mode2_int_select(memory: &[u8]) -> bool {
+    memory[io_regs::STAT as usize] & 0b0010_0000 == 0b0010_0000
+}
+
+pub fn mode1_int_select(memory: &[u8]) -> bool {
+    memory[io_regs::STAT as usize] & 0b0001_0000 == 0b0001_0000
+}
+
+pub fn mode0_int_select(memory: &[u8]) -> bool {
+    memory[io_regs::STAT as usize] & 0b0000_1000 == 0b0000_1000
+}
+
 // Set the LYC == LY bit in the STATUS register.
 pub fn set_coincidence(memory: &mut [u8], value: bool) {
     const COINCIDENCE_BIT: u8 = 0b0000_0100;

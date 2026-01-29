@@ -34,6 +34,7 @@ pub struct Ppu {
     // whatever the PPU puts into its queue.
     obj_buffer: VecDeque<Obj>,
     obj_fetcher: ObjectFetcher,
+    stat_interrupt_line: bool,
     pub funny_buffer_test: Vec<u8>,
 }
 
@@ -192,16 +193,27 @@ impl Ppu {
         if self.dot_counter.is_multiple_of(DOTS_PER_SCANLINE) {
             // Update LCD Y coordinate.
             memory[io_regs::LY as usize] = self.ly();
+        }
 
-            // Update the LYC == LY bit in the STATUS register.
-            let coincidence = memory[io_regs::LY as usize] == memory[io_regs::LYC as usize];
-            lcd_status::set_coincidence(memory, coincidence);
-            if coincidence && lcd_status::lyc_int_select(memory) {
-                // Request the LCD interrupt.
-                memory[io_regs::IF as usize] |= 0b0000_0010;
-                // TODO: Implement interrupts for Mode 0-2
-                // See: https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status
-            }
+        // STAT interrupt triggering.
+        let prev_stat_line = self.stat_interrupt_line;
+
+        let coincidence = memory[io_regs::LY as usize] == memory[io_regs::LYC as usize];
+        lcd_status::set_coincidence(memory, coincidence);
+        let lcy_int = coincidence && lcd_status::lyc_int_select(memory);
+
+        let mode_int = match self.mode {
+            PpuMode::HBlank => lcd_status::mode0_int_select(memory),
+            PpuMode::VBlank => lcd_status::mode1_int_select(memory),
+            PpuMode::OamScan  => lcd_status::mode2_int_select(memory),
+            PpuMode::Drawing => false,
+        };
+        self.stat_interrupt_line = lcy_int || mode_int;
+
+        // Low to high transition on the STAT interrupt line.
+        if self.stat_interrupt_line && !prev_stat_line {
+            // Request the LCD interrupt.
+            memory[io_regs::IF as usize] |= 0b0000_0010;
         }
     }
 }
@@ -217,6 +229,7 @@ impl Default for Ppu {
             bg_fetcher: BackgroundFetcher::default(),
             obj_buffer: VecDeque::with_capacity(10),
             obj_fetcher: ObjectFetcher::default(),
+            stat_interrupt_line: false,
             funny_buffer_test: vec![0; 160 * 144],
         }
     }
