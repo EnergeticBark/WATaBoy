@@ -57,10 +57,12 @@ impl Ppu {
     }
 
     fn pop_next_obj(&mut self) -> Option<Obj> {
-        if self.obj_buffer.front()?.intersects_x(self.x) {
-            return self.obj_buffer.pop_front()
+        // Discard any fully off-screen sprites.
+        if self.obj_buffer.pop_front_if(|obj| obj.x_pos == 0).is_some() {
+            return None;
         }
-        None
+
+        self.obj_buffer.pop_front_if(|obj| obj.intersects_x(self.x))
     }
 
     // Advance the PPU by 1 dot.

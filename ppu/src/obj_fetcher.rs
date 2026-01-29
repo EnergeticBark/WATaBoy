@@ -58,10 +58,13 @@ impl ObjectFetcher {
 
     // Push a row of 8 pixels from a tile to the Obj FIFO.
     fn push(&mut self, obj: Obj) {
+        // Discard offscreen pixels.
+        let to_discard = 8_u8.saturating_sub(obj.x_pos);
+
         if obj.x_flip() {
-            self.push_bit_range(0..8, obj)
+            self.push_bit_range(to_discard..8, obj)
         } else {
-            self.push_bit_range((0..8).rev(), obj)
+            self.push_bit_range((0..8-to_discard).rev(), obj)
         };
     }
 
