@@ -175,6 +175,14 @@ impl Ppu {
                         self.mode = PpuMode::VBlank;
                         // Request the VBlank interrupt.
                         memory[io_regs::IF as usize] |= 0b0000_0001;
+
+                        // A VBlank triggering also the OAM being triggered... for some reason?
+                        // See: https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
+                        if !self.stat_interrupt_line && lcd_status::mode2_int_select(memory) {
+                            self.stat_interrupt_line = true;
+                            // Request the LCD interrupt.
+                            memory[io_regs::IF as usize] |= 0b0000_0010;
+                        }
                     }
                 }
             }
@@ -195,23 +203,22 @@ impl Ppu {
             memory[io_regs::LY as usize] = self.ly();
         }
 
-        // STAT interrupt triggering.
-        let prev_stat_line = self.stat_interrupt_line;
-
         let coincidence = memory[io_regs::LY as usize] == memory[io_regs::LYC as usize];
         lcd_status::set_coincidence(memory, coincidence);
-        let lcy_int = coincidence && lcd_status::lyc_int_select(memory);
 
+        // STAT interrupt triggering.
+        let lcy_int = coincidence && lcd_status::lyc_int_select(memory);
         let mode_int = match self.mode {
             PpuMode::HBlank => lcd_status::mode0_int_select(memory),
             PpuMode::VBlank => lcd_status::mode1_int_select(memory),
             PpuMode::OamScan  => lcd_status::mode2_int_select(memory),
             PpuMode::Drawing => false,
         };
+        let prev_stat_line = self.stat_interrupt_line;
         self.stat_interrupt_line = lcy_int || mode_int;
 
         // Low to high transition on the STAT interrupt line.
-        if self.stat_interrupt_line && !prev_stat_line {
+        if !prev_stat_line && self.stat_interrupt_line {
             // Request the LCD interrupt.
             memory[io_regs::IF as usize] |= 0b0000_0010;
         }

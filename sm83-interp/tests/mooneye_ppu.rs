@@ -27,3 +27,11 @@ fn test_stat_irq_blocking() {
 
     assert_eq!(bcdehl, FIBONACCI);
 }
+
+#[test]
+fn test_vblank_stat_intr() {
+    let mut cpu = Cpu::post_boot_dmg();
+    let bcdehl = run_mooneye_test(&mut cpu, include_bytes!("roms/mooneye/ppu/vblank_stat_intr-GS.gb"));
+
+    assert_eq!(bcdehl, FIBONACCI);
+}
