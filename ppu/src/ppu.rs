@@ -5,7 +5,7 @@ use crate::obj_fetcher::ObjectFetcher;
 use crate::{lcd, oam, lcd_status, palette};
 
 use hw_constants::io_regs;
-use log::trace;
+use log::{trace, warn};
 use crate::palette::Palette;
 
 const SCANLINES_PER_FRAME: usize = 154;
@@ -66,25 +66,62 @@ impl Ppu {
         self.obj_buffer.pop_front_if(|obj| obj.intersects_x(self.x))
     }
 
+    fn transition_hblank(&mut self, memory: &mut [u8]) {
+        self.mode = PpuMode::HBlank;
+        lcd_status::set_ppu_mode(memory, 0);
+
+        warn!(target: "ppu_hblank", "Set to Mode 0 on dot: {}, (Drew for {} dots)", self.dot_counter % DOTS_PER_SCANLINE, (self.dot_counter % DOTS_PER_SCANLINE) - OAM_SCAN_DOTS);
+
+        self.x = 0;
+        // Reset each of the fetchers.
+        self.bg_fetcher = BackgroundFetcher::default();
+        self.obj_fetcher = ObjectFetcher::default();
+    }
+
+    fn transition_vblank(&mut self, memory: &mut [u8]) {
+        self.mode = PpuMode::VBlank;
+        lcd_status::set_ppu_mode(memory, 1);
+
+        // Request the VBlank interrupt.
+        memory[io_regs::IF as usize] |= 0b0000_0001;
+
+        // A VBlank triggering also the OAM being triggered... for some reason?
+        // See: https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
+        if !self.stat_interrupt_line && lcd_status::mode2_int_select(memory) {
+            self.stat_interrupt_line = true;
+            // Request the LCD interrupt.
+            memory[io_regs::IF as usize] |= 0b0000_0010;
+        }
+    }
+
+    fn transition_oam_scan(&mut self, memory: &mut [u8]) {
+        self.mode = PpuMode::OamScan;
+        lcd_status::set_ppu_mode(memory, 2);
+
+        warn!(target: "ppu_hblank", "Set to Mode 2 on dot: {}", self.dot_counter % DOTS_PER_SCANLINE);
+    }
+
+    fn transition_drawing(&mut self, memory: &mut [u8]) {
+        self.mode = PpuMode::Drawing;
+        lcd_status::set_ppu_mode(memory, 3);
+
+        // This is the last cycle of the OAM scan, so lets actually do the OAM scan.
+        self.obj_buffer = oam::oam_scan(memory, self.ly());
+
+        // Prepare for Drawing.
+        self.pixels_to_drop = memory[io_regs::SCX as usize] & 7;
+    }
+
     // Advance the PPU by 1 dot.
     pub fn tick(&mut self, memory: &mut [u8]) {
         self.dot_counter += 1;
         match self.mode {
             PpuMode::OamScan => {
-                lcd_status::set_ppu_mode(memory, 2);
-
                 if self.dot_counter % DOTS_PER_SCANLINE >= OAM_SCAN_DOTS {
-                    // This is the last cycle of the OAM scan, so lets actually do the OAM scan.
-                    self.obj_buffer = oam::oam_scan(memory, self.ly());
-
-                    // Prepare for Drawing.
-                    self.pixels_to_drop = memory[io_regs::SCX as usize] & 7;
-                    self.mode = PpuMode::Drawing;
+                    self.transition_drawing(memory);
                 }
             }
             PpuMode::Drawing => {
-                lcd_status::set_ppu_mode(memory, 3);
-
                 if let Some(obj) = self.pop_next_obj() {
                     self.obj_fetcher.push_obj(obj);
                 }
@@ -112,10 +149,8 @@ impl Ppu {
                                 }
                             };
 
-                            if let Some(obj_pixel) = self.obj_fetcher.shift_out() {
-                                if lcd::obj_enabled(memory) {
-                                    pixel_to_render = mix_pixels(pixel_to_render, obj_pixel);
-                                }
+                            if let Some(obj_pixel) = self.obj_fetcher.shift_out() && lcd::obj_enabled(memory) {
+                                pixel_to_render = mix_pixels(pixel_to_render, obj_pixel);
                             }
 
                             let mut funny_greyscale = 0;
@@ -153,46 +188,23 @@ impl Ppu {
                 }
 
                 if self.x >= 160 {
-                    trace!(
-                        target: "ppu_hblank",
-                        "Drew for {} dots",
-                        (self.dot_counter % DOTS_PER_SCANLINE) - OAM_SCAN_DOTS
-                    );
-
-                    self.x = 0;
-                    self.bg_fetcher = BackgroundFetcher::default();
-                    self.obj_fetcher = ObjectFetcher::default();
-                    self.mode = PpuMode::HBlank;
+                    self.transition_hblank(memory);
                 }
             }
             PpuMode::HBlank => {
-                lcd_status::set_ppu_mode(memory, 0);
-
                 if self.dot_counter.is_multiple_of(DOTS_PER_SCANLINE) {
                     if self.ly() < 144 {
-                        self.mode = PpuMode::OamScan;
+                        self.transition_oam_scan(memory);
                     } else {
-                        self.mode = PpuMode::VBlank;
-                        // Request the VBlank interrupt.
-                        memory[io_regs::IF as usize] |= 0b0000_0001;
-
-                        // A VBlank triggering also the OAM being triggered... for some reason?
-                        // See: https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
-                        if !self.stat_interrupt_line && lcd_status::mode2_int_select(memory) {
-                            self.stat_interrupt_line = true;
-                            // Request the LCD interrupt.
-                            memory[io_regs::IF as usize] |= 0b0000_0010;
-                        }
+                        self.transition_vblank(memory);
                     }
                 }
             }
             PpuMode::VBlank => {
-                lcd_status::set_ppu_mode(memory, 1);
-
                 if self.dot_counter == DOTS_PER_FRAME {
                     self.dot_counter = 0;
                     self.window_y = 255;
-                    self.mode = PpuMode::OamScan;
+                    self.transition_oam_scan(memory);
                 }
             }
         }
@@ -201,6 +213,7 @@ impl Ppu {
         if self.dot_counter.is_multiple_of(DOTS_PER_SCANLINE) {
             // Update LCD Y coordinate.
             memory[io_regs::LY as usize] = self.ly();
+            warn!(target: "ppu_ly", "Updating LY on dot: {}", self.dot_counter % DOTS_PER_SCANLINE);
         }
 
         let coincidence = memory[io_regs::LY as usize] == memory[io_regs::LYC as usize];
