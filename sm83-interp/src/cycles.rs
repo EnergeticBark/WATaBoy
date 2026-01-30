@@ -69,7 +69,7 @@ pub fn m_cycles(opcode: Opcode) -> u16 {
         RstN { .. } => 4,
 
         // Miscellaneous instructions
-        Halt => 0, // TODO: Unknown
+        Halt => 1,
         Stop => 0, // TODO: Unknown
         Di => 1,
         Ei => 1,
