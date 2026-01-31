@@ -118,13 +118,9 @@ fn step_multiple(steps: u32, dmg_state: &mut Cpu, ppu_state: &mut Ppu, buttons_h
 
 fn step_vblank(dmg_state: &mut Cpu, ppu_state: &mut Ppu, buttons_held: ButtonsHeld) {
     loop {
+        let ly_before_vblank = ppu_state.ly() == 143;
         step_once(dmg_state, ppu_state, buttons_held);
-        let vblank_happened = (dmg_state.memory.buffer[io_regs::IF as usize] & 0b0000_0001
-            == 0b0000_0001)
-            && (dmg_state.memory.buffer[hw_constants::IE as usize] & 0b0000_0001 == 0b0000_0001)
-            && dmg_state.ime;
-        dmg_state.handle_interrupts();
-        if vblank_happened {
+        if ly_before_vblank && ppu_state.ly() == 144 {
             return;
         }
     }
