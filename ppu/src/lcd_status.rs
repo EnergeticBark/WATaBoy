@@ -35,3 +35,7 @@ pub fn set_ppu_mode(memory: &mut [u8], value: u8) {
     memory[io_regs::STAT as usize] &= !MASK;
     memory[io_regs::STAT as usize] |= value;
 }
+
+pub fn ppu_mode(memory: &[u8]) -> u8 {
+    memory[io_regs::STAT as usize] & 0b0000_0011
+}

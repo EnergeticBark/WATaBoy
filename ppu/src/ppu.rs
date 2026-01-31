@@ -37,6 +37,8 @@ pub struct Ppu {
     stat_interrupt_line: bool,
     pub funny_buffer_test: Vec<u8>,
     disabled: bool,
+    update_stat_on_dot: usize,
+    ly_to_compare_lyc: u8,
 }
 
 fn drawing_window(memory: &[u8], x: u8, y: u8) -> bool {
@@ -67,9 +69,9 @@ impl Ppu {
         self.obj_buffer.pop_front_if(|obj| obj.intersects_x(self.x))
     }
 
-    fn transition_hblank(&mut self, memory: &mut [u8]) {
+    fn transition_hblank(&mut self) {
         self.mode = PpuMode::HBlank;
-        lcd_status::set_ppu_mode(memory, 0);
+        self.update_stat_on_dot = self.dot_counter + 4;
 
         trace!(target: "ppu_hblank", "Set to Mode 0 on dot: {}, (Drew for {} dots)", self.dot_counter % DOTS_PER_SCANLINE, (self.dot_counter % DOTS_PER_SCANLINE) - OAM_SCAN_DOTS);
 
@@ -81,7 +83,7 @@ impl Ppu {
 
     fn transition_vblank(&mut self, memory: &mut [u8]) {
         self.mode = PpuMode::VBlank;
-        lcd_status::set_ppu_mode(memory, 1);
+        self.update_stat_on_dot = self.dot_counter + 4;
 
         // Request the VBlank interrupt.
         memory[io_regs::IF as usize] |= 0b0000_0001;
@@ -95,16 +97,16 @@ impl Ppu {
         }
     }
 
-    fn transition_oam_scan(&mut self, memory: &mut [u8]) {
+    fn transition_oam_scan(&mut self) {
         self.mode = PpuMode::OamScan;
-        lcd_status::set_ppu_mode(memory, 2);
+        self.update_stat_on_dot = self.dot_counter + 4;
 
-        warn!(target: "ppu_hblank", "Set to Mode 2 on dot: {}", self.dot_counter % DOTS_PER_SCANLINE);
+        trace!(target: "ppu_hblank", "Set to Mode 2 on dot: {}", self.dot_counter % DOTS_PER_SCANLINE);
     }
 
     fn transition_drawing(&mut self, memory: &mut [u8]) {
         self.mode = PpuMode::Drawing;
-        lcd_status::set_ppu_mode(memory, 3);
+        self.update_stat_on_dot = self.dot_counter + 4;
 
         // This is the last cycle of the OAM scan, so lets actually do the OAM scan.
         self.obj_buffer = oam::oam_scan(memory, self.ly());
@@ -126,6 +128,7 @@ impl Ppu {
 
                 // Reset the PPU state.
                 *self = Ppu::default();
+                lcd_status::set_ppu_mode(memory, 0);
                 self.update_ly_register(memory);
             }
             return;
@@ -138,11 +141,21 @@ impl Ppu {
         self.dot_counter += 1;
         match self.mode {
             PpuMode::OamScan => {
+                if self.dot_counter == self.update_stat_on_dot {
+                    lcd_status::set_ppu_mode(memory, 2);
+                    self.update_stat_on_dot = usize::MAX;
+                }
+
                 if self.dot_counter % DOTS_PER_SCANLINE >= OAM_SCAN_DOTS {
                     self.transition_drawing(memory);
                 }
             }
             PpuMode::Drawing => {
+                if self.dot_counter == self.update_stat_on_dot {
+                    lcd_status::set_ppu_mode(memory, 3);
+                    self.update_stat_on_dot = usize::MAX;
+                }
+
                 if let Some(obj) = self.pop_next_obj() {
                     self.obj_fetcher.push_obj(obj);
                 }
@@ -209,23 +222,33 @@ impl Ppu {
                 }
 
                 if self.x >= 160 {
-                    self.transition_hblank(memory);
+                    self.transition_hblank();
                 }
             }
             PpuMode::HBlank => {
+                if self.dot_counter == self.update_stat_on_dot {
+                    lcd_status::set_ppu_mode(memory, 0);
+                    self.update_stat_on_dot = usize::MAX;
+                }
+
                 if self.dot_counter.is_multiple_of(DOTS_PER_SCANLINE) {
                     if self.ly() < 144 {
-                        self.transition_oam_scan(memory);
+                        self.transition_oam_scan();
                     } else {
                         self.transition_vblank(memory);
                     }
                 }
             }
             PpuMode::VBlank => {
+                if self.dot_counter == self.update_stat_on_dot {
+                    lcd_status::set_ppu_mode(memory, 1);
+                    self.update_stat_on_dot = usize::MAX;
+                }
+
                 if self.dot_counter == DOTS_PER_FRAME {
                     self.dot_counter = 0;
                     self.window_y = 255;
-                    self.transition_oam_scan(memory);
+                    self.transition_oam_scan();
                 }
             }
         }
@@ -234,9 +257,14 @@ impl Ppu {
         if self.dot_counter.is_multiple_of(DOTS_PER_SCANLINE) {
             // Update LCD Y coordinate.
             self.update_ly_register(memory);
+            self.ly_to_compare_lyc = 255;
         }
 
-        let coincidence = memory[io_regs::LY as usize] == memory[io_regs::LYC as usize];
+        if self.dot_counter % DOTS_PER_SCANLINE == 4 {
+            self.ly_to_compare_lyc = memory[io_regs::LY as usize];
+        }
+
+        let coincidence = self.ly_to_compare_lyc == memory[io_regs::LYC as usize];
         lcd_status::set_coincidence(memory, coincidence);
 
         // STAT interrupt triggering.
@@ -255,6 +283,22 @@ impl Ppu {
             // Request the LCD interrupt.
             memory[io_regs::IF as usize] |= 0b0000_0010;
         }
+
+        let dots_this_line = self.dot_counter % DOTS_PER_SCANLINE;
+        match dots_this_line {
+            1 | 5 | 9 | 13 | 77 | 81 | 85 | 449 | 453 => {
+                warn!(
+                    target: "ppu_enabled",
+                    "Clocks: {}, LY: {}, STAT Mode: {}, LY to compare LYC: {}, Mode INT: {}",
+                    self.dot_counter % DOTS_PER_SCANLINE - 1,
+                    memory[io_regs::LY as usize],
+                    lcd_status::ppu_mode(memory),
+                    self.ly_to_compare_lyc,
+                    mode_int,
+                );
+            }
+            _ => ()
+        }
     }
 }
 
@@ -272,6 +316,8 @@ impl Default for Ppu {
             stat_interrupt_line: false,
             funny_buffer_test: vec![0; 160 * 144],
             disabled: true,
+            update_stat_on_dot: usize::MAX,
+            ly_to_compare_lyc: 0,
         }
     }
 }
