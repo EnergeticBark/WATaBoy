@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use crate::bg_fetcher::{BackgroundFetcher, Pixel};
 use crate::oam::Obj;
 use crate::obj_fetcher::ObjectFetcher;
-use crate::{lcd, oam, lcd_status, palette};
+use crate::{lcd_control, oam, lcd_status, palette};
 
 use hw_constants::io_regs;
 use log::{trace, warn};
@@ -39,7 +39,7 @@ pub struct Ppu {
 }
 
 fn drawing_window(memory: &[u8], x: u8, y: u8) -> bool {
-    lcd::window_enabled(memory)
+    lcd_control::window_enabled(memory)
         && x + 7 == memory[io_regs::WX as usize]
         && y >= memory[io_regs::WY as usize]
 }
@@ -138,7 +138,7 @@ impl Ppu {
                         } else {
                             // If the background/window is disabled, use a pixel with a value of 0.
                             // See: https://gbdev.io/pandocs/pixel_fifo.html#pixel-rendering
-                            let mut pixel_to_render = if lcd::bg_and_window_enabled(memory) {
+                            let mut pixel_to_render = if lcd_control::bg_and_window_enabled(memory) {
                                 bg_pixel
                             } else {
                                 Pixel {
@@ -149,7 +149,7 @@ impl Ppu {
                                 }
                             };
 
-                            if let Some(obj_pixel) = self.obj_fetcher.shift_out() && lcd::obj_enabled(memory) {
+                            if let Some(obj_pixel) = self.obj_fetcher.shift_out() && lcd_control::obj_enabled(memory) {
                                 pixel_to_render = mix_pixels(pixel_to_render, obj_pixel);
                             }
 

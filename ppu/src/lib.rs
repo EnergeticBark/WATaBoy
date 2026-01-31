@@ -1,5 +1,5 @@
 mod bg_fetcher;
-pub mod lcd;
+pub mod lcd_control;
 pub mod oam;
 mod obj_fetcher;
 pub mod ppu;

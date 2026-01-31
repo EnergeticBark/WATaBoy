@@ -1,5 +1,5 @@
-use crate::lcd::{bg_tile_map, window_tile_map};
-use crate::{lcd, tiles};
+use crate::lcd_control::{bg_tile_map, window_tile_map};
+use crate::{lcd_control, tiles};
 
 use hw_constants::io_regs;
 use std::collections::VecDeque;
@@ -96,7 +96,7 @@ impl BackgroundFetcher {
     }
 
     fn current_tile<'a>(&self, memory: &'a [u8]) -> &'a [u8; 16] {
-        if lcd::bg_and_window_tiles(memory) {
+        if lcd_control::bg_and_window_tiles(memory) {
             tiles::unsigned_nth_tile(memory, self.tile_id as usize)
         } else {
             tiles::signed_nth_tile(memory, self.tile_id.cast_signed() as isize)

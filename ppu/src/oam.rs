@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use crate::lcd::obj_size;
+use crate::lcd_control::obj_size;
 
 const OBJ_SIZE: usize = 4;
 

@@ -3,7 +3,7 @@ use crate::oam::Obj;
 use crate::tiles;
 
 use std::collections::VecDeque;
-use crate::lcd::obj_size;
+use crate::lcd_control::obj_size;
 use crate::palette::Palette;
 
 // The ObjectFetcher's pixel FIFO always contains 8 pixels.
