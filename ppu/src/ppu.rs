@@ -36,6 +36,7 @@ pub struct Ppu {
     obj_fetcher: ObjectFetcher,
     stat_interrupt_line: bool,
     pub funny_buffer_test: Vec<u8>,
+    disabled: bool,
 }
 
 fn drawing_window(memory: &[u8], x: u8, y: u8) -> bool {
@@ -70,7 +71,7 @@ impl Ppu {
         self.mode = PpuMode::HBlank;
         lcd_status::set_ppu_mode(memory, 0);
 
-        warn!(target: "ppu_hblank", "Set to Mode 0 on dot: {}, (Drew for {} dots)", self.dot_counter % DOTS_PER_SCANLINE, (self.dot_counter % DOTS_PER_SCANLINE) - OAM_SCAN_DOTS);
+        trace!(target: "ppu_hblank", "Set to Mode 0 on dot: {}, (Drew for {} dots)", self.dot_counter % DOTS_PER_SCANLINE, (self.dot_counter % DOTS_PER_SCANLINE) - OAM_SCAN_DOTS);
 
         self.x = 0;
         // Reset each of the fetchers.
@@ -112,8 +113,28 @@ impl Ppu {
         self.pixels_to_drop = memory[io_regs::SCX as usize] & 7;
     }
 
+    fn update_ly_register(&self, memory: &mut [u8]) {
+        memory[io_regs::LY as usize] = self.ly();
+        trace!(target: "ppu_ly", "Updating LY on dot: {}", self.dot_counter % DOTS_PER_SCANLINE);
+    }
+
     // Advance the PPU by 1 dot.
     pub fn tick(&mut self, memory: &mut [u8]) {
+        if !lcd_control::lcd_and_ppu_enabled(memory) {
+            if !self.disabled {
+                warn!(target: "ppu_disabled", "Disabled on dot: {}", self.dot_counter);
+
+                // Reset the PPU state.
+                *self = Ppu::default();
+                self.update_ly_register(memory);
+            }
+            return;
+        }
+        if self.disabled {
+            self.disabled = false;
+            warn!(target: "ppu_enabled", "Enabled");
+        }
+
         self.dot_counter += 1;
         match self.mode {
             PpuMode::OamScan => {
@@ -212,8 +233,7 @@ impl Ppu {
         // At the start of every scanline (even offscreen scanlines).
         if self.dot_counter.is_multiple_of(DOTS_PER_SCANLINE) {
             // Update LCD Y coordinate.
-            memory[io_regs::LY as usize] = self.ly();
-            warn!(target: "ppu_ly", "Updating LY on dot: {}", self.dot_counter % DOTS_PER_SCANLINE);
+            self.update_ly_register(memory);
         }
 
         let coincidence = memory[io_regs::LY as usize] == memory[io_regs::LYC as usize];
@@ -251,6 +271,7 @@ impl Default for Ppu {
             obj_fetcher: ObjectFetcher::default(),
             stat_interrupt_line: false,
             funny_buffer_test: vec![0; 160 * 144],
+            disabled: true,
         }
     }
 }
@@ -268,7 +289,7 @@ mod tests {
     #[test]
     fn test_minimum_bg_mode_3_dots() {
         let mut ppu = Ppu::default();
-        let mut memory = [0; 0x10000];
+        let mut memory = hw_constants::post_boot_hwio();
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
             ppu.tick(&mut memory);
@@ -287,7 +308,7 @@ mod tests {
     #[test]
     fn test_scrolled_bg_mode_3_dots() {
         let mut ppu = Ppu::default();
-        let mut memory = [0; 0x10000];
+        let mut memory = hw_constants::post_boot_hwio();
         memory[io_regs::SCX as usize] = 7;
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
@@ -307,7 +328,7 @@ mod tests {
     #[test]
     fn test_minimum_bg_window_mode_3_dots() {
         let mut ppu = Ppu::default();
-        let mut memory = [0; 0x10000];
+        let mut memory = hw_constants::post_boot_hwio();
 
         // Enable the window.
         memory[io_regs::LCDC as usize] |= 0b0010_0000;
@@ -331,7 +352,7 @@ mod tests {
     #[test]
     fn test_scrolled_bg_window_mode_3_dots() {
         let mut ppu = Ppu::default();
-        let mut memory = [0; 0x10000];
+        let mut memory = hw_constants::post_boot_hwio();
         memory[io_regs::SCX as usize] = 7;
 
         // Enable the window.

@@ -1,5 +1,5 @@
 use rkyv::{Archive, Deserialize, Serialize};
-use crate::common::post_boot::PostBoot;
+use hw_constants::PostBoot;
 
 #[derive(Default, Archive, Deserialize, Serialize)]
 pub struct Timers {

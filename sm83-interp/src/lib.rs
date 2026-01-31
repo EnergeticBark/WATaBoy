@@ -1,5 +1,4 @@
 mod bus;
-pub mod common;
 pub mod cpu;
 mod cycles;
 mod mbc;

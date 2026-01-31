@@ -1,6 +1,6 @@
 pub mod common;
 
-use sm83_interp::common::post_boot::PostBoot;
+use hw_constants::PostBoot;
 use sm83_interp::cpu::Cpu;
 use crate::common::mooneye::{run_mooneye_test, FIBONACCI};
 

@@ -1,8 +1,8 @@
 pub mod common;
 
+use hw_constants::PostBoot;
 use sm83_interp::cpu::Cpu;
 use crate::common::blarggs::{run_blargg_test, BlarggTest};
-use sm83_interp::common::post_boot::PostBoot;
 
 const READ_TIMING_01: BlarggTest = BlarggTest {
     rom: include_bytes!("roms/blarggs/mem_timing_2/rom_singles/01-read_timing.gb"),

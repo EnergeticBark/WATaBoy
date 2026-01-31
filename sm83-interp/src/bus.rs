@@ -1,18 +1,15 @@
 use crate::mbc::Mbc;
-use crate::common::post_boot::PostBoot;
 use crate::timers::Timers;
 
-use hw_constants::io_regs;
+use hw_constants::{io_regs, PostBoot};
 use std::ops::{Index, Range};
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize};
 use crate::joypad::{ButtonsHeld, Joyp};
 
-const MEM_MAP_SIZE: usize = 0x10000;
-
 #[derive(Archive, Deserialize, Serialize)]
 pub struct AddressBus {
-    pub buffer: [u8; MEM_MAP_SIZE],
+    pub buffer: [u8; hw_constants::MEM_MAP_SIZE],
     timers: Timers,
     // Number of MCycles the PPU needs to run to catch up with the CPU.
     ppu_catchup: usize,
@@ -54,7 +51,8 @@ impl AddressBus {
             io_regs::TAC => self.buffer[index as usize] = value | 0b1111_1000,
             io_regs::DIV => self.timers.system_clock = 0,
             io_regs::IF => self.buffer[index as usize] = value | 0b1110_0000,
-            io_regs::STAT | io_regs::NR10 => self.buffer[index as usize] = value | 0b1000_0000,
+            io_regs::STAT => self.buffer[index as usize] = (value | 0b1000_0000) & !0b0000_0111,
+            io_regs::NR10 => self.buffer[index as usize] = value | 0b1000_0000,
             io_regs::NR30 => self.buffer[index as usize] = value | 0b0111_1111,
             io_regs::NR32 => self.buffer[index as usize] = value | 0b1001_1111,
             io_regs::NR44 => self.buffer[index as usize] = value | 0b0011_1111,
@@ -118,7 +116,7 @@ impl AddressBus {
 impl Default for AddressBus {
     fn default() -> Self {
         Self {
-            buffer: [0; MEM_MAP_SIZE],
+            buffer: [0; hw_constants::MEM_MAP_SIZE],
             timers: Timers::default(),
             ppu_catchup: 0,
             mbc: Mbc::default(),
@@ -129,12 +127,7 @@ impl Default for AddressBus {
 impl PostBoot for AddressBus {
     fn post_boot_dmg() -> Self {
         Self {
-            buffer: {
-                let mut buffer = [0; MEM_MAP_SIZE];
-                buffer[0xA000..0xC000].fill(0xFF);
-                buffer
-            },
-            // TODO: some memory values should be set. Try to pass the mooneye test.
+            buffer: hw_constants::post_boot_hwio(),
             timers: Timers::post_boot_dmg(),
             ..Default::default()
         }
