@@ -97,32 +97,28 @@ impl PPUViewApp {
     }
 }
 
+fn step_once(dmg_state: &mut Cpu, ppu_state: &mut Ppu, buttons_held: ButtonsHeld) {
+    dmg_state.memory.update_joypad(buttons_held);
+    if let Err(message) = dmg_state.execute() {
+        error!("{message}")
+    } else {
+        let m_cycles = dmg_state.memory.claim_ppu_cycles();
+        for _ in 0..m_cycles * 4 {
+            ppu_state.tick(&mut dmg_state.memory.buffer);
+        }
+    }
+    dmg_state.handle_interrupts();
+}
+
 fn step_multiple(steps: u32, dmg_state: &mut Cpu, ppu_state: &mut Ppu, buttons_held: ButtonsHeld) {
     for _ in 0..steps {
-        dmg_state.memory.update_joypad(buttons_held);
-        match dmg_state.execute() {
-            Err(message) => error!("{message}"),
-            Ok(m_cycles) => {
-                for _ in 0..m_cycles * 4 {
-                    ppu_state.tick(&mut dmg_state.memory.buffer);
-                }
-            }
-        }
-        dmg_state.handle_interrupts();
+        step_once(dmg_state, ppu_state, buttons_held);
     }
 }
 
 fn step_vblank(dmg_state: &mut Cpu, ppu_state: &mut Ppu, buttons_held: ButtonsHeld) {
     loop {
-        dmg_state.memory.update_joypad(buttons_held);
-        match dmg_state.execute() {
-            Err(message) => error!("{message}"),
-            Ok(m_cycles) => {
-                for _ in 0..m_cycles * 4 {
-                    ppu_state.tick(&mut dmg_state.memory.buffer);
-                }
-            }
-        }
+        step_once(dmg_state, ppu_state, buttons_held);
         let vblank_happened = (dmg_state.memory.buffer[io_regs::IF as usize] & 0b0000_0001
             == 0b0000_0001)
             && (dmg_state.memory.buffer[hw_constants::IE as usize] & 0b0000_0001 == 0b0000_0001)

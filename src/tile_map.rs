@@ -4,7 +4,7 @@ use eframe::epaint::{ColorImage, TextureHandle};
 use egui::emath::RectTransform;
 use egui::{Color32, Frame, Stroke, StrokeKind, Ui, Vec2, pos2};
 use hw_constants::io_regs;
-use ppu::{lcd, tiles};
+use ppu::{lcd_control, tiles};
 use sm83_interp::cpu::Cpu;
 
 fn draw_tile_map(
@@ -20,7 +20,7 @@ fn draw_tile_map(
         for column in 0..32 {
             let tile_id = tile_map[row * 32 + column];
 
-            let tile_data = if lcd::bg_and_window_tiles(&dmg_state.memory.buffer) {
+            let tile_data = if lcd_control::bg_and_window_tiles(&dmg_state.memory.buffer) {
                 tiles::unsigned_nth_tile(&dmg_state.memory.buffer, tile_id as usize)
             } else {
                 tiles::signed_nth_tile(&dmg_state.memory.buffer, tile_id.cast_signed() as isize)
@@ -92,12 +92,12 @@ pub fn draw_tile_map_0(ui: &mut Ui, tile_map_0_texture: &mut TextureHandle, dmg_
 
             draw_tile_map(ui, rect, tile_map_0_texture, tile_map, dmg_state);
 
-            if lcd::bg_and_window_enabled(&dmg_state.memory.buffer) {
-                if !lcd::bg_tile_map(&dmg_state.memory.buffer) {
+            if lcd_control::bg_and_window_enabled(&dmg_state.memory.buffer) {
+                if !lcd_control::bg_tile_map(&dmg_state.memory.buffer) {
                     highlight_background(ui, to_screen, dmg_state);
                 }
-                if !lcd::window_tile_map(&dmg_state.memory.buffer)
-                    && lcd::window_enabled(&dmg_state.memory.buffer)
+                if !lcd_control::window_tile_map(&dmg_state.memory.buffer)
+                    && lcd_control::window_enabled(&dmg_state.memory.buffer)
                 {
                     highlight_window(ui, to_screen, dmg_state);
                 }
@@ -119,12 +119,12 @@ pub fn draw_tile_map_1(ui: &mut Ui, tile_map_1_texture: &mut TextureHandle, dmg_
 
             draw_tile_map(ui, rect, tile_map_1_texture, tile_map, dmg_state);
 
-            if lcd::bg_and_window_enabled(&dmg_state.memory.buffer) {
-                if lcd::bg_tile_map(&dmg_state.memory.buffer) {
+            if lcd_control::bg_and_window_enabled(&dmg_state.memory.buffer) {
+                if lcd_control::bg_tile_map(&dmg_state.memory.buffer) {
                     highlight_background(ui, to_screen, dmg_state);
                 }
-                if lcd::window_tile_map(&dmg_state.memory.buffer)
-                    && lcd::window_enabled(&dmg_state.memory.buffer)
+                if lcd_control::window_tile_map(&dmg_state.memory.buffer)
+                    && lcd_control::window_enabled(&dmg_state.memory.buffer)
                 {
                     highlight_window(ui, to_screen, dmg_state);
                 }
