@@ -4,7 +4,8 @@ use crate::timers::Timers;
 use hw_constants::{io_regs, PostBoot};
 use std::ops::{Index, Range};
 use log::info;
-use rkyv::{Archive, Deserialize, Serialize};
+use rkyv::{Archive, Deserialize, Serialize, with::Skip};
+use ppu::ppu::Ppu;
 use crate::joypad::{ButtonsHeld, Joyp};
 
 #[derive(Archive, Deserialize, Serialize)]
@@ -12,7 +13,8 @@ pub struct AddressBus {
     pub buffer: [u8; hw_constants::MEM_MAP_SIZE],
     timers: Timers,
     // Number of MCycles the PPU needs to run to catch up with the CPU.
-    ppu_catchup: usize,
+    #[rkyv(with = Skip)]
+    pub ppu: Ppu,
     mbc: Mbc,
 }
 
@@ -68,7 +70,9 @@ impl AddressBus {
     }
 
     pub fn increment_timers(&mut self, m_cycles: u16) {
-        self.ppu_catchup += m_cycles as usize;
+        for _ in 0..m_cycles * 4 {
+            self.ppu.tick(&mut self.buffer);
+        }
 
         self.timers
             .update_timer_counter(self.buffer[io_regs::TIMA as usize]);
@@ -104,13 +108,6 @@ impl AddressBus {
         // TODO: Fire the joypad interrupt on a high-to-low change
         self.buffer[io_regs::JOYP as usize] = joypad.into_bits();
     }
-    
-    // Get the number of MCycles the PPU needs to run for and reset the counter to 0.
-    pub fn claim_ppu_cycles(&mut self) -> usize {
-        let cycles = self.ppu_catchup;
-        self.ppu_catchup = 0;
-        cycles
-    }
 }
 
 impl Default for AddressBus {
@@ -118,7 +115,7 @@ impl Default for AddressBus {
         Self {
             buffer: [0; hw_constants::MEM_MAP_SIZE],
             timers: Timers::default(),
-            ppu_catchup: 0,
+            ppu: Ppu::default(),
             mbc: Mbc::default(),
         }
     }

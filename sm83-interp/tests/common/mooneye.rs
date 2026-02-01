@@ -18,7 +18,6 @@ fn read_bcdehl(cpu: &Cpu) -> [u8; 6] {
 }
 
 fn execute_until_ld_b_b(cpu: &mut Cpu) {
-    let mut ppu = Ppu::default();
     loop {
         let next_byte = cpu.memory.buffer[cpu.registers.pc as usize];
         if let Ok(Opcode::LdRR { x: R8::B, y: R8::B }) = opcodes::decode(next_byte) {
@@ -26,10 +25,6 @@ fn execute_until_ld_b_b(cpu: &mut Cpu) {
         }
 
         cpu.execute().unwrap();
-        let m_cycles = cpu.memory.claim_ppu_cycles();
-        for _ in 0..m_cycles * 4 {
-            ppu.tick(&mut cpu.memory.buffer);
-        }
         cpu.handle_interrupts();
     }
 }

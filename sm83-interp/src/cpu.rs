@@ -1,4 +1,4 @@
-use log::info;
+use log::{info, warn};
 use rkyv::{Archive, Deserialize, Serialize};
 use crate::bus::AddressBus;
 use crate::cycles::{m_cycles, prefix_m_cycles};
@@ -469,6 +469,10 @@ impl Cpu {
             // Block 1
             LdRR { x: dest, y: src } => {
                 let value = self.r8(src);
+                if matches!(dest, R8::A) && matches!(src, R8::IndirectHL) {
+                    warn!(target: "cpu_debug", "Loading Mode to A from (HL): {}", value & 0b0000_0011);
+                    warn!(target: "cpu_ahead", "Executed on PPU dot: {}", self.memory.ppu.dot_counter % 456);
+                }
                 self.set_r8(dest, value);
                 self.registers.pc += 1;
             }

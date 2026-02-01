@@ -23,7 +23,7 @@ enum PpuMode {
 
 pub struct Ppu {
     mode: PpuMode,
-    dot_counter: usize,
+    pub dot_counter: usize,
     x: u8,
     pixels_to_drop: u8,
     window_y: u8,
@@ -286,11 +286,11 @@ impl Ppu {
 
         let dots_this_line = self.dot_counter % DOTS_PER_SCANLINE;
         match dots_this_line {
-            1 | 5 | 9 | 13 | 77 | 81 | 85 | 449 | 453 => {
+            0 | 4 | 8 | 12 | 76 | 80 | 84 | 448 | 452 => {
                 warn!(
                     target: "ppu_enabled",
                     "Clocks: {}, LY: {}, STAT Mode: {}, LY to compare LYC: {}, Mode INT: {}",
-                    self.dot_counter % DOTS_PER_SCANLINE - 1,
+                    self.dot_counter % DOTS_PER_SCANLINE,
                     memory[io_regs::LY as usize],
                     lcd_status::ppu_mode(memory),
                     self.ly_to_compare_lyc,
