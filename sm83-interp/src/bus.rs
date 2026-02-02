@@ -53,7 +53,11 @@ impl AddressBus {
             io_regs::TAC => self.buffer[index as usize] = value | 0b1111_1000,
             io_regs::DIV => self.timers.system_clock = 0,
             io_regs::IF => self.buffer[index as usize] = value | 0b1110_0000,
-            io_regs::STAT => self.buffer[index as usize] = (value | 0b1000_0000) & !0b0000_0111,
+            io_regs::STAT => {
+                self.buffer[index as usize] &= 0b1000_0111;
+                let masked_value = value & 0b0111_1000;
+                self.buffer[index as usize] |= masked_value;
+            },
             io_regs::NR10 => self.buffer[index as usize] = value | 0b1000_0000,
             io_regs::NR30 => self.buffer[index as usize] = value | 0b0111_1111,
             io_regs::NR32 => self.buffer[index as usize] = value | 0b1001_1111,
