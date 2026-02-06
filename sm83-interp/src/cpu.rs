@@ -105,15 +105,36 @@ impl Cpu {
         self.memory.buffer[0..DMG_BOOT_ROM.len()].copy_from_slice(DMG_BOOT_ROM);
     }
 
-    pub fn handle_interrupts(&mut self) {
-        // If an interrupt's enabled and flag bit is set, it needs to be serviced.
-        let to_service = self.memory[hw_constants::IE] & self.memory[io_regs::IF];
-
-        if to_service != 0 {
-            self.halted = false;
+    fn handle_interrupts(&mut self) {
+        if self.halted {
+            // DMG checks interrupt flags *between* M-Cycles in halt mode.
+            self.memory.half_increment_timers();
         }
 
-        if self.ime && to_service != 0 {
+        // If an interrupt's enabled and flag bit is set, it needs to be serviced.
+        let to_service = self.memory[hw_constants::IE] & self.memory[io_regs::IF] & 0b0001_1111;
+        
+        if self.halted {
+            // Another half tick to complete the M-Cycle.
+            self.memory.half_increment_timers();
+        }
+
+        if to_service == 0 {
+            // Nothing to do, so return early.
+            return;
+        }
+
+        if self.halted {
+            warn!("LEAVING HALT ON DOT {}", self.memory.ppu.dots_this_line());
+            self.halted = false;
+            // I can't find any definitive answers for whether this is right.
+            //self.memory.increment_timers(1);
+        }
+
+        if self.ime {
+            // Turn off interrupt master enable.
+            self.ime = false;
+
             // Interrupts are serviced with a priority in order of least-to-most significant bit.
             // 0: VBlank, 1: LCD, 2: Timer, 3: Serial, and 4: Joypad.
             let nth_interrupt = to_service.trailing_zeros();
@@ -123,9 +144,6 @@ impl Cpu {
             // Clear the flag bit of the interrupt we're servicing.
             let flag_mask = !(0b0000_0001 << nth_interrupt);
             self.memory.buffer[io_regs::IF as usize] &= flag_mask;
-
-            // Turn off interrupt master enable.
-            self.ime = false;
 
             // Push the PC to the stack.
             self.registers.sp -= 2;
@@ -185,8 +203,11 @@ impl Cpu {
     pub fn execute(&mut self) -> Result<(), String> {
         use Opcode::*;
 
+        // Our halted CPU just early return forever unless handle_interrupts gets us out of halted mode.
+        // This function may tick other components if we're halted and/or servicing an interrupt.
+        self.handle_interrupts();
+
         if self.halted {
-            self.memory.increment_timers(1);
             return Ok(());
         }
 
@@ -256,6 +277,10 @@ impl Cpu {
                 let r8 = self.r8(x);
                 let result = r8.wrapping_add(1);
                 self.set_r8(x, result);
+
+                if matches!(x, R8::B) {
+                    warn!(target: "cpu_ahead", "Incrementing B {r8} -> {result} on dot: {}", self.memory.ppu.dot_counter % 456);
+                }
 
                 self.registers.af.set_f(
                     self.registers
@@ -468,6 +493,9 @@ impl Cpu {
 
             // Block 1
             LdRR { x: dest, y: src } => {
+                if matches!(dest, R8::A) && matches!(src, R8::IndirectHL) {
+                    warn!(target: "cpu_ahead", "Fetching on PPU dot: {}", self.memory.ppu.dot_counter % 456);
+                }
                 let value = self.r8(src);
                 if matches!(dest, R8::A) && matches!(src, R8::IndirectHL) {
                     warn!(target: "cpu_debug", "Loading Mode to A from (HL): {}", value & 0b0000_0011);
@@ -477,6 +505,7 @@ impl Cpu {
                 self.registers.pc += 1;
             }
             Halt => {
+                info!(target: "cpu_halt", "HALTING on PPU dot: {}", self.memory.ppu.dot_counter % 456);
                 self.registers.pc += 1;
                 self.halted = true;
             }
@@ -989,6 +1018,8 @@ impl Cpu {
             Ei => {
                 // TODO: For accuracy, wait until the next instruction to actually enable interrupts
                 // See: https://rgbds.gbdev.io/docs/v0.9.4/gbz80.7#EI
+                info!(target: "cpu_ei", "Enabling interrupts on dot: {}", self.memory.ppu.dots_this_line());
+                info!("FLAGS {:b}", self.memory[io_regs::IF]);
                 self.ime = true;
                 self.registers.pc += 1;
             }

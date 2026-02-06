@@ -6,3 +6,4 @@ pub mod ppu;
 pub mod tiles;
 mod lcd_status;
 mod palette;
+mod stat_mode;

@@ -1,4 +1,3 @@
-use ppu::ppu::Ppu;
 use sm83_interp::cpu::Cpu;
 use sm83_interp::opcodes;
 use sm83_interp::opcodes::Opcode;
@@ -25,7 +24,6 @@ fn execute_until_ld_b_b(cpu: &mut Cpu) {
         }
 
         cpu.execute().unwrap();
-        cpu.handle_interrupts();
     }
 }
 

@@ -16,6 +16,7 @@ pub struct AddressBus {
     #[rkyv(with = Skip)]
     pub ppu: Ppu,
     mbc: Mbc,
+    half_ticked: bool,
 }
 
 impl AddressBus {
@@ -73,6 +74,34 @@ impl AddressBus {
         }
     }
 
+    pub fn half_increment_timers(&mut self) {
+        for _ in 0..2 {
+            self.ppu.tick(&mut self.buffer);
+        }
+        
+        if !self.half_ticked {
+            self.half_ticked = true;
+            return;
+        }
+        self.half_ticked = false;
+        
+        self.timers
+            .update_timer_counter(self.buffer[io_regs::TIMA as usize]);
+        self.timers
+            .update_timer_modulo(self.buffer[io_regs::TMA as usize]);
+        self.timers
+            .update_timer_control(self.buffer[io_regs::TAC as usize]);
+
+        self.timers.increment(1);
+
+        self.buffer[io_regs::DIV as usize] = self.timers.div();
+        self.buffer[io_regs::TIMA as usize] = self.timers.tima();
+
+        if self.timers.process_interrupt() {
+            self.buffer[io_regs::IF as usize] |= 0b0000_0100;
+        }
+    }
+
     pub fn increment_timers(&mut self, m_cycles: u16) {
         for _ in 0..m_cycles * 4 {
             self.ppu.tick(&mut self.buffer);
@@ -121,6 +150,7 @@ impl Default for AddressBus {
             timers: Timers::default(),
             ppu: Ppu::default(),
             mbc: Mbc::default(),
+            half_ticked: false,
         }
     }
 }
@@ -130,6 +160,7 @@ impl PostBoot for AddressBus {
         Self {
             buffer: hw_constants::post_boot_hwio(),
             timers: Timers::post_boot_dmg(),
+            ppu: Ppu::post_boot_dmg(),
             ..Default::default()
         }
     }

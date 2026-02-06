@@ -21,7 +21,6 @@ fn read_ascii_from_tile_map(cpu: &Cpu) -> Vec<String> {
 fn execute_until(cpu: &mut Cpu, final_pc: u16) {
     while cpu.registers.pc != final_pc {
         cpu.execute().unwrap();
-        cpu.handle_interrupts();
     }
 }
 

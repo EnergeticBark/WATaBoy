@@ -4,8 +4,8 @@ use crate::oam::Obj;
 use crate::obj_fetcher::ObjectFetcher;
 use crate::{lcd_control, oam, lcd_status, palette};
 
-use hw_constants::io_regs;
-use log::{trace, warn};
+use hw_constants::{io_regs, PostBoot};
+use log::{info, trace, warn};
 use crate::palette::Palette;
 
 const SCANLINES_PER_FRAME: usize = 154;
@@ -14,6 +14,9 @@ const DOTS_PER_FRAME: usize = DOTS_PER_SCANLINE * SCANLINES_PER_FRAME;
 
 const OAM_SCAN_DOTS: usize = 80;
 
+const FIRST_LINE_SHORTENED: usize = 4;
+
+#[derive(Debug, Copy, Clone)]
 enum PpuMode {
     HBlank,
     VBlank,
@@ -22,8 +25,9 @@ enum PpuMode {
 }
 
 pub struct Ppu {
-    mode: PpuMode,
     pub dot_counter: usize,
+    mode: PpuMode,
+    dots_in_mode: usize,
     x: u8,
     pixels_to_drop: u8,
     window_y: u8,
@@ -37,8 +41,9 @@ pub struct Ppu {
     stat_interrupt_line: bool,
     pub funny_buffer_test: Vec<u8>,
     disabled: bool,
-    update_stat_on_dot: usize,
+    delay_cycles: usize,
     ly_to_compare_lyc: u8,
+    just_enabled: bool,
 }
 
 fn drawing_window(memory: &[u8], x: u8, y: u8) -> bool {
@@ -59,6 +64,9 @@ impl Ppu {
     pub fn ly(&self) -> u8 {
         (self.dot_counter / DOTS_PER_SCANLINE) as u8
     }
+    pub fn dots_this_line(&self) -> usize {
+        self.dot_counter % DOTS_PER_SCANLINE
+    }
 
     fn pop_next_obj(&mut self) -> Option<Obj> {
         // Discard any fully off-screen sprites.
@@ -71,9 +79,8 @@ impl Ppu {
 
     fn transition_hblank(&mut self) {
         self.mode = PpuMode::HBlank;
-        self.update_stat_on_dot = self.dot_counter + 4;
-
-        trace!(target: "ppu_hblank", "Set to Mode 0 on dot: {}, (Drew for {} dots)", self.dot_counter % DOTS_PER_SCANLINE, (self.dot_counter % DOTS_PER_SCANLINE) - OAM_SCAN_DOTS);
+        self.dots_in_mode = 0;
+        info!(target: "ppu_hblank", "Set to Mode 0 on dot: {}, (Drew for {} dots)", self.dots_this_line(), self.dots_this_line() - OAM_SCAN_DOTS);
 
         self.x = 0;
         // Reset each of the fetchers.
@@ -83,30 +90,20 @@ impl Ppu {
 
     fn transition_vblank(&mut self, memory: &mut [u8]) {
         self.mode = PpuMode::VBlank;
-        self.update_stat_on_dot = self.dot_counter + 4;
-
-        // Request the VBlank interrupt.
-        memory[io_regs::IF as usize] |= 0b0000_0001;
-
-        // A VBlank triggering also the OAM being triggered... for some reason?
-        // See: https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
-        if !self.stat_interrupt_line && lcd_status::mode2_int_select(memory) {
-            self.stat_interrupt_line = true;
-            // Request the LCD interrupt.
-            memory[io_regs::IF as usize] |= 0b0000_0010;
-        }
+        self.dots_in_mode = 0;
+        // Update LCD Y coordinate.
+        self.update_ly_register(memory);
     }
 
     fn transition_oam_scan(&mut self) {
         self.mode = PpuMode::OamScan;
-        self.update_stat_on_dot = self.dot_counter + 4;
-
-        trace!(target: "ppu_hblank", "Set to Mode 2 on dot: {}", self.dot_counter % DOTS_PER_SCANLINE);
+        self.dots_in_mode = 0;
+        trace!(target: "ppu_oamscan", "Set to Mode 2 on dot: {}", self.dots_this_line());
     }
 
     fn transition_drawing(&mut self, memory: &mut [u8]) {
         self.mode = PpuMode::Drawing;
-        self.update_stat_on_dot = self.dot_counter + 4;
+        self.dots_in_mode = 0;
 
         // This is the last cycle of the OAM scan, so lets actually do the OAM scan.
         self.obj_buffer = oam::oam_scan(memory, self.ly());
@@ -117,7 +114,42 @@ impl Ppu {
 
     fn update_ly_register(&self, memory: &mut [u8]) {
         memory[io_regs::LY as usize] = self.ly();
-        trace!(target: "ppu_ly", "Updating LY on dot: {}", self.dot_counter % DOTS_PER_SCANLINE);
+    }
+
+    fn update_stat_mode(&self, memory: &mut [u8], mode: PpuMode) {
+        match mode {
+            PpuMode::HBlank => {
+                lcd_status::set_ppu_mode(memory, 0);
+                //info!(target: "ppu_hblank", "STAT changed to Mode 0 on dot: {}", self.dots_this_line());
+            },
+            PpuMode::VBlank => lcd_status::set_ppu_mode(memory, 1),
+            PpuMode::OamScan => lcd_status::set_ppu_mode(memory, 2),
+            PpuMode::Drawing => lcd_status::set_ppu_mode(memory, 3),
+        }
+    }
+
+    fn update_stat_interrupt(&mut self, memory: &mut [u8], mode: PpuMode) {
+        let coincidence = self.ly_to_compare_lyc == memory[io_regs::LYC as usize];
+        lcd_status::set_coincidence(memory, coincidence);
+
+        // STAT interrupt triggering.
+        let lyc_int = coincidence && lcd_status::lyc_int_select(memory);
+        let mode_int = match mode {
+            PpuMode::HBlank => lcd_status::mode0_int_select(memory),
+            PpuMode::VBlank => lcd_status::mode1_int_select(memory),
+            PpuMode::OamScan => lcd_status::mode2_int_select(memory),
+            PpuMode::Drawing => false,
+        };
+
+        let prev_stat_line = self.stat_interrupt_line;
+        self.stat_interrupt_line = lyc_int || mode_int;
+
+        // Low to high transition on the STAT interrupt line.
+        if !prev_stat_line && self.stat_interrupt_line {
+            warn!(target: "lct_int", "LCD interrupt flag set on dot: {}", self.dots_this_line());
+            // Request the LCD interrupt.
+            memory[io_regs::IF as usize] |= 0b0000_0010;
+        }
     }
 
     // Advance the PPU by 1 dot.
@@ -138,22 +170,88 @@ impl Ppu {
             warn!(target: "ppu_enabled", "Enabled");
         }
 
-        self.dot_counter += 1;
+        if self.delay_cycles > 0 {
+            self.delay_cycles -= 1;
+            return;
+        }
+
+        // Do evil initial line 0 shenanigans.
+        if self.just_enabled {
+
+            // Observable 1.
+            if self.dot_counter == 0 {
+                // There is no drawing interrupt, so it's treated as none.
+                self.update_stat_interrupt(memory, PpuMode::Drawing);
+            }
+
+            // Observable 79.
+            if self.dot_counter == 78 {
+                self.update_stat_mode(memory, PpuMode::Drawing);
+            }
+
+            // 85 will be observed as 89, (4 dots skipped).
+            if self.dot_counter == 84 {
+                self.dot_counter += FIRST_LINE_SHORTENED;
+            }
+
+            // Observable 256.
+            if self.dot_counter == 255 {
+                self.update_stat_mode(memory, PpuMode::HBlank);
+                self.dot_counter += FIRST_LINE_SHORTENED; // Skip 4 extra cycles to match SameBoy's 8 total.
+            }
+
+            self.dot_counter += 1;
+            if self.dot_counter == DOTS_PER_SCANLINE {
+                self.transition_oam_scan();
+                self.just_enabled = false;
+            }
+            return;
+        }
+
         match self.mode {
             PpuMode::OamScan => {
-                if self.dot_counter == self.update_stat_on_dot {
-                    lcd_status::set_ppu_mode(memory, 2);
-                    self.update_stat_on_dot = usize::MAX;
+                // Mode 2 signals a mode interrupt ***1-Tcycle*** *before* its bits change in STAT on line 1 onward???
+                // Whatever, this lets us pass intr_2_0_timing.gb.
+                // See: section 8.11.1 of TCAGBD.
+                // Also see cycles.txt based on SameBoy's timing.
+
+                // Observable 3.
+                if self.dots_this_line() == 2 {
+                    if self.ly() == 0 {
+                        self.ly_to_compare_lyc = 0;
+                        // TODO: THIS MIGHT BE VBLANK
+                        self.update_stat_interrupt(memory, PpuMode::HBlank);
+                    } else {
+                        self.ly_to_compare_lyc = 0xFF;
+                        self.update_stat_interrupt(memory, PpuMode::OamScan);
+                    }
+
+                    self.update_stat_mode(memory, PpuMode::HBlank);
                 }
 
-                if self.dot_counter % DOTS_PER_SCANLINE >= OAM_SCAN_DOTS {
+                // Observable 4.
+                if self.dots_this_line() == 3 {
+                    self.update_stat_mode(memory, PpuMode::OamScan);
+
+                    self.ly_to_compare_lyc = self.ly();
+
+                    self.update_stat_interrupt(memory, PpuMode::OamScan);
+                    // There is no drawing interrupt, so it's treated as none.
+                    self.update_stat_interrupt(memory, PpuMode::Drawing);
+                }
+
+                self.dot_counter += 1;
+                self.dots_in_mode += 1;
+                if self.dots_this_line() == OAM_SCAN_DOTS {
                     self.transition_drawing(memory);
                 }
             }
             PpuMode::Drawing => {
-                if self.dot_counter == self.update_stat_on_dot {
-                    lcd_status::set_ppu_mode(memory, 3);
-                    self.update_stat_on_dot = usize::MAX;
+                // Observable 84.
+                if self.dots_this_line() == 83 {
+                    self.update_stat_mode(memory, PpuMode::Drawing);
+                    // There is no drawing interrupt, so it's treated as none.
+                    self.update_stat_interrupt(memory, PpuMode::Drawing);
                 }
 
                 if let Some(obj) = self.pop_next_obj() {
@@ -163,7 +261,7 @@ impl Ppu {
 
                 if self.obj_fetcher.idle_and_empty() {
                     self.bg_fetcher.tick(memory, self.ly(), self.window_y);
-                    //println!("Dot: {}, X: {}, FIFO: {}", (self.dot_counter % DOTS_PER_SCANLINE) - OAM_SCAN_DOTS, self.x, self.bg_fetcher.bg_fifo.len());
+                    //println!("Dot: {}, X: {}, FIFO: {}", (self.dots_this_line()) - OAM_SCAN_DOTS, self.x, self.bg_fetcher.bg_fifo.len());
 
                     // TODO: Combine FIFOs correctly.
                     if let Some(bg_pixel) = self.bg_fetcher.shift_out() {
@@ -221,30 +319,94 @@ impl Ppu {
                     self.pixels_to_drop = 0;
                 }
 
+                self.dot_counter += 1;
+                self.dots_in_mode += 1;
                 if self.x >= 160 {
                     self.transition_hblank();
                 }
             }
             PpuMode::HBlank => {
-                if self.dot_counter == self.update_stat_on_dot {
-                    lcd_status::set_ppu_mode(memory, 0);
-                    self.update_stat_on_dot = usize::MAX;
+                // Mode 0 signals a mode interrupt ***1 T-Cycle*** *after* its bits change in STAT, aka 5 T-Cycles into the HBlank.
+                // HUH??? This should be 4 and 5 right?
+
+                // Observable 4 dots into HBlank, or 256 with the shortest mode 3.
+                // Maybe wrong?
+                if self.dots_in_mode == 3 {
+                    self.update_stat_mode(memory, PpuMode::HBlank);
+                }
+                // Observable 5 dots into HBlank, or 257 with the shortest mode 3.
+                // Maybe wrong?
+                if self.dots_in_mode == 4 {
+                    self.update_stat_interrupt(memory, PpuMode::HBlank);
                 }
 
+                self.dot_counter += 1;
+                self.dots_in_mode += 1;
                 if self.dot_counter.is_multiple_of(DOTS_PER_SCANLINE) {
-                    if self.ly() < 144 {
-                        self.transition_oam_scan();
-                    } else {
+                    if self.ly() == 144 {
                         self.transition_vblank(memory);
+                        self.update_ly_register(memory);
+                        self.ly_to_compare_lyc = 0xFF;
+                    } else {
+                        // Update LCD Y coordinate.
+                        self.update_ly_register(memory);
+                        self.transition_oam_scan();
                     }
                 }
             }
             PpuMode::VBlank => {
-                if self.dot_counter == self.update_stat_on_dot {
-                    lcd_status::set_ppu_mode(memory, 1);
-                    self.update_stat_on_dot = usize::MAX;
+                // TODO: Handle special line 453
+
+
+                // TODO: Observable 2.
+                /*if self.dots_this_line() == 1 {
+                    if self.ly() == 144 {
+                        self.update_stat_interrupt(memory, PpuMode::OamScan);
+                    } else {
+                        self.update_stat_interrupt(memory, PpuMode::VBlank);
+                    }
+                }*/
+
+                // Observable 4.
+                if self.dots_this_line() == 3 {
+                    self.ly_to_compare_lyc = self.ly();
+                    if self.ly() == 144 {
+                        self.update_stat_mode(memory, PpuMode::VBlank);
+                        // Request the VBlank interrupt.
+                        memory[io_regs::IF as usize] |= 0b0000_0001;
+                        self.update_stat_interrupt(memory, PpuMode::OamScan);
+                        self.update_stat_interrupt(memory, PpuMode::VBlank);
+                    }
+                    // No idea why this is here
+                    self.update_stat_interrupt(memory, PpuMode::VBlank);
                 }
 
+
+                /*
+                // TODO: Dots 0 and 2.
+                if self.dots_in_mode == 2 && self.ly() == 144 {
+                    self.update_stat_interrupt(memory, PpuMode::HBlank);
+                }
+
+                if self.dots_this_line() == 4 {
+                    self.ly_to_compare_lyc = self.ly();
+                    self.update_stat_interrupt(memory, PpuMode::VBlank);
+                }
+
+                if self.dots_in_mode == 4 {
+
+
+                    // A VBlank triggering also triggers as an OAM Scan... for some reason?
+                    // See: https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
+                    self.update_stat_interrupt(memory, PpuMode::OamScan);
+                    self.update_stat_interrupt(memory, PpuMode::VBlank);
+                }*/
+
+                self.dot_counter += 1;
+                if self.dots_this_line() == 0 {
+                    // Update LCD Y coordinate.
+                    self.update_ly_register(memory);
+                }
                 if self.dot_counter == DOTS_PER_FRAME {
                     self.dot_counter = 0;
                     self.window_y = 255;
@@ -253,48 +415,16 @@ impl Ppu {
             }
         }
 
-        // At the start of every scanline (even offscreen scanlines).
-        if self.dot_counter.is_multiple_of(DOTS_PER_SCANLINE) {
-            // Update LCD Y coordinate.
-            self.update_ly_register(memory);
-            self.ly_to_compare_lyc = 255;
-        }
-
-        if self.dot_counter % DOTS_PER_SCANLINE == 4 {
-            self.ly_to_compare_lyc = memory[io_regs::LY as usize];
-        }
-
-        let coincidence = self.ly_to_compare_lyc == memory[io_regs::LYC as usize];
-        lcd_status::set_coincidence(memory, coincidence);
-
-        // STAT interrupt triggering.
-        let lcy_int = coincidence && lcd_status::lyc_int_select(memory);
-        let mode_int = match self.mode {
-            PpuMode::HBlank => lcd_status::mode0_int_select(memory),
-            PpuMode::VBlank => lcd_status::mode1_int_select(memory),
-            PpuMode::OamScan  => lcd_status::mode2_int_select(memory),
-            PpuMode::Drawing => false,
-        };
-        let prev_stat_line = self.stat_interrupt_line;
-        self.stat_interrupt_line = lcy_int || mode_int;
-
-        // Low to high transition on the STAT interrupt line.
-        if !prev_stat_line && self.stat_interrupt_line {
-            // Request the LCD interrupt.
-            memory[io_regs::IF as usize] |= 0b0000_0010;
-        }
-
-        let dots_this_line = self.dot_counter % DOTS_PER_SCANLINE;
-        match dots_this_line {
+        match self.dots_this_line() {
             0 | 4 | 8 | 12 | 76 | 80 | 84 | 448 | 452 => {
                 warn!(
                     target: "ppu_enabled",
-                    "Clocks: {}, LY: {}, STAT Mode: {}, LY to compare LYC: {}, Mode INT: {}",
-                    self.dot_counter % DOTS_PER_SCANLINE,
+                    "Clocks: {:3}, LY: {:3}, STAT Mode: {}, LY to compare LYC: {:3}, INT: {}",
+                    self.dots_this_line(),
                     memory[io_regs::LY as usize],
                     lcd_status::ppu_mode(memory),
                     self.ly_to_compare_lyc,
-                    mode_int,
+                    self.stat_interrupt_line,
                 );
             }
             _ => ()
@@ -305,8 +435,9 @@ impl Ppu {
 impl Default for Ppu {
     fn default() -> Self {
         Self {
-            mode: PpuMode::OamScan,
             dot_counter: 0,
+            mode: PpuMode::HBlank,
+            dots_in_mode: 0,
             x: 0,
             pixels_to_drop: 0,
             window_y: 255,
@@ -316,15 +447,89 @@ impl Default for Ppu {
             stat_interrupt_line: false,
             funny_buffer_test: vec![0; 160 * 144],
             disabled: true,
-            update_stat_on_dot: usize::MAX,
+            delay_cycles: 0,
             ly_to_compare_lyc: 0,
+            just_enabled: true,
+        }
+    }
+}
+
+impl PostBoot for Ppu {
+    fn post_boot_dmg() -> Self {
+        Self {
+            dot_counter: DOTS_PER_FRAME - 54,
+            mode: PpuMode::VBlank,
+            dots_in_mode: 0,
+            x: 0,
+            pixels_to_drop: 0,
+            window_y: 255,
+            bg_fetcher: BackgroundFetcher::default(),
+            obj_buffer: VecDeque::with_capacity(10),
+            obj_fetcher: ObjectFetcher::default(),
+            stat_interrupt_line: false,
+            funny_buffer_test: vec![0; 160 * 144],
+            disabled: false,
+            delay_cycles: 0,
+            ly_to_compare_lyc: 0,
+            just_enabled: false,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
+    use std::fs::File;
+    use crate::lcd_status::ppu_mode;
     use super::*;
+
+    #[test]
+    fn log_stat() {
+        let mut ppu = Ppu::post_boot_dmg();
+        let mut memory = hw_constants::post_boot_hwio();
+
+        let filename = "mystat.txt";
+        let mut file = File::create(filename).unwrap();
+
+        let mut last_stat = 0;
+
+        for dot in 0..DOTS_PER_FRAME * 2 {
+            //println!("Dot: {dot}: STAT is {:02b}", &gb.ppu.borrow().stat & 0b0000_0011);
+            if memory[io_regs::STAT as usize] & 0b0000_0011 != last_stat {
+                writeln!(&mut file, "Dot: {dot}: STAT is {}", memory[io_regs::STAT as usize] & 0b0000_0011).unwrap();
+                last_stat = memory[io_regs::STAT as usize] & 0b0000_0011
+            }
+
+            ppu.tick(&mut memory);
+        }
+    }
+
+    #[test]
+    fn log_ly() {
+        let mut ppu = Ppu::post_boot_dmg();
+        let mut memory = hw_constants::post_boot_hwio();
+
+        let filename = "myLY.txt";
+        let mut file = File::create(filename).unwrap();
+
+
+        for dot in 0..DOTS_PER_FRAME * 2 { // TWO FRAMES
+            writeln!(&mut file, "Dot: {dot}: LY is {}", memory[io_regs::LY as usize]).unwrap();
+
+            ppu.tick(&mut memory);
+        }
+    }
+
+    #[test]
+    fn test_line_1_mode_0() {
+        let mut ppu = Ppu::default();
+        let mut memory = hw_constants::post_boot_hwio();
+        for ticks in 0..DOTS_PER_SCANLINE * 2 {
+            println!("(Ticks: {ticks:3}, Dot {:3}): mode {:?}, observable STAT mode: {:7}, IO LY: {:3}", ppu.dots_this_line(), &ppu.mode, ppu_mode(&memory), memory[io_regs::LY as usize]);
+            ppu.tick(&mut memory);
+        }
+        //assert!(matches!(stat_machine.mode, Mode::OamScan));
+    }
 
     // Assert that the minimum Mode 3 length (172) with:
     // - unscrolled background tiles (0)
