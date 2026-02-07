@@ -1,7 +1,7 @@
 use log::{info, warn};
 use rkyv::{Archive, Deserialize, Serialize};
 use crate::bus::AddressBus;
-use crate::cycles::{m_cycles, prefix_m_cycles};
+use crate::cycles::m_cycles;
 use crate::opcodes::{Opcode, PrefixOpcode};
 use crate::parameters::{Condition, R8, R16, R16Mem};
 use crate::registers::Registers;
@@ -113,7 +113,7 @@ impl Cpu {
 
         // If an interrupt's enabled and flag bit is set, it needs to be serviced.
         let to_service = self.memory[hw_constants::IE] & self.memory[io_regs::IF] & 0b0001_1111;
-        
+
         if self.halted {
             // Another half tick to complete the M-Cycle.
             self.memory.half_increment_timers();
@@ -215,7 +215,12 @@ impl Cpu {
         let bytecode = self.memory[pc];
         let opcode = opcodes::decode(bytecode)?;
 
-        let m_cycles = self.calculate_m_cycles(opcode);
+        let mut m_cycles = self.calculate_m_cycles(opcode);
+
+        if m_cycles > 0 {
+            self.memory.increment_timers(1);
+            m_cycles -= 1;
+        }
 
         match opcode {
             // Block 0
@@ -309,11 +314,12 @@ impl Cpu {
             }
             LdRN { x } => {
                 // TICKS MANUALLY
+                self.memory.increment_timers(1);
+
                 let next_byte = self.memory[pc + 1];
                 self.memory.increment_timers(1);
 
                 self.set_r8(x, next_byte);
-                self.memory.increment_timers(1);
 
                 self.registers.pc += 2;
             }
@@ -904,17 +910,21 @@ impl Cpu {
             }
             LdhNA => {
                 // TICKS MANUALLY
+                self.memory.increment_timers(1);
+
                 let next_byte = self.memory[pc + 1];
                 self.memory.increment_timers(1);
 
                 let destination = u16::from_le_bytes([next_byte, 0xFF]);
                 self.memory.write_byte(destination, self.registers.af.a());
-                self.memory.increment_timers(2);
+                self.memory.increment_timers(1);
 
                 self.registers.pc += 2;
             }
             LdNnA => {
                 // TICKS MANUALLY
+                self.memory.increment_timers(1);
+
                 let first_byte = self.memory[pc + 1];
                 self.memory.increment_timers(1);
 
@@ -924,35 +934,40 @@ impl Cpu {
                 let address = u16::from_le_bytes([first_byte, second_byte]);
                 self.memory
                     .write_byte(address, self.registers.af.a());
-                self.memory.increment_timers(2);
+                self.memory.increment_timers(1);
 
                 self.registers.pc += 3;
             }
             LdhAC => {
                 // TICKS MANUALLY
+                self.memory.increment_timers(1);
+
                 let address = u16::from_le_bytes([self.registers.bc.c(), 0xFF]);
                 let value = self.memory[address];
                 self.memory.increment_timers(1);
 
                 self.set_r8(R8::A, value);
-                self.memory.increment_timers(1);
 
                 self.registers.pc += 1;
             }
             LdhAN => {
                 // TICKS MANUALLY
+                self.memory.increment_timers(1);
+
                 let next_byte = self.memory[pc + 1];
                 self.memory.increment_timers(1);
 
                 let address = u16::from_le_bytes([next_byte, 0xFF]);
                 let value = self.memory[address];
                 self.registers.af.set_a(value);
-                self.memory.increment_timers(2);
+                self.memory.increment_timers(1);
 
                 self.registers.pc += 2;
             }
             LdANn => {
                 // TICKS MANUALLY
+                self.memory.increment_timers(1);
+
                 let first_byte = self.memory[pc + 1];
                 self.memory.increment_timers(1);
 
@@ -961,7 +976,7 @@ impl Cpu {
 
                 let value = self.memory[u16::from_le_bytes([first_byte, second_byte])];
                 self.registers.af.set_a(value);
-                self.memory.increment_timers(2);
+                self.memory.increment_timers(1);
 
                 self.registers.pc += 3;
             }
@@ -1034,12 +1049,14 @@ impl Cpu {
     fn execute_prefix(&mut self) {
         use PrefixOpcode::*;
 
-        let second_byte = self.memory[self.registers.pc + 1];
-        let prefix_opcode = opcodes::decode_prefix(second_byte);
         // Decoding the 0xCB instruction took 1 MCycle.
         self.memory.increment_timers(1);
 
-        let m_cycles = prefix_m_cycles(prefix_opcode);
+        let second_byte = self.memory[self.registers.pc + 1];
+        let prefix_opcode = opcodes::decode_prefix(second_byte);
+
+        // Decoding the next byte took another.
+        self.memory.increment_timers(1);
 
         match prefix_opcode {
             RlcR { x } => {
@@ -1234,8 +1251,6 @@ impl Cpu {
                 self.registers.pc += 2;
             }
         }
-
-        self.memory.increment_timers(m_cycles);
     }
 }
 

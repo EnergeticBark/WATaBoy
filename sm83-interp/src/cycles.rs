@@ -1,4 +1,4 @@
-use crate::opcodes::{Opcode, PrefixOpcode};
+use crate::opcodes::Opcode;
 
 // Loading from IndirectHL takes extra machine cycles.
 // See: https://gekkio.fi/files/gb-docs/gbctr.pdf
@@ -75,25 +75,5 @@ pub fn m_cycles(opcode: Opcode) -> u16 {
         Ei => 1,
         Nop => 1,
         Prefix => 0,
-    }
-}
-
-// Get the number of MCycles it takes to execute a 0xCB prefixed instruction.
-// Returned value does not include the extra 1 MCycle taken to decode the prefix itself.
-pub fn prefix_m_cycles(opcode: PrefixOpcode) -> u16 {
-    use PrefixOpcode::*;
-
-    match opcode {
-        RlcR { .. }
-        | RrcR { .. }
-        | RlR { .. }
-        | RrR { .. }
-        | SlaR { .. }
-        | SraR { .. }
-        | SwapR { .. }
-        | SrlR { .. }
-        | BitBR { .. }
-        | ResBR { .. }
-        | SetBR { .. } => 1,
     }
 }
