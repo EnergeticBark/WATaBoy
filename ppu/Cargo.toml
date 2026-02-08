@@ -8,3 +8,6 @@ hw-constants = { path = "../hw-constants" }
 bitfield-struct = "0.12.1"
 arbitrary-int = "2.0.0"
 log = "0.4.29"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }

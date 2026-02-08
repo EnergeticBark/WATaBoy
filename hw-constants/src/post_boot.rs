@@ -6,6 +6,7 @@ pub trait PostBoot: Sized {
 
 // Values are from the "DMG / MGB" column of Pan Docs's table on hardware registers.
 // See: https://gbdev.io/pandocs/Power_Up_Sequence.html#hardware-registers
+#[must_use]
 pub fn post_boot_hwio() -> [u8; MEM_MAP_SIZE] {
     let mut buffer = [0_u8; MEM_MAP_SIZE];
     buffer[0xA000..0xC000].fill(0xFF);

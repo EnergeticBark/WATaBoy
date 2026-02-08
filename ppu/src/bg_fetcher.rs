@@ -55,7 +55,7 @@ impl BackgroundFetcher {
             let pixel = Pixel {
                 low: (self.tile_data_low >> nth_bit) & 1 == 1,
                 high: (self.tile_data_high >> nth_bit) & 1 == 1,
-                palette: Palette::BGP,
+                palette: Palette::Bgp,
                 priority: false,
             };
 
@@ -144,7 +144,7 @@ impl BackgroundFetcher {
                         self.state = FetcherState::Push;
                     }
                 }
-                _ => {}
+                FetcherState::Push => {} // Already handled in the if-let.
             }
         }
     }

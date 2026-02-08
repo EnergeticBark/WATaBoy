@@ -3,9 +3,9 @@ use hw_constants::io_regs;
 
 #[derive(Copy, Clone)]
 pub enum Palette {
-    BGP,
-    OBP0,
-    OBP1,
+    Bgp,
+    Obp0,
+    Obp1,
 }
 
 #[bitenum]

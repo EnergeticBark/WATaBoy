@@ -4,8 +4,8 @@ use crate::oam::Obj;
 use crate::obj_fetcher::ObjectFetcher;
 use crate::{lcd_control, oam, lcd_status, palette};
 
-use hw_constants::{io_regs, PostBoot};
-use log::{info, trace, warn};
+use hw_constants::{io_regs, PostBoot, SCREEN_WIDTH, SCREEN_SIZE};
+use log::{info, trace};
 use crate::palette::Palette;
 
 const SCANLINES_PER_FRAME: usize = 154;
@@ -40,7 +40,8 @@ pub struct Ppu {
     obj_fetcher: ObjectFetcher,
     stat_mode_for_interrupt: u8,
     stat_interrupt_line: bool,
-    pub funny_buffer_test: Vec<u8>,
+    // Buffer of greyscale pixel values, i.e. what the PPU would output to the LCD.
+    pub lcd_buffer: Vec<u8>,
     disabled: bool,
     delay_cycles: usize,
     ly_to_compare_lyc: u8,
@@ -62,9 +63,13 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
 }
 
 impl Ppu {
+    #[allow(clippy::cast_possible_truncation)]
+    #[must_use] 
     pub fn ly(&self) -> u8 {
         (self.dot_counter / DOTS_PER_SCANLINE) as u8
     }
+    
+    #[must_use] 
     pub fn dots_this_line(&self) -> usize {
         self.dot_counter % DOTS_PER_SCANLINE
     }
@@ -81,7 +86,7 @@ impl Ppu {
     fn transition_hblank(&mut self) {
         self.mode = PpuMode::HBlank;
         self.dots_in_mode = 0;
-        info!(target: "ppu_hblank", "Set to Mode 0 on dot: {}, (Drew for {} dots)", self.dots_this_line(), self.dots_this_line() - OAM_SCAN_DOTS);
+        trace!(target: "ppu_hblank", "Set to Mode 0 on dot: {}, (Drew for {} dots)", self.dots_this_line(), self.dots_this_line() - OAM_SCAN_DOTS);
 
         self.x = 0;
         // Reset each of the fetchers.
@@ -119,10 +124,7 @@ impl Ppu {
 
     fn update_stat_mode(&self, memory: &mut [u8], mode: PpuMode) {
         match mode {
-            PpuMode::HBlank => {
-                lcd_status::set_ppu_mode(memory, 0);
-                //info!(target: "ppu_hblank", "STAT changed to Mode 0 on dot: {}", self.dots_this_line());
-            },
+            PpuMode::HBlank => lcd_status::set_ppu_mode(memory, 0),
             PpuMode::VBlank => lcd_status::set_ppu_mode(memory, 1),
             PpuMode::OamScan => lcd_status::set_ppu_mode(memory, 2),
             PpuMode::Drawing => lcd_status::set_ppu_mode(memory, 3),
@@ -147,7 +149,7 @@ impl Ppu {
 
         // Low to high transition on the STAT interrupt line.
         if !prev_stat_line && self.stat_interrupt_line {
-            warn!(target: "lct_int", "LCD interrupt flag set on dot: {}", self.dots_this_line());
+            info!(target: "lcd_int", "LCD interrupt flag set on dot: {}", self.dots_this_line());
             // Request the LCD interrupt.
             memory[io_regs::IF as usize] |= 0b0000_0010;
         }
@@ -157,7 +159,7 @@ impl Ppu {
     pub fn tick(&mut self, memory: &mut [u8]) {
         if !lcd_control::lcd_and_ppu_enabled(memory) {
             if !self.disabled {
-                warn!(target: "ppu_disabled", "Disabled on dot: {}", self.dot_counter);
+                info!(target: "ppu_disabled", "Disabled on dot: {}", self.dot_counter);
 
                 // Reset the PPU state.
                 *self = Ppu::default();
@@ -168,7 +170,7 @@ impl Ppu {
         }
         if self.disabled {
             self.disabled = false;
-            warn!(target: "ppu_enabled", "Enabled");
+            info!(target: "ppu_enabled", "Enabled");
         }
 
         if self.delay_cycles > 0 {
@@ -267,9 +269,8 @@ impl Ppu {
 
                 if self.obj_fetcher.idle_and_empty() {
                     self.bg_fetcher.tick(memory, self.ly(), self.window_y);
-                    //println!("Dot: {}, X: {}, FIFO: {}", (self.dots_this_line()) - OAM_SCAN_DOTS, self.x, self.bg_fetcher.bg_fifo.len());
 
-                    // TODO: Combine FIFOs correctly.
+                    // Combine FIFOs.
                     if let Some(bg_pixel) = self.bg_fetcher.shift_out() {
                         if self.pixels_to_drop > 0 {
                             self.pixels_to_drop -= 1
@@ -282,7 +283,7 @@ impl Ppu {
                                 Pixel {
                                     low: false,
                                     high: false,
-                                    palette: Palette::BGP,
+                                    palette: Palette::Bgp,
                                     priority: false,
                                 }
                             };
@@ -299,15 +300,16 @@ impl Ppu {
                                 funny_greyscale |= 0b0000_0010;
                             }
 
-                            let funny_index = self.ly() as usize * 160 + self.x as usize;
+                            let lcd_row = self.ly() as usize * SCREEN_WIDTH as usize;
+                            let lcd_pixel_index = lcd_row + self.x as usize;
                             let color = match pixel_to_render.palette {
-                                Palette::BGP => palette::map_to_bgp(memory, funny_greyscale),
-                                Palette::OBP0 => palette::map_to_obp0(memory, funny_greyscale),
-                                Palette::OBP1 => palette::map_to_obp1(memory, funny_greyscale),
+                                Palette::Bgp => palette::map_to_bgp(memory, funny_greyscale),
+                                Palette::Obp0 => palette::map_to_obp0(memory, funny_greyscale),
+                                Palette::Obp1 => palette::map_to_obp1(memory, funny_greyscale),
                             };
                             
                             // Get the colors in their correct greyscale values.
-                            self.funny_buffer_test[funny_index] = 255 - color.into_bits() * 64;
+                            self.lcd_buffer[lcd_pixel_index] = 255 - color.into_bits() * 64;
 
                             self.x += 1;
                         }
@@ -327,9 +329,11 @@ impl Ppu {
 
                 self.dot_counter += 1;
                 self.dots_in_mode += 1;
-                if self.x >= 160 {
+                // If we've finished drawing this line, then transition to the HBlank state.
+                if self.x == SCREEN_WIDTH {
                     self.transition_hblank();
                 }
+                assert!(self.x <= SCREEN_WIDTH);
             }
             PpuMode::HBlank => {
                 // Observable 4 dots into HBlank, or 256 with the shortest mode 3.
@@ -393,7 +397,7 @@ impl Ppu {
 
         match self.dots_this_line() {
             0 | 4 | 8 | 12 | 76 | 80 | 84 | 448 | 452 => {
-                warn!(
+                trace!(
                     target: "ppu_enabled",
                     "Clocks: {:3}, LY: {:3}, STAT Mode: {}, LY to compare LYC: {:3}, INT: {}",
                     self.dots_this_line(),
@@ -422,7 +426,7 @@ impl Default for Ppu {
             obj_fetcher: ObjectFetcher::default(),
             stat_mode_for_interrupt: 0xFF,
             stat_interrupt_line: false,
-            funny_buffer_test: vec![0; 160 * 144],
+            lcd_buffer: vec![0; SCREEN_SIZE],
             disabled: true,
             delay_cycles: 0,
             ly_to_compare_lyc: 0,
@@ -445,7 +449,7 @@ impl PostBoot for Ppu {
             obj_fetcher: ObjectFetcher::default(),
             stat_mode_for_interrupt: 1,
             stat_interrupt_line: false,
-            funny_buffer_test: vec![0; 160 * 144],
+            lcd_buffer: vec![0; SCREEN_SIZE],
             disabled: false,
             delay_cycles: 0,
             ly_to_compare_lyc: 0,

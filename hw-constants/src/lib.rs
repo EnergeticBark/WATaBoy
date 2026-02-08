@@ -10,8 +10,10 @@ pub const IE: u16 = 0xFFFF;
 
 pub const MEM_MAP_SIZE: usize = 0x10000;
 
-pub const SCREEN_WIDTH: usize = 160;
-pub const SCREEN_HEIGHT: usize = 144;
+// Screen
+pub const SCREEN_WIDTH: u8 = 160;
+pub const SCREEN_HEIGHT: u8 = 144;
+pub const SCREEN_SIZE: usize = SCREEN_WIDTH as usize * SCREEN_HEIGHT as usize;
 
 pub const TILE_MAP_SIZE: usize = 256;
 

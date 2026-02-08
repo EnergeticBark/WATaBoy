@@ -1038,7 +1038,7 @@ impl Cpu {
                 self.ime = true;
                 self.registers.pc += 1;
             }
-            opcode => Err(format!("unimplemented opcode: {opcode:?}"))?,
+            Stop => Err("STOP opcode reached.".to_string())?,
         }
 
         self.memory.increment_timers(m_cycles);

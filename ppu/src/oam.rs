@@ -12,6 +12,7 @@ pub struct Obj {
 }
 
 impl Obj {
+    #[must_use]
     pub fn from_bytes(bytes: &[u8; OBJ_SIZE]) -> Self {
         Self {
             y_pos: bytes[0],
@@ -21,19 +22,24 @@ impl Obj {
         }
     }
 
+    #[must_use]
     pub fn priority(&self) -> bool {
         self.attributes & 0b1000_0000 == 0b1000_0000
     }
+    #[must_use]
     pub fn y_flip(&self) -> bool {
         self.attributes & 0b0100_0000 == 0b0100_0000
     }
+    #[must_use]
     pub fn x_flip(&self) -> bool {
         self.attributes & 0b0010_0000 == 0b0010_0000
     }
+    #[must_use]
     pub fn palette(&self) -> bool {
         self.attributes & 0b0001_0000 == 0b0001_0000
     }
 
+    #[must_use]
     pub fn intersects_y(&self, y: u8, obj_size: bool) -> bool {
         let obj_height = if obj_size { 16 } else { 8 };
 
@@ -42,6 +48,7 @@ impl Obj {
         (y_top..y_bottom).contains(&(y + 16))
     }
 
+    #[must_use]
     pub fn intersects_x(&self, x: u8) -> bool {
         let x_left = self.x_pos;
         let x_right = x_left.wrapping_add(8);
@@ -49,6 +56,7 @@ impl Obj {
     }
 }
 
+#[must_use]
 pub fn nth_obj(memory: &[u8], index: usize) -> Obj {
     let offset = index * OBJ_SIZE;
     let obj_start = hw_constants::OAM as usize + offset;
@@ -57,6 +65,7 @@ pub fn nth_obj(memory: &[u8], index: usize) -> Obj {
     Obj::from_bytes(obj_bytes)
 }
 
+#[must_use]
 pub fn oam_scan(memory: &[u8], ly: u8) -> VecDeque<Obj> {
     let obj_size = obj_size(memory);
 

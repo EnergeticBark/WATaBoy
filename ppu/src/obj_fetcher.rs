@@ -14,7 +14,7 @@ use crate::palette::Palette;
 const TRANSPARENT: Pixel = Pixel {
     low: false,
     high: false,
-    palette: Palette::OBP0,
+    palette: Palette::Obp0,
     priority: false,
 };
 
@@ -62,10 +62,10 @@ impl ObjectFetcher {
         let to_discard = 8_u8.saturating_sub(obj.x_pos);
 
         if obj.x_flip() {
-            self.push_bit_range(to_discard..8, obj)
+            self.push_bit_range(to_discard..8, obj);
         } else {
-            self.push_bit_range((0..8-to_discard).rev(), obj)
-        };
+            self.push_bit_range((0..8-to_discard).rev(), obj);
+        }
     }
 
     fn push_bit_range<T: Iterator<Item = u8>>(&mut self, bit_range: T, obj: Obj) {
@@ -76,9 +76,9 @@ impl ObjectFetcher {
                 high: (self.tile_data_high >> nth_bit) & 1 == 1,
                 palette: {
                     if obj.palette() {
-                        Palette::OBP1
+                        Palette::Obp1
                     } else {
-                        Palette::OBP0
+                        Palette::Obp0
                     }
                 },
                 priority: obj.priority(),
@@ -87,27 +87,28 @@ impl ObjectFetcher {
         // Replace any transparent pixels that are currently on the queue with the new pixels.
         for (old, new) in old_pixels.zip(new_pixels) {
             if !(old.low || old.high) {
-                *old = new
+                *old = new;
             }
         }
     }
 
     // Returns obj_line
-    fn get_tile(&self, current_scanline: u8, obj: Obj, obj_size: bool) -> u8 {
+    fn get_tile(current_scanline: u8, obj: Obj, obj_size: bool) -> u8 {
         let obj_line = current_scanline + 16 - obj.y_pos;
-        // Handle vertical object flipping.
+        // If the object isn't flipped vertically, just return the line.
         if !obj.y_flip() {
             return obj_line
         }
 
-        if !obj_size {
-            7 - obj_line
-        } else {
+        // If the object is flipped we need to subtract from its height - 1.
+        if obj_size {
             15 - obj_line
+        } else {
+            7 - obj_line
         }
     }
 
-    fn current_tile<'a>(&self, memory: &'a [u8], obj: Obj, obj_line: u8) -> &'a [u8; 16] {
+    fn current_tile(memory: &[u8], obj: Obj, obj_line: u8) -> &[u8; 16] {
         let mut tile_index = obj.tile_index;
         if obj_size(memory) {
             // Override the first bit as described in PanDocs.
@@ -123,13 +124,13 @@ impl ObjectFetcher {
     }
 
     fn get_tile_data_low(&mut self, memory: &[u8], obj: Obj, obj_line: u8) {
-        let tile = self.current_tile(memory, obj, obj_line);
+        let tile = Self::current_tile(memory, obj, obj_line);
         let tile_line = obj_line % 8;
         self.tile_data_low = tile[tile_line as usize * 2];
     }
 
     fn get_tile_data_high(&mut self, memory: &[u8], obj: Obj, obj_line: u8) {
-        let tile = self.current_tile(memory, obj, obj_line);
+        let tile = Self::current_tile(memory, obj, obj_line);
         let tile_line = obj_line % 8;
         self.tile_data_high = tile[tile_line as usize * 2 + 1];
     }
@@ -145,7 +146,7 @@ impl ObjectFetcher {
                 }
             }
             ObjectFetcherState::GetTile { ticks_remaining: 0, obj } => {
-                let obj_line = self.get_tile(current_scanline, obj, obj_size(memory));
+                let obj_line = Self::get_tile(current_scanline, obj, obj_size(memory));
                 self.state = ObjectFetcherState::GetTileDataLow { ticks_remaining: 1, obj, obj_line };
             }
             ObjectFetcherState::GetTileDataLow { ticks_remaining: 0, obj, obj_line } => {
@@ -162,9 +163,9 @@ impl ObjectFetcher {
             }
 
             // Countdown
-            ObjectFetcherState::GetTile { ref mut ticks_remaining, .. } => *ticks_remaining -= 1,
-            ObjectFetcherState::GetTileDataLow { ref mut ticks_remaining, .. } => *ticks_remaining -= 1,
-            ObjectFetcherState::GetTileDataHigh { ref mut ticks_remaining, .. } => *ticks_remaining -= 1,
+            ObjectFetcherState::GetTile { ref mut ticks_remaining, .. }
+            | ObjectFetcherState::GetTileDataLow { ref mut ticks_remaining, .. }
+            | ObjectFetcherState::GetTileDataHigh { ref mut ticks_remaining, .. } => *ticks_remaining -= 1,
         }
     }
 }
