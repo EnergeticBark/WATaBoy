@@ -6,13 +6,11 @@ use crate::tile_map::{draw_tile_map_0, draw_tile_map_1};
 use crate::tiles::draw_tile_table;
 use eframe::epaint::textures::TextureOptions;
 use eframe::epaint::{Color32, ColorImage};
-use egui::{Key, Slider, TextureHandle};
-use hw_constants::io_regs;
+use egui::{Key, Slider, TextureHandle, Ui};
+use hw_constants::{PostBoot, SCREEN_HEIGHT, SCREEN_WIDTH, TILE_MAP_SIZE, TILE_SIZE};
 use log::error;
-use ppu::ppu::Ppu;
 use rkyv::deserialize;
 use rkyv::rancor::Error;
-use sm83_interp::common::post_boot::PostBoot;
 use sm83_interp::cpu::{ArchivedCpu, Cpu};
 use sm83_interp::joypad::ButtonsHeld;
 use sm83_interp::opcodes::decode;
@@ -23,7 +21,6 @@ const NINTENDO_LOGO: &[u8; 48] = include_bytes!("../nintendo_logo.bin");
 
 pub struct PPUViewApp {
     dmg_state: Cpu,
-    ppu_state: Ppu,
     tiles: Vec<TextureHandle>,
     tile_map_0: TextureHandle,
     tile_map_1: TextureHandle,
@@ -32,6 +29,7 @@ pub struct PPUViewApp {
     step_by_frames: u32,
     play: bool,
     buttons_held: ButtonsHeld,
+    logger_open: bool,
 }
 
 impl PPUViewApp {
@@ -52,39 +50,29 @@ impl PPUViewApp {
                 cpu.memory.buffer[0x014D] = 0xE7;
                 cpu
             },
-            ppu_state: Ppu::default(),
             tiles: (0..384)
                 .map(|tile_index| {
                     cc.egui_ctx.load_texture(
                         format!("Tile {tile_index}"),
-                        ColorImage::filled(
-                            [hw_constants::TILE_SIZE, hw_constants::TILE_SIZE],
-                            Color32::BLACK,
-                        ),
+                        ColorImage::filled([TILE_SIZE, TILE_SIZE], Color32::BLACK),
                         TextureOptions::NEAREST,
                     )
                 })
                 .collect(),
             tile_map_0: cc.egui_ctx.load_texture(
                 "Tile Map 0",
-                ColorImage::filled(
-                    [hw_constants::TILE_MAP_SIZE, hw_constants::TILE_MAP_SIZE],
-                    Color32::BLACK,
-                ),
+                ColorImage::filled([TILE_MAP_SIZE, TILE_MAP_SIZE], Color32::BLACK),
                 TextureOptions::NEAREST,
             ),
             tile_map_1: cc.egui_ctx.load_texture(
                 "Tile Map 1",
-                ColorImage::filled(
-                    [hw_constants::TILE_MAP_SIZE, hw_constants::TILE_MAP_SIZE],
-                    Color32::BLACK,
-                ),
+                ColorImage::filled([TILE_MAP_SIZE, TILE_MAP_SIZE], Color32::BLACK),
                 TextureOptions::NEAREST,
             ),
             screen: cc.egui_ctx.load_texture(
                 "Screen",
                 ColorImage::filled(
-                    [hw_constants::SCREEN_WIDTH, hw_constants::SCREEN_HEIGHT],
+                    [SCREEN_WIDTH as usize, SCREEN_HEIGHT as usize],
                     Color32::BLACK,
                 ),
                 TextureOptions::NEAREST,
@@ -93,34 +81,61 @@ impl PPUViewApp {
             step_by_frames: 1,
             play: false,
             buttons_held: ButtonsHeld::default(),
+            logger_open: false,
         }
+    }
+
+    fn draw_menu_bar(&mut self, ui: &mut Ui) {
+        egui::MenuBar::new().ui(ui, |ui| {
+            ui.menu_button("File", |ui| {
+                if ui.button("Load Bootrom (dmg.bin)").clicked() {
+                    self.dmg_state.load_boot_rom();
+                }
+
+                if ui.button("Load State").clicked() {
+                    let mut file = File::open("./savestate.bin").unwrap();
+                    let mut bytes = Vec::new();
+                    file.read_to_end(&mut bytes).unwrap();
+                    let archived = rkyv::access::<ArchivedCpu, Error>(&bytes).unwrap();
+                    self.dmg_state = deserialize::<Cpu, Error>(archived).unwrap();
+                }
+
+                if ui.button("Save State").clicked() {
+                    let bytes = rkyv::to_bytes::<Error>(&self.dmg_state).unwrap();
+                    let mut file = File::create("./savestate.bin").unwrap();
+                    file.write_all(&bytes).unwrap();
+                }
+
+                if ui.button("Reset").clicked() {
+                    self.dmg_state = Cpu::default();
+                }
+            });
+
+            ui.menu_button("Tools", |ui| {
+                self.logger_open = ui.button("Show Logger").clicked();
+            });
+        });
     }
 }
 
-fn step_once(dmg_state: &mut Cpu, ppu_state: &mut Ppu, buttons_held: ButtonsHeld) {
-    dmg_state.memory.update_joypad(buttons_held);
+fn step_once(dmg_state: &mut Cpu, buttons_held: ButtonsHeld) {
     if let Err(message) = dmg_state.execute() {
-        error!("{message}")
-    } else {
-        let m_cycles = dmg_state.memory.claim_ppu_cycles();
-        for _ in 0..m_cycles * 4 {
-            ppu_state.tick(&mut dmg_state.memory.buffer);
-        }
+        error!("{message}");
     }
-    dmg_state.handle_interrupts();
+    dmg_state.memory.update_joypad(buttons_held);
 }
 
-fn step_multiple(steps: u32, dmg_state: &mut Cpu, ppu_state: &mut Ppu, buttons_held: ButtonsHeld) {
+fn step_multiple(steps: u32, dmg_state: &mut Cpu, buttons_held: ButtonsHeld) {
     for _ in 0..steps {
-        step_once(dmg_state, ppu_state, buttons_held);
+        step_once(dmg_state, buttons_held);
     }
 }
 
-fn step_vblank(dmg_state: &mut Cpu, ppu_state: &mut Ppu, buttons_held: ButtonsHeld) {
+fn step_vblank(dmg_state: &mut Cpu, buttons_held: ButtonsHeld) {
     loop {
-        let ly_before_vblank = ppu_state.ly() == 143;
-        step_once(dmg_state, ppu_state, buttons_held);
-        if ly_before_vblank && ppu_state.ly() == 144 {
+        let ly_before_vblank = dmg_state.memory.ppu.ly() == 143;
+        step_once(dmg_state, buttons_held);
+        if ly_before_vblank && dmg_state.memory.ppu.ly() == 144 {
             return;
         }
     }
@@ -129,16 +144,18 @@ fn step_vblank(dmg_state: &mut Cpu, ppu_state: &mut Ppu, buttons_held: ButtonsHe
 impl eframe::App for PPUViewApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::Window::new("Log").show(ctx, |ui| {
-            // Draws the logger UI.
-            egui_logger::logger_ui().show(ui);
-        });
+        egui::Window::new("Log")
+            .open(&mut self.logger_open)
+            .show(ctx, |ui| {
+                // Draws the logger UI.
+                egui_logger::logger_ui().show(ui);
+            });
 
         egui::Window::new("PPU Output").show(ctx, |ui| {
             self.screen.set(
                 ColorImage::from_gray(
-                    [hw_constants::SCREEN_WIDTH, hw_constants::SCREEN_HEIGHT],
-                    &self.ppu_state.funny_buffer_test,
+                    [SCREEN_WIDTH as usize, SCREEN_HEIGHT as usize],
+                    &self.dmg_state.memory.ppu.lcd_buffer,
                 ),
                 TextureOptions::NEAREST,
             );
@@ -147,31 +164,7 @@ impl eframe::App for PPUViewApp {
         });
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            egui::MenuBar::new().ui(ui, |ui| {
-                ui.menu_button("File", |ui| {
-                    if ui.button("Load Bootrom (dmg.bin)").clicked() {
-                        self.dmg_state.load_boot_rom();
-                    }
-
-                    if ui.button("Load State").clicked() {
-                        let mut file = File::open("./savestate.bin").unwrap();
-                        let mut bytes = Vec::new();
-                        file.read_to_end(&mut bytes).unwrap();
-                        let archived = rkyv::access::<ArchivedCpu, Error>(&bytes).unwrap();
-                        self.dmg_state = deserialize::<Cpu, Error>(archived).unwrap();
-                    }
-
-                    if ui.button("Save State").clicked() {
-                        let bytes = rkyv::to_bytes::<Error>(&self.dmg_state).unwrap();
-                        let mut file = File::create("./savestate.bin").unwrap();
-                        file.write_all(&bytes).unwrap();
-                    }
-
-                    if ui.button("Reset").clicked() {
-                        self.dmg_state = Cpu::default();
-                    }
-                });
-            });
+            self.draw_menu_bar(ui);
         });
 
         egui::SidePanel::right("Registers")
@@ -208,12 +201,7 @@ impl eframe::App for PPUViewApp {
 
             ui.horizontal(|ui| {
                 if ui.button("Step multiple").clicked() {
-                    step_multiple(
-                        self.step_by_cycles,
-                        &mut self.dmg_state,
-                        &mut self.ppu_state,
-                        self.buttons_held,
-                    );
+                    step_multiple(self.step_by_cycles, &mut self.dmg_state, self.buttons_held);
                 }
 
                 ui.add(Slider::new(&mut self.step_by_cycles, 0..=1_000_000));
@@ -222,7 +210,7 @@ impl eframe::App for PPUViewApp {
             ui.horizontal(|ui| {
                 if ui.button("Step vblank").clicked() {
                     for _ in 0..self.step_by_frames {
-                        step_vblank(&mut self.dmg_state, &mut self.ppu_state, self.buttons_held);
+                        step_vblank(&mut self.dmg_state, self.buttons_held);
                     }
                 }
 
@@ -233,7 +221,7 @@ impl eframe::App for PPUViewApp {
                 self.play = !self.play;
             }
             if self.play {
-                step_vblank(&mut self.dmg_state, &mut self.ppu_state, self.buttons_held);
+                step_vblank(&mut self.dmg_state, self.buttons_held);
             }
 
             draw_oam_table(ui, &mut self.tiles, &self.dmg_state);
