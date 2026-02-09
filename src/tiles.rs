@@ -5,7 +5,7 @@ use egui_extras::{Column, TableBody, TableBuilder};
 use ppu::tiles;
 use sm83_interp::cpu::Cpu;
 
-const TILE_SCALE: usize = 4;
+const TILE_SCALE: f32 = 4.0;
 
 pub fn draw_tile_table(ui: &mut Ui, tiles: &mut [TextureHandle], dmg_state: &Cpu) {
     ui.heading("Tile Data: 0x8000-0x9800");
@@ -28,7 +28,7 @@ pub fn greyscale_from_tile(tile: &[u8; 16]) -> Vec<u8> {
 
 fn draw_tiles_body(body: TableBody<'_>, tiles: &mut [TextureHandle], dmg_state: &Cpu) {
     body.rows(
-        (hw_constants::TILE_SIZE * TILE_SCALE) as f32,
+        f32::from(hw_constants::TILE_SIZE) * TILE_SCALE,
         tiles.len() / 8,
         |mut row| {
             let row_index = row.index() * 8;
@@ -36,10 +36,10 @@ fn draw_tiles_body(body: TableBody<'_>, tiles: &mut [TextureHandle], dmg_state: 
             for i in 0..8 {
                 let tile = &mut tiles[row_index + i];
 
-                let tile_data = tiles::unsigned_nth_tile(&dmg_state.memory.buffer, row_index + i);
+                let tile_data = tiles::unsigned_nth_tile(dmg_state.memory.buffer.as_slice(), row_index + i);
                 tile.set(
                     ColorImage::from_gray(
-                        [hw_constants::TILE_SIZE, hw_constants::TILE_SIZE],
+                        [hw_constants::TILE_SIZE as usize, hw_constants::TILE_SIZE as usize],
                         &greyscale_from_tile(tile_data),
                     ),
                     TextureOptions::NEAREST,
@@ -47,7 +47,7 @@ fn draw_tiles_body(body: TableBody<'_>, tiles: &mut [TextureHandle], dmg_state: 
 
                 row.col(|ui| {
                     ui.add(
-                        egui::Image::from_texture(&*tile).fit_to_original_size(TILE_SCALE as f32),
+                        egui::Image::from_texture(&*tile).fit_to_original_size(TILE_SCALE),
                     );
                 });
             }

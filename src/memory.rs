@@ -20,7 +20,7 @@ fn draw_memory_body(ui: &mut Ui, dmg_state: &Cpu) {
     egui::ScrollArea::vertical().show_rows(ui, 18.0, 0x10000 / 16, |ui, row_range| {
         for row in row_range {
             ui.horizontal(|ui| {
-                let row_index = row as u16 * 16;
+                let row_index = u16::try_from(row).unwrap() * 16;
                 let row_label = format!("{:03X}0", row_index / 16);
                 ui.label(row_label);
 

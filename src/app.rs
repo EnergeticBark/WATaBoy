@@ -54,19 +54,19 @@ impl PPUViewApp {
                 .map(|tile_index| {
                     cc.egui_ctx.load_texture(
                         format!("Tile {tile_index}"),
-                        ColorImage::filled([TILE_SIZE, TILE_SIZE], Color32::BLACK),
+                        ColorImage::filled([TILE_SIZE as usize, TILE_SIZE as usize], Color32::BLACK),
                         TextureOptions::NEAREST,
                     )
                 })
                 .collect(),
             tile_map_0: cc.egui_ctx.load_texture(
                 "Tile Map 0",
-                ColorImage::filled([TILE_MAP_SIZE, TILE_MAP_SIZE], Color32::BLACK),
+                ColorImage::filled([TILE_MAP_SIZE as usize, TILE_MAP_SIZE as usize], Color32::BLACK),
                 TextureOptions::NEAREST,
             ),
             tile_map_1: cc.egui_ctx.load_texture(
                 "Tile Map 1",
-                ColorImage::filled([TILE_MAP_SIZE, TILE_MAP_SIZE], Color32::BLACK),
+                ColorImage::filled([TILE_MAP_SIZE as usize, TILE_MAP_SIZE as usize], Color32::BLACK),
                 TextureOptions::NEAREST,
             ),
             screen: cc.egui_ctx.load_texture(

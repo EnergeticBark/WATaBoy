@@ -3,9 +3,11 @@ use eframe::epaint::textures::TextureOptions;
 use eframe::epaint::{ColorImage, TextureHandle};
 use egui::emath::RectTransform;
 use egui::{Color32, Frame, Stroke, StrokeKind, Ui, Vec2, pos2};
-use hw_constants::io_regs;
+use hw_constants::{TILE_MAP_SIZE, io_regs};
 use ppu::{lcd_control, tiles};
 use sm83_interp::cpu::Cpu;
+
+const TILE_MAP_SCALE: f32 = 1.0;
 
 fn draw_tile_map(
     ui: &mut Ui,
@@ -20,10 +22,14 @@ fn draw_tile_map(
         for column in 0..32 {
             let tile_id = tile_map[row * 32 + column];
 
-            let tile_data = if lcd_control::bg_and_window_tiles(&dmg_state.memory.buffer) {
-                tiles::unsigned_nth_tile(&dmg_state.memory.buffer, tile_id as usize)
+            let tile_data = if lcd_control::bg_and_window_tiles(dmg_state.memory.buffer.as_slice())
+            {
+                tiles::unsigned_nth_tile(dmg_state.memory.buffer.as_slice(), tile_id as usize)
             } else {
-                tiles::signed_nth_tile(&dmg_state.memory.buffer, tile_id.cast_signed() as isize)
+                tiles::signed_nth_tile(
+                    dmg_state.memory.buffer.as_slice(),
+                    tile_id.cast_signed() as isize,
+                )
             };
 
             let greyscale_tile = crate::tiles::greyscale_from_tile(tile_data);
@@ -83,21 +89,29 @@ pub fn draw_tile_map_0(ui: &mut Ui, tile_map_0_texture: &mut TextureHandle, dmg_
     ui.vertical(|ui| {
         ui.heading("Tile Map 0: 0x9800-0x9C00");
 
-        let tile_map = tiles::tile_map_0(&dmg_state.memory.buffer);
+        let tile_map = tiles::tile_map_0(dmg_state.memory.buffer.as_slice());
 
         Frame::canvas(ui.style()).show(ui, |ui| {
-            let (_, rect) = ui.allocate_space(Vec2::new(512.0, 512.0));
-            let to_screen =
-                RectTransform::from_to(Rect::from_x_y_ranges(0.0..=255.0, 0.0..=255.0), rect);
+            let (_, rect) = ui.allocate_space(Vec2::new(
+                f32::from(TILE_MAP_SIZE) * TILE_MAP_SCALE,
+                f32::from(TILE_MAP_SIZE) * TILE_MAP_SCALE,
+            ));
+            let to_screen = RectTransform::from_to(
+                Rect::from_x_y_ranges(
+                    0.0..=f32::from(TILE_MAP_SIZE - 1),
+                    0.0..=f32::from(TILE_MAP_SIZE - 1),
+                ),
+                rect,
+            );
 
             draw_tile_map(ui, rect, tile_map_0_texture, tile_map, dmg_state);
 
-            if lcd_control::bg_and_window_enabled(&dmg_state.memory.buffer) {
-                if !lcd_control::bg_tile_map(&dmg_state.memory.buffer) {
+            if lcd_control::bg_and_window_enabled(dmg_state.memory.buffer.as_slice()) {
+                if !lcd_control::bg_tile_map(dmg_state.memory.buffer.as_slice()) {
                     highlight_background(ui, to_screen, dmg_state);
                 }
-                if !lcd_control::window_tile_map(&dmg_state.memory.buffer)
-                    && lcd_control::window_enabled(&dmg_state.memory.buffer)
+                if !lcd_control::window_tile_map(dmg_state.memory.buffer.as_slice())
+                    && lcd_control::window_enabled(dmg_state.memory.buffer.as_slice())
                 {
                     highlight_window(ui, to_screen, dmg_state);
                 }
@@ -110,21 +124,29 @@ pub fn draw_tile_map_1(ui: &mut Ui, tile_map_1_texture: &mut TextureHandle, dmg_
     ui.vertical(|ui| {
         ui.heading("Tile Map 1: 0x9C00-0xA000");
 
-        let tile_map = tiles::tile_map_1(&dmg_state.memory.buffer);
+        let tile_map = tiles::tile_map_1(dmg_state.memory.buffer.as_slice());
 
         Frame::canvas(ui.style()).show(ui, |ui| {
-            let (_, rect) = ui.allocate_space(Vec2::new(512.0, 512.0));
-            let to_screen =
-                RectTransform::from_to(Rect::from_x_y_ranges(0.0..=255.0, 0.0..=255.0), rect);
+            let (_, rect) = ui.allocate_space(Vec2::new(
+                f32::from(TILE_MAP_SIZE) * TILE_MAP_SCALE,
+                f32::from(TILE_MAP_SIZE) * TILE_MAP_SCALE,
+            ));
+            let to_screen = RectTransform::from_to(
+                Rect::from_x_y_ranges(
+                    0.0..=f32::from(TILE_MAP_SIZE - 1),
+                    0.0..=f32::from(TILE_MAP_SIZE - 1),
+                ),
+                rect,
+            );
 
             draw_tile_map(ui, rect, tile_map_1_texture, tile_map, dmg_state);
 
-            if lcd_control::bg_and_window_enabled(&dmg_state.memory.buffer) {
-                if lcd_control::bg_tile_map(&dmg_state.memory.buffer) {
+            if lcd_control::bg_and_window_enabled(dmg_state.memory.buffer.as_slice()) {
+                if lcd_control::bg_tile_map(dmg_state.memory.buffer.as_slice()) {
                     highlight_background(ui, to_screen, dmg_state);
                 }
-                if lcd_control::window_tile_map(&dmg_state.memory.buffer)
-                    && lcd_control::window_enabled(&dmg_state.memory.buffer)
+                if lcd_control::window_tile_map(dmg_state.memory.buffer.as_slice())
+                    && lcd_control::window_enabled(dmg_state.memory.buffer.as_slice())
                 {
                     highlight_window(ui, to_screen, dmg_state);
                 }
