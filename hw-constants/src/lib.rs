@@ -15,6 +15,6 @@ pub const SCREEN_WIDTH: u8 = 160;
 pub const SCREEN_HEIGHT: u8 = 144;
 pub const SCREEN_SIZE: usize = SCREEN_WIDTH as usize * SCREEN_HEIGHT as usize;
 
-pub const TILE_MAP_SIZE: usize = 256;
+pub const TILE_MAP_SIZE: u16 = 256;
 
-pub const TILE_SIZE: usize = 8;
+pub const TILE_SIZE: u8 = 8;
