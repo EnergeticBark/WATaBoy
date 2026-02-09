@@ -29,6 +29,13 @@ fn draw_memory_body(ui: &mut Ui, dmg_state: &Cpu) {
 
                     if row_index + i == dmg_state.registers.pc {
                         ui.strong(RichText::from(formatted_row).color(Color32::RED));
+                    } else if row_index + i == dmg_state.registers.sp {
+                        let sp_color = if ui.visuals().dark_mode {
+                            Color32::LIGHT_BLUE
+                        } else {
+                            Color32::BLUE
+                        };
+                        ui.strong(RichText::from(formatted_row).color(sp_color));
                     } else {
                         ui.strong(formatted_row);
                     }

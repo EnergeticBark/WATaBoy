@@ -1,4 +1,4 @@
-use egui::Ui;
+use egui::{Color32, RichText, Ui};
 use egui_extras::{Column, TableBody, TableBuilder};
 use sm83_interp::cpu::Cpu;
 
@@ -40,7 +40,18 @@ fn draw_registers_body(body: TableBody<'_>, dmg_state: &Cpu) {
         let (name, value) = &formatted[row_index];
 
         row.col(|ui| {
-            ui.label(*name);
+            if *name == "PC" {
+                ui.label(RichText::from(*name).color(Color32::RED));
+            } else if *name == "SP" {
+                let sp_color = if ui.visuals().dark_mode {
+                    Color32::LIGHT_BLUE
+                } else {
+                    Color32::BLUE
+                };
+                ui.label(RichText::from(*name).color(sp_color));
+            } else {
+                ui.label(*name);
+            }
         });
         row.col(|ui| {
             ui.label(value);
