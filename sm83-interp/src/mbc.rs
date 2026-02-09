@@ -7,7 +7,6 @@ const RAM_SIZE_ADDR: usize = 0x0149;
 
 const RAM_BANK_SIZE: usize = 0x2000;
 
-
 // TODO: Add the other MBC types.
 #[derive(Default)]
 enum MbcKind {
@@ -160,7 +159,7 @@ impl Mbc {
                     memory[index as usize] = value;
                 }
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 }

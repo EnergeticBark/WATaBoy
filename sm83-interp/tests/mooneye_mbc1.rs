@@ -1,8 +1,9 @@
 pub mod common;
 
+use crate::common::mooneye::{FIBONACCI, run_mooneye_test};
+
 use hw_constants::PostBoot;
 use sm83_interp::cpu::Cpu;
-use crate::common::mooneye::{run_mooneye_test, FIBONACCI};
 
 #[test]
 fn test_bits_bank1() {

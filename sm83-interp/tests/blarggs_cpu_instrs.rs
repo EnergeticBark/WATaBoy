@@ -1,8 +1,9 @@
 pub mod common;
 
+use crate::common::blarggs::{BlarggTest, run_blargg_test};
+
 use hw_constants::PostBoot;
 use sm83_interp::cpu::Cpu;
-use crate::common::blarggs::{run_blargg_test, BlarggTest};
 
 const SPECIAL_01: BlarggTest = BlarggTest {
     rom: include_bytes!("roms/blarggs/cpu_instrs/01-special.gb"),

@@ -1,5 +1,6 @@
-use std::collections::VecDeque;
 use crate::lcd_control::obj_size;
+
+use std::collections::VecDeque;
 
 const OBJ_SIZE: usize = 4;
 
@@ -56,6 +57,9 @@ impl Obj {
     }
 }
 
+/// # Panics
+/// 
+/// Will panic if the provided index causes an out of bounds memory read.
 #[must_use]
 pub fn nth_obj(memory: &[u8], index: usize) -> Obj {
     let offset = index * OBJ_SIZE;

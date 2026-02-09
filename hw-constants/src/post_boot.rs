@@ -1,4 +1,4 @@
-use crate::{io_regs, MEM_MAP_SIZE};
+use crate::{MEM_MAP_SIZE, io_regs};
 
 pub trait PostBoot: Sized {
     fn post_boot_dmg() -> Self;
@@ -6,9 +6,10 @@ pub trait PostBoot: Sized {
 
 // Values are from the "DMG / MGB" column of Pan Docs's table on hardware registers.
 // See: https://gbdev.io/pandocs/Power_Up_Sequence.html#hardware-registers
+#[allow(clippy::missing_panics_doc)]
 #[must_use]
-pub fn post_boot_hwio() -> [u8; MEM_MAP_SIZE] {
-    let mut buffer = [0_u8; MEM_MAP_SIZE];
+pub fn post_boot_hwio() -> Box<[u8; MEM_MAP_SIZE]> {
+    let mut buffer: Box<[u8; MEM_MAP_SIZE]> = vec![0; MEM_MAP_SIZE].into_boxed_slice().try_into().unwrap();
     buffer[0xA000..0xC000].fill(0xFF);
     buffer[io_regs::JOYP as usize] = 0xCF;
     buffer[io_regs::SC as usize] = 0x7E;

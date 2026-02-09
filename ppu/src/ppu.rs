@@ -1,12 +1,12 @@
-use std::collections::VecDeque;
 use crate::bg_fetcher::{BackgroundFetcher, Pixel};
 use crate::oam::Obj;
 use crate::obj_fetcher::ObjectFetcher;
-use crate::{lcd_control, oam, lcd_status, palette};
-
-use hw_constants::{io_regs, PostBoot, SCREEN_WIDTH, SCREEN_SIZE};
-use log::{info, trace};
 use crate::palette::Palette;
+use crate::{lcd_control, lcd_status, oam, palette};
+
+use hw_constants::{PostBoot, SCREEN_SIZE, SCREEN_WIDTH, io_regs};
+use log::{info, trace};
+use std::collections::VecDeque;
 
 const SCANLINES_PER_FRAME: usize = 154;
 const DOTS_PER_SCANLINE: usize = 456;
@@ -64,12 +64,12 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
 
 impl Ppu {
     #[allow(clippy::cast_possible_truncation)]
-    #[must_use] 
+    #[must_use]
     pub fn ly(&self) -> u8 {
         (self.dot_counter / DOTS_PER_SCANLINE) as u8
     }
-    
-    #[must_use] 
+
+    #[must_use]
     pub fn dots_this_line(&self) -> usize {
         self.dot_counter % DOTS_PER_SCANLINE
     }
@@ -122,7 +122,7 @@ impl Ppu {
         memory[io_regs::LY as usize] = self.ly();
     }
 
-    fn update_stat_mode(&self, memory: &mut [u8], mode: PpuMode) {
+    fn update_stat_mode(memory: &mut [u8], mode: PpuMode) {
         match mode {
             PpuMode::HBlank => lcd_status::set_ppu_mode(memory, 0),
             PpuMode::VBlank => lcd_status::set_ppu_mode(memory, 1),
@@ -156,6 +156,9 @@ impl Ppu {
     }
 
     // Advance the PPU by 1 dot.
+    #[allow(clippy::too_many_lines)]
+    // Only panics if internal assertions fail, and they never should.
+    #[allow(clippy::missing_panics_doc)]
     pub fn tick(&mut self, memory: &mut [u8]) {
         if !lcd_control::lcd_and_ppu_enabled(memory) {
             if !self.disabled {
@@ -181,7 +184,6 @@ impl Ppu {
         // Do evil initial line 0 shenanigans.
         // TODO: None of this is right for line 0. It doesn't pass lcdon yet.
         if self.just_enabled {
-
             // Observable 1.
             if self.dot_counter == 0 {
                 self.stat_mode_for_interrupt = 0xFF;
@@ -190,7 +192,7 @@ impl Ppu {
 
             // Observable 79.
             if self.dot_counter == 78 {
-                self.update_stat_mode(memory, PpuMode::Drawing);
+                Self::update_stat_mode(memory, PpuMode::Drawing);
                 self.stat_mode_for_interrupt = 3;
                 self.update_stat_interrupt(memory);
             }
@@ -202,7 +204,7 @@ impl Ppu {
 
             // Observable 256.
             if self.dot_counter == 255 {
-                self.update_stat_mode(memory, PpuMode::HBlank);
+                Self::update_stat_mode(memory, PpuMode::HBlank);
                 self.dot_counter += FIRST_LINE_SHORTENED; // Skip 4 extra cycles to match SameBoy's 8 total.
             }
 
@@ -230,13 +232,13 @@ impl Ppu {
                         self.stat_mode_for_interrupt = 2;
                     }
 
-                    self.update_stat_mode(memory, PpuMode::HBlank);
+                    Self::update_stat_mode(memory, PpuMode::HBlank);
                     self.update_stat_interrupt(memory);
                 }
 
                 // Observable 4.
                 if self.dots_this_line() == 3 {
-                    self.update_stat_mode(memory, PpuMode::OamScan);
+                    Self::update_stat_mode(memory, PpuMode::OamScan);
 
                     self.ly_to_compare_lyc = self.ly();
 
@@ -256,7 +258,7 @@ impl Ppu {
             PpuMode::Drawing => {
                 // Observable 84.
                 if self.dots_this_line() == 83 {
-                    self.update_stat_mode(memory, PpuMode::Drawing);
+                    Self::update_stat_mode(memory, PpuMode::Drawing);
 
                     self.stat_mode_for_interrupt = 3;
                     self.update_stat_interrupt(memory);
@@ -273,11 +275,12 @@ impl Ppu {
                     // Combine FIFOs.
                     if let Some(bg_pixel) = self.bg_fetcher.shift_out() {
                         if self.pixels_to_drop > 0 {
-                            self.pixels_to_drop -= 1
+                            self.pixels_to_drop -= 1;
                         } else {
                             // If the background/window is disabled, use a pixel with a value of 0.
                             // See: https://gbdev.io/pandocs/pixel_fifo.html#pixel-rendering
-                            let mut pixel_to_render = if lcd_control::bg_and_window_enabled(memory) {
+                            let mut pixel_to_render = if lcd_control::bg_and_window_enabled(memory)
+                            {
                                 bg_pixel
                             } else {
                                 Pixel {
@@ -288,7 +291,9 @@ impl Ppu {
                                 }
                             };
 
-                            if let Some(obj_pixel) = self.obj_fetcher.shift_out() && lcd_control::obj_enabled(memory) {
+                            if let Some(obj_pixel) = self.obj_fetcher.shift_out()
+                                && lcd_control::obj_enabled(memory)
+                            {
                                 pixel_to_render = mix_pixels(pixel_to_render, obj_pixel);
                             }
 
@@ -307,7 +312,7 @@ impl Ppu {
                                 Palette::Obp0 => palette::map_to_obp0(memory, funny_greyscale),
                                 Palette::Obp1 => palette::map_to_obp1(memory, funny_greyscale),
                             };
-                            
+
                             // Get the colors in their correct greyscale values.
                             self.lcd_buffer[lcd_pixel_index] = 255 - color.into_bits() * 64;
 
@@ -338,7 +343,7 @@ impl Ppu {
             PpuMode::HBlank => {
                 // Observable 4 dots into HBlank, or 256 with the shortest mode 3.
                 if self.dots_in_mode == 3 {
-                    self.update_stat_mode(memory, PpuMode::HBlank);
+                    Self::update_stat_mode(memory, PpuMode::HBlank);
                     self.stat_mode_for_interrupt = 0;
                     self.update_stat_interrupt(memory);
                 }
@@ -360,14 +365,13 @@ impl Ppu {
             PpuMode::VBlank => {
                 // TODO: Handle special line 453
 
-
                 // TODO: Observable 2.
 
                 // Observable 4.
                 if self.dots_this_line() == 3 {
                     self.ly_to_compare_lyc = self.ly();
                     if self.ly() == 144 {
-                        self.update_stat_mode(memory, PpuMode::VBlank);
+                        Self::update_stat_mode(memory, PpuMode::VBlank);
                         // Request the VBlank interrupt.
                         memory[io_regs::IF as usize] |= 0b0000_0001;
 
@@ -407,7 +411,7 @@ impl Ppu {
                     self.stat_interrupt_line,
                 );
             }
-            _ => ()
+            _ => (),
         }
     }
 }

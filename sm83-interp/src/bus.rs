@@ -1,16 +1,16 @@
 use crate::mbc::Mbc;
 use crate::timers::Timers;
-
-use hw_constants::{io_regs, PostBoot};
-use std::ops::{Index, Range};
-use log::info;
-use rkyv::{Archive, Deserialize, Serialize, with::Skip};
-use ppu::ppu::Ppu;
 use crate::joypad::{ButtonsHeld, Joyp};
+
+use hw_constants::{PostBoot, io_regs};
+use log::info;
+use ppu::ppu::Ppu;
+use rkyv::{Archive, Deserialize, Serialize, with::Skip};
+use std::ops::{Index, Range};
 
 #[derive(Archive, Deserialize, Serialize)]
 pub struct AddressBus {
-    pub buffer: [u8; hw_constants::MEM_MAP_SIZE],
+    pub buffer: Box<[u8; hw_constants::MEM_MAP_SIZE]>,
     timers: Timers,
     // Number of MCycles the PPU needs to run to catch up with the CPU.
     #[rkyv(with = Skip)]
@@ -29,9 +29,9 @@ impl AddressBus {
         match index {
             // Delegate write in the ROM range and the SRAM range to the MBC.
             0x0000..0x8000 | 0xA000..0xC000 => {
-                self.mbc.write_byte(&mut self.buffer, index, value);
+                self.mbc.write_byte(self.buffer.as_mut_slice(), index, value);
             }
-            
+
             // Initiate OAM transfer.
             0xFF46 => {
                 // Actually write the value to this address before starting the OAM DMA transfer.
@@ -58,7 +58,7 @@ impl AddressBus {
                 self.buffer[index as usize] &= 0b1000_0111;
                 let masked_value = value & 0b0111_1000;
                 self.buffer[index as usize] |= masked_value;
-            },
+            }
             io_regs::NR10 => self.buffer[index as usize] = value | 0b1000_0000,
             io_regs::NR30 => self.buffer[index as usize] = value | 0b0111_1111,
             io_regs::NR32 => self.buffer[index as usize] = value | 0b1001_1111,
@@ -76,15 +76,15 @@ impl AddressBus {
 
     pub fn half_increment_timers(&mut self) {
         for _ in 0..2 {
-            self.ppu.tick(&mut self.buffer);
+            self.ppu.tick(self.buffer.as_mut_slice());
         }
-        
+
         if !self.half_ticked {
             self.half_ticked = true;
             return;
         }
         self.half_ticked = false;
-        
+
         self.timers
             .update_timer_counter(self.buffer[io_regs::TIMA as usize]);
         self.timers
@@ -104,7 +104,7 @@ impl AddressBus {
 
     pub fn increment_timers(&mut self, m_cycles: u16) {
         for _ in 0..m_cycles * 4 {
-            self.ppu.tick(&mut self.buffer);
+            self.ppu.tick(self.buffer.as_mut_slice());
         }
 
         self.timers
@@ -146,7 +146,7 @@ impl AddressBus {
 impl Default for AddressBus {
     fn default() -> Self {
         Self {
-            buffer: [0; hw_constants::MEM_MAP_SIZE],
+            buffer: vec![0; hw_constants::MEM_MAP_SIZE].into_boxed_slice().try_into().unwrap(),
             timers: Timers::default(),
             ppu: Ppu::default(),
             mbc: Mbc::default(),

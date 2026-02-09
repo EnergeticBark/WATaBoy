@@ -1,9 +1,9 @@
 use crate::lcd_control::{bg_tile_map, window_tile_map};
 use crate::{lcd_control, tiles};
+use crate::palette::Palette;
 
 use hw_constants::io_regs;
 use std::collections::VecDeque;
-use crate::palette::Palette;
 
 #[derive(Copy, Clone)]
 pub struct Pixel {

@@ -1,10 +1,10 @@
 use crate::bg_fetcher::Pixel;
 use crate::oam::Obj;
 use crate::tiles;
-
-use std::collections::VecDeque;
 use crate::lcd_control::obj_size;
 use crate::palette::Palette;
+
+use std::collections::VecDeque;
 
 // The ObjectFetcher's pixel FIFO always contains 8 pixels.
 // Each time a pixel is popped from the queue, a transparent pixel is pushed to the back of the
@@ -20,10 +20,23 @@ const TRANSPARENT: Pixel = Pixel {
 
 enum ObjectFetcherState {
     Idle,
-    GetTile { ticks_remaining: u8, obj: Obj },
-    GetTileDataLow { ticks_remaining: u8, obj: Obj, obj_line: u8 },
-    GetTileDataHigh { ticks_remaining: u8, obj: Obj, obj_line: u8 },
-    Push { obj: Obj },
+    GetTile {
+        ticks_remaining: u8,
+        obj: Obj,
+    },
+    GetTileDataLow {
+        ticks_remaining: u8,
+        obj: Obj,
+        obj_line: u8,
+    },
+    GetTileDataHigh {
+        ticks_remaining: u8,
+        obj: Obj,
+        obj_line: u8,
+    },
+    Push {
+        obj: Obj,
+    },
 }
 
 pub struct ObjectFetcher {
@@ -64,25 +77,23 @@ impl ObjectFetcher {
         if obj.x_flip() {
             self.push_bit_range(to_discard..8, obj);
         } else {
-            self.push_bit_range((0..8-to_discard).rev(), obj);
+            self.push_bit_range((0..8 - to_discard).rev(), obj);
         }
     }
 
     fn push_bit_range<T: Iterator<Item = u8>>(&mut self, bit_range: T, obj: Obj) {
         let old_pixels = self.fifo.iter_mut();
-        let new_pixels = bit_range.map(|nth_bit| {
-            Pixel {
-                low: (self.tile_data_low >> nth_bit) & 1 == 1,
-                high: (self.tile_data_high >> nth_bit) & 1 == 1,
-                palette: {
-                    if obj.palette() {
-                        Palette::Obp1
-                    } else {
-                        Palette::Obp0
-                    }
-                },
-                priority: obj.priority(),
-            }
+        let new_pixels = bit_range.map(|nth_bit| Pixel {
+            low: (self.tile_data_low >> nth_bit) & 1 == 1,
+            high: (self.tile_data_high >> nth_bit) & 1 == 1,
+            palette: {
+                if obj.palette() {
+                    Palette::Obp1
+                } else {
+                    Palette::Obp0
+                }
+            },
+            priority: obj.priority(),
         });
         // Replace any transparent pixels that are currently on the queue with the new pixels.
         for (old, new) in old_pixels.zip(new_pixels) {
@@ -97,7 +108,7 @@ impl ObjectFetcher {
         let obj_line = current_scanline + 16 - obj.y_pos;
         // If the object isn't flipped vertically, just return the line.
         if !obj.y_flip() {
-            return obj_line
+            return obj_line;
         }
 
         // If the object is flipped we need to subtract from its height - 1.
@@ -142,18 +153,40 @@ impl ObjectFetcher {
                     // This used to be ticks_remaining: 1. But Idle is taking its own tick, so it's
                     // probably more accurate to use ticks_remaining: 0 so GetTile finishes after
                     // two ticks instead of three.
-                    self.state = ObjectFetcherState::GetTile { ticks_remaining: 0, obj };
+                    self.state = ObjectFetcherState::GetTile {
+                        ticks_remaining: 0,
+                        obj,
+                    };
                 }
             }
-            ObjectFetcherState::GetTile { ticks_remaining: 0, obj } => {
+            ObjectFetcherState::GetTile {
+                ticks_remaining: 0,
+                obj,
+            } => {
                 let obj_line = Self::get_tile(current_scanline, obj, obj_size(memory));
-                self.state = ObjectFetcherState::GetTileDataLow { ticks_remaining: 1, obj, obj_line };
+                self.state = ObjectFetcherState::GetTileDataLow {
+                    ticks_remaining: 1,
+                    obj,
+                    obj_line,
+                };
             }
-            ObjectFetcherState::GetTileDataLow { ticks_remaining: 0, obj, obj_line } => {
+            ObjectFetcherState::GetTileDataLow {
+                ticks_remaining: 0,
+                obj,
+                obj_line,
+            } => {
                 self.get_tile_data_low(memory, obj, obj_line);
-                self.state = ObjectFetcherState::GetTileDataHigh { ticks_remaining: 1, obj, obj_line };
+                self.state = ObjectFetcherState::GetTileDataHigh {
+                    ticks_remaining: 1,
+                    obj,
+                    obj_line,
+                };
             }
-            ObjectFetcherState::GetTileDataHigh { ticks_remaining: 0, obj, obj_line } => {
+            ObjectFetcherState::GetTileDataHigh {
+                ticks_remaining: 0,
+                obj,
+                obj_line,
+            } => {
                 self.get_tile_data_high(memory, obj, obj_line);
                 self.state = ObjectFetcherState::Push { obj };
             }
@@ -163,9 +196,18 @@ impl ObjectFetcher {
             }
 
             // Countdown
-            ObjectFetcherState::GetTile { ref mut ticks_remaining, .. }
-            | ObjectFetcherState::GetTileDataLow { ref mut ticks_remaining, .. }
-            | ObjectFetcherState::GetTileDataHigh { ref mut ticks_remaining, .. } => *ticks_remaining -= 1,
+            ObjectFetcherState::GetTile {
+                ref mut ticks_remaining,
+                ..
+            }
+            | ObjectFetcherState::GetTileDataLow {
+                ref mut ticks_remaining,
+                ..
+            }
+            | ObjectFetcherState::GetTileDataHigh {
+                ref mut ticks_remaining,
+                ..
+            } => *ticks_remaining -= 1,
         }
     }
 }

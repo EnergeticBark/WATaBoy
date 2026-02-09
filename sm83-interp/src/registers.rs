@@ -1,7 +1,8 @@
 use crate::parameters::{R16, R16Stack};
+
 use bitfield_struct::bitfield;
-use rkyv::{Archive, Deserialize, Serialize};
 use hw_constants::PostBoot;
+use rkyv::{Archive, Deserialize, Serialize};
 
 #[bitfield(u8, order = Msb)]
 #[derive(Archive, Deserialize, Serialize)]

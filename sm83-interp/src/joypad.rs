@@ -32,4 +32,3 @@ pub struct ButtonsHeld {
     pub left: bool,
     pub right: bool,
 }
-
