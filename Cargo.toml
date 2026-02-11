@@ -1,0 +1,11 @@
+[package]
+name = "sm83-jit"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+wasm-encoder = "0.244"
+sm83-interp = { path = "../wasmboy/sm83-interp" }

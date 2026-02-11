@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<script type="module">
+		const instantiate_and_link_module = (bufferPtr, bufferLen) => {
+			console.log("Instantiate and link called...");
+			console.log("Ptr: " + bufferPtr);
+			console.log("Len " + bufferLen);
+						
+			const bytecode = new Uint8Array(instance.exports.memory.buffer, bufferPtr, bufferLen);
+			console.log(bytecode);
+			
+			const anotherMod = new WebAssembly.Module(bytecode);
+			const anotherInstance = new WebAssembly.Instance(anotherMod, {});
+			console.log(anotherInstance);
+			
+			__indirect_function_table.grow(1, anotherInstance.exports.add_r)
+			
+			// Hardcoded func_idx for now.
+			return 32;
+		}
+		
+		const __indirect_function_table = new WebAssembly.Table({ initial: 32, element: "anyfunc" });
+	
+		const importObj = {env: {instantiate_and_link_module, __indirect_function_table}};
+		
+		const source = fetch("../target/wasm32-unknown-unknown/release/sm83_jit.wasm");
+		const {instance} = await WebAssembly.instantiateStreaming(source, importObj);
+		
+		// instance.exports.call_indirect(1);
+		const a = instance.exports.test_make_add();
+		console.log("a value: " + a);
+
+		console.log("done :)");
+	</script>
+	<title>Title</title>
+</head>
+<body>
+
+</body>
+</html>
