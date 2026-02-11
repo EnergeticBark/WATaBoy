@@ -1,15 +1,17 @@
 use crate::bus::AddressBus;
-use crate::common::post_boot::PostBoot;
-use crate::cycles::{m_cycles, prefix_m_cycles};
+use crate::cycles::m_cycles;
 use crate::opcodes::{Opcode, PrefixOpcode};
 use crate::parameters::{Condition, R8, R16, R16Mem};
 use crate::registers::Registers;
 use crate::{opcodes, registers};
-use hw_constants::io_regs;
+
+use hw_constants::{PostBoot, io_regs};
+use log::info;
+use rkyv::{Archive, Deserialize, Serialize};
 
 const DMG_BOOT_ROM: &[u8] = include_bytes!("../dmg.bin");
 
-#[derive(Default)]
+#[derive(Default, Archive, Deserialize, Serialize)]
 pub struct Cpu {
     pub registers: Registers,
     pub memory: AddressBus,
@@ -19,7 +21,7 @@ pub struct Cpu {
 }
 
 impl Cpu {
-    pub(crate) fn r8(&self, r8: R8) -> u8 {
+    fn r8(&mut self, r8: R8) -> u8 {
         match r8 {
             R8::B => self.registers.bc.b(),
             R8::C => self.registers.bc.c(),
@@ -27,12 +29,16 @@ impl Cpu {
             R8::E => self.registers.de.e(),
             R8::H => self.registers.hl.h(),
             R8::L => self.registers.hl.l(),
-            R8::IndirectHL => self.memory[self.registers.hl.into_bits()],
+            R8::IndirectHL => {
+                let value = self.memory[self.registers.hl.into_bits()];
+                self.memory.increment_timers(1);
+                value
+            }
             R8::A => self.registers.af.a(),
         }
     }
 
-    pub(crate) fn set_r8(&mut self, r8: R8, value: u8) {
+    fn set_r8(&mut self, r8: R8, value: u8) {
         match r8 {
             R8::B => self.registers.bc.set_b(value),
             R8::C => self.registers.bc.set_c(value),
@@ -40,7 +46,10 @@ impl Cpu {
             R8::E => self.registers.de.set_e(value),
             R8::H => self.registers.hl.set_h(value),
             R8::L => self.registers.hl.set_l(value),
-            R8::IndirectHL => self.memory.write_byte(self.registers.hl.into_bits(), value),
+            R8::IndirectHL => {
+                self.memory.write_byte(self.registers.hl.into_bits(), value);
+                self.memory.increment_timers(1);
+            }
             R8::A => self.registers.af.set_a(value),
         }
     }
@@ -82,13 +91,12 @@ impl Cpu {
     }
 
     fn check_condition(&self, condition: Condition) -> bool {
-        use Condition::*;
         let flags = self.registers.af.f();
         match condition {
-            Nz => !flags.z(),
-            Z => flags.z(),
-            Nc => !flags.c(),
-            C => flags.c(),
+            Condition::Nz => !flags.z(),
+            Condition::Z => flags.z(),
+            Condition::Nc => !flags.c(),
+            Condition::C => flags.c(),
         }
     }
 
@@ -97,27 +105,43 @@ impl Cpu {
         self.memory.buffer[0..DMG_BOOT_ROM.len()].copy_from_slice(DMG_BOOT_ROM);
     }
 
-    pub fn handle_interrupts(&mut self) {
-        // If an interrupt's enabled and flag bit is set, it needs to be serviced.
-        let to_service = self.memory[hw_constants::IE] & self.memory[io_regs::IF];
+    fn handle_interrupts(&mut self) {
+        if self.halted {
+            // DMG checks interrupt flags *between* M-Cycles in halt mode.
+            self.memory.half_increment_timers();
+        }
 
-        if to_service != 0 {
+        // If an interrupt's enabled and flag bit is set, it needs to be serviced.
+        let to_service = self.memory[hw_constants::IE] & self.memory[io_regs::IF] & 0b0001_1111;
+
+        if self.halted {
+            // Another half tick to complete the M-Cycle.
+            self.memory.half_increment_timers();
+        }
+
+        if to_service == 0 {
+            // Nothing to do, so return early.
+            return;
+        }
+
+        if self.halted {
+            info!(target: "cpu_halt", "Leaving HALT halt on dot: {}", self.memory.ppu.dots_this_line());
             self.halted = false;
         }
 
-        if self.ime && to_service != 0 {
+        if self.ime {
+            // Turn off interrupt master enable.
+            self.ime = false;
+
             // Interrupts are serviced with a priority in order of least-to-most significant bit.
             // 0: VBlank, 1: LCD, 2: Timer, 3: Serial, and 4: Joypad.
             let nth_interrupt = to_service.trailing_zeros();
 
-            println!("Now serving {nth_interrupt} :)");
+            info!(target: "cpu_interrupt", "Serving interrupt: {nth_interrupt}");
 
             // Clear the flag bit of the interrupt we're servicing.
             let flag_mask = !(0b0000_0001 << nth_interrupt);
             self.memory.buffer[io_regs::IF as usize] &= flag_mask;
-
-            // Turn off interrupt master enable.
-            self.ime = false;
 
             // Push the PC to the stack.
             self.registers.sp -= 2;
@@ -129,6 +153,10 @@ impl Cpu {
             #[allow(clippy::cast_possible_truncation)]
             let interrupt_handler_offset = 0x0008 * nth_interrupt as u16;
             self.registers.pc = 0x0040 + interrupt_handler_offset;
+
+            // Interrupt handling takes 5 MCycles
+            // See: https://gbdev.io/pandocs/Interrupts.html#interrupt-handling
+            self.memory.increment_timers(5);
         }
     }
 
@@ -170,41 +198,47 @@ impl Cpu {
     ///
     /// Will return an error if the instruction at the current program counter is unimplemented.
     #[allow(clippy::too_many_lines)]
-    pub fn execute(&mut self) -> Result<u16, String> {
-        use Opcode::*;
+    pub fn execute(&mut self) -> Result<(), String> {
+        // Our halted CPU just early return forever unless handle_interrupts gets us out of halted mode.
+        // This function may tick other components if we're halted and/or servicing an interrupt.
+        self.handle_interrupts();
 
         if self.halted {
-            self.memory.increment_timers(1);
-            return Ok(1);
+            return Ok(());
         }
 
         let pc = self.registers.pc;
         let bytecode = self.memory[pc];
         let opcode = opcodes::decode(bytecode)?;
 
-        let m_cycles = self.calculate_m_cycles(opcode);
+        let mut m_cycles = self.calculate_m_cycles(opcode);
+
+        if m_cycles > 0 {
+            self.memory.increment_timers(1);
+            m_cycles -= 1;
+        }
 
         match opcode {
             // Block 0
-            Nop => {
+            Opcode::Nop => {
                 self.registers.pc += 1;
             }
-            LdRrNn { x } => {
+            Opcode::LdRrNn { x } => {
                 let next_two_bytes = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
                 *self.registers.r16_mut(x) = next_two_bytes;
 
                 self.registers.pc += 3;
             }
-            LdMemA { x } => {
+            Opcode::LdMemA { x } => {
                 self.set_r16_mem(x, self.registers.af.a());
                 self.registers.pc += 1;
             }
-            LdAMem { x } => {
+            Opcode::LdAMem { x } => {
                 let value = self.r16_mem(x);
                 self.registers.af.set_a(value);
                 self.registers.pc += 1;
             }
-            LdNnSp => {
+            Opcode::LdNnSp => {
                 let [low_sp, high_sp] = self.registers.sp.to_le_bytes();
 
                 let destination = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
@@ -213,16 +247,16 @@ impl Cpu {
                 self.memory.write_byte(destination + 1, high_sp);
                 self.registers.pc += 3;
             }
-            IncRr { x } => {
+            Opcode::IncRr { x } => {
                 *self.registers.r16_mut(x) = self.registers.r16_mut(x).wrapping_add(1);
                 self.registers.pc += 1;
             }
-            DecRr { x } => {
+            Opcode::DecRr { x } => {
                 let result = self.registers.r16_mut(x).wrapping_sub(1);
                 *self.registers.r16_mut(x) = result;
                 self.registers.pc += 1;
             }
-            AddHlRr { x } => {
+            Opcode::AddHlRr { x } => {
                 let hl = self.registers.hl.into_bits();
                 let r16 = *self.registers.r16_mut(x);
                 let (result, carry) = hl.overflowing_add(r16);
@@ -240,7 +274,7 @@ impl Cpu {
 
                 self.registers.pc += 1;
             }
-            IncR { x } => {
+            Opcode::IncR { x } => {
                 let r8 = self.r8(x);
                 let result = r8.wrapping_add(1);
                 self.set_r8(x, result);
@@ -255,7 +289,7 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
-            DecR { x } => {
+            Opcode::DecR { x } => {
                 let r8 = self.r8(x);
                 let result = r8.wrapping_sub(1);
                 self.set_r8(x, result);
@@ -270,12 +304,18 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
-            LdRN { x } => {
+            Opcode::LdRN { x } => {
+                // TICKS MANUALLY
+                self.memory.increment_timers(1);
+
                 let next_byte = self.memory[pc + 1];
+                self.memory.increment_timers(1);
+
                 self.set_r8(x, next_byte);
+
                 self.registers.pc += 2;
             }
-            Rlca => {
+            Opcode::Rlca => {
                 // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
                 // output: [b7] [b6][b5][b4][b3][b2][b1][b0][b7]
                 let value = self.registers.af.a();
@@ -294,7 +334,7 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
-            Rrca => {
+            Opcode::Rrca => {
                 // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
                 // output: [b0] [b0][b7][b6][b5][b4][b3][b2][b1]
                 let value = self.registers.af.a();
@@ -313,7 +353,7 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
-            Rla => {
+            Opcode::Rla => {
                 // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
                 // output: [b7] [b6][b5][b4][b3][b2][b1][b0][c]
                 let value = self.registers.af.a();
@@ -336,7 +376,7 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
-            Rra => {
+            Opcode::Rra => {
                 // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
                 // output: [b0] [c][b7][b6][b5][b4][b3][b2][b1]
                 let value = self.registers.af.a();
@@ -359,7 +399,7 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
-            Daa => {
+            Opcode::Daa => {
                 // A surprisingly complicated instruction. This implementation is largely based on:
                 // https://rgbds.gbdev.io/docs/v0.9.4/gbz80.7#DAA
                 let a = self.registers.af.a();
@@ -397,7 +437,7 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
-            Cpl => {
+            Opcode::Cpl => {
                 let flipped = !self.registers.af.a();
 
                 self.registers.af.set_a(flipped);
@@ -406,7 +446,7 @@ impl Cpu {
                     .set_f(self.registers.af.f().with_n(true).with_h(true));
                 self.registers.pc += 1;
             }
-            Scf => {
+            Opcode::Scf => {
                 self.registers.af.set_f(
                     self.registers
                         .af
@@ -417,7 +457,7 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
-            Ccf => {
+            Opcode::Ccf => {
                 let carry = !self.registers.af.f().c();
                 self.registers.af.set_f(
                     self.registers
@@ -429,7 +469,7 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
-            JrE => {
+            Opcode::JrE => {
                 let jump_offset = self.memory[pc + 1].cast_signed();
                 self.registers.pc = self
                     .registers
@@ -437,7 +477,7 @@ impl Cpu {
                     .wrapping_add_signed(i16::from(jump_offset));
                 self.registers.pc += 2;
             }
-            JrCcE { c } => {
+            Opcode::JrCcE { c } => {
                 let jump_offset = self.memory[pc + 1].cast_signed();
 
                 if self.check_condition(c) {
@@ -448,19 +488,22 @@ impl Cpu {
                 }
                 self.registers.pc += 2;
             }
+            Opcode::Stop => Err("STOP opcode reached.".to_string())?,
 
             // Block 1
-            LdRR { x: dest, y: src } => {
-                self.set_r8(dest, self.r8(src));
+            Opcode::LdRR { x: dest, y: src } => {
+                let value = self.r8(src);
+                self.set_r8(dest, value);
                 self.registers.pc += 1;
             }
-            Halt => {
+            Opcode::Halt => {
+                info!(target: "cpu_halt", "HALTING on PPU dot: {}", self.memory.ppu.dot_counter % 456);
                 self.registers.pc += 1;
                 self.halted = true;
             }
 
             // Block 2
-            AddR { x } => {
+            Opcode::AddR { x } => {
                 let a = self.registers.af.a();
                 let r8 = self.r8(x);
                 let (result, carry) = a.overflowing_add(r8);
@@ -478,7 +521,7 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
-            AdcR { x } => {
+            Opcode::AdcR { x } => {
                 let a = self.registers.af.a();
                 let r8 = self.r8(x);
                 let prev_carry = self.registers.af.f().c();
@@ -500,7 +543,7 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
-            SubR { x } => {
+            Opcode::SubR { x } => {
                 let a = self.registers.af.a();
                 let r8 = self.r8(x);
                 let (result, carry) = a.overflowing_sub(r8);
@@ -517,7 +560,7 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
-            SbcR { x } => {
+            Opcode::SbcR { x } => {
                 let a = self.registers.af.a();
                 let r8 = self.r8(x);
                 let prev_carry = self.registers.af.f().c();
@@ -537,7 +580,7 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
-            AndR { x } => {
+            Opcode::AndR { x } => {
                 let result = self.registers.af.a() & self.r8(x);
 
                 self.registers.af.set_a(result);
@@ -552,7 +595,7 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
-            XorR { x } => {
+            Opcode::XorR { x } => {
                 let result = self.registers.af.a() ^ self.r8(x);
 
                 self.registers.af.set_a(result);
@@ -567,7 +610,7 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
-            OrR { x } => {
+            Opcode::OrR { x } => {
                 let result = self.registers.af.a() | self.r8(x);
 
                 self.registers.af.set_a(result);
@@ -582,7 +625,7 @@ impl Cpu {
                 );
                 self.registers.pc += 1;
             }
-            CpR { x } => {
+            Opcode::CpR { x } => {
                 let a = self.registers.af.a();
                 let r8 = self.r8(x);
                 let result = a.wrapping_sub(r8);
@@ -600,7 +643,7 @@ impl Cpu {
             }
 
             // Block 3
-            AddN => {
+            Opcode::AddN => {
                 let a = self.registers.af.a();
                 let next_byte = self.memory[pc + 1];
                 let (result, carry) = a.overflowing_add(next_byte);
@@ -618,7 +661,7 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
-            AdcN => {
+            Opcode::AdcN => {
                 let a = self.registers.af.a();
                 let next_byte = self.memory[pc + 1];
                 let prev_carry = self.registers.af.f().c();
@@ -640,7 +683,7 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
-            SubN => {
+            Opcode::SubN => {
                 let a = self.registers.af.a();
                 let next_byte = self.memory[pc + 1];
                 let (result, carry) = a.overflowing_sub(next_byte);
@@ -657,7 +700,7 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
-            SbcN => {
+            Opcode::SbcN => {
                 let a = self.registers.af.a();
                 let next_byte = self.memory[pc + 1];
                 let prev_carry = self.registers.af.f().c();
@@ -677,7 +720,7 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
-            AndN => {
+            Opcode::AndN => {
                 let next_byte = self.memory[pc + 1];
                 let result = self.registers.af.a() & next_byte;
 
@@ -693,7 +736,7 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
-            XorN => {
+            Opcode::XorN => {
                 let next_byte = self.memory[pc + 1];
                 let result = self.registers.af.a() ^ next_byte;
 
@@ -709,7 +752,7 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
-            OrN => {
+            Opcode::OrN => {
                 let next_byte = self.memory[pc + 1];
                 let result = self.registers.af.a() | next_byte;
 
@@ -725,7 +768,7 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
-            CpN => {
+            Opcode::CpN => {
                 let a = self.registers.af.a();
                 let next_byte = self.memory[pc + 1];
 
@@ -740,7 +783,7 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
-            RetCc { c } => {
+            Opcode::RetCc { c } => {
                 self.registers.pc += 1;
 
                 if self.check_condition(c) {
@@ -753,7 +796,7 @@ impl Cpu {
                     self.registers.pc = destination;
                 }
             }
-            Ret => {
+            Opcode::Ret => {
                 let destination = u16::from_le_bytes([
                     self.memory[self.registers.sp],
                     self.memory[self.registers.sp + 1],
@@ -762,7 +805,7 @@ impl Cpu {
 
                 self.registers.pc = destination;
             }
-            Reti => {
+            Opcode::Reti => {
                 let destination = u16::from_le_bytes([
                     self.memory[self.registers.sp],
                     self.memory[self.registers.sp + 1],
@@ -772,7 +815,7 @@ impl Cpu {
                 self.ime = true;
                 self.registers.pc = destination;
             }
-            JpCcNn { c } => {
+            Opcode::JpCcNn { c } => {
                 let destination = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
                 self.registers.pc += 3;
 
@@ -780,14 +823,14 @@ impl Cpu {
                     self.registers.pc = destination;
                 }
             }
-            JpNn => {
+            Opcode::JpNn => {
                 let destination = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
                 self.registers.pc = destination;
             }
-            JpHl => {
+            Opcode::JpHl => {
                 self.registers.pc = self.registers.hl.into_bits();
             }
-            CallCcNn { c } => {
+            Opcode::CallCcNn { c } => {
                 let destination = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
 
                 self.registers.pc += 3;
@@ -802,7 +845,7 @@ impl Cpu {
                     self.registers.pc = destination;
                 }
             }
-            CallNn => {
+            Opcode::CallNn => {
                 // Push the address of the next instruction to the stack.
                 self.registers.sp -= 2;
                 let [low, high] = (pc + 3).to_le_bytes();
@@ -812,7 +855,7 @@ impl Cpu {
                 let destination = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
                 self.registers.pc = destination;
             }
-            RstN { x } => {
+            Opcode::RstN { x } => {
                 // Push the address of the next instruction to the stack.
                 self.registers.sp -= 2;
                 let [low, high] = (pc + 1).to_le_bytes();
@@ -826,7 +869,7 @@ impl Cpu {
                 ]);
                 self.registers.pc = destination;
             }
-            PopRr { x } => {
+            Opcode::PopRr { x } => {
                 let low = self.memory[self.registers.sp];
                 let high = self.memory[self.registers.sp + 1];
                 self.registers.sp += 2;
@@ -836,7 +879,7 @@ impl Cpu {
 
                 self.registers.pc += 1;
             }
-            PushRr { x } => {
+            Opcode::PushRr { x } => {
                 let [low, high] = self.registers.r16_stack(x).to_le_bytes();
                 // Make room on the stack for a 16-bit value.
                 self.registers.sp -= 2;
@@ -845,45 +888,84 @@ impl Cpu {
                 self.memory.write_byte(self.registers.sp + 1, high);
                 self.registers.pc += 1;
             }
-            Prefix => self.execute_prefix(),
-            LdhCA => {
+            Opcode::Prefix => self.execute_prefix(),
+            Opcode::LdhCA => {
                 let destination = u16::from_le_bytes([self.registers.bc.c(), 0xFF]);
                 self.memory.write_byte(destination, self.registers.af.a());
                 self.registers.pc += 1;
             }
-            LdhNA => {
+            Opcode::LdhNA => {
+                // TICKS MANUALLY
+                self.memory.increment_timers(1);
+
                 let next_byte = self.memory[pc + 1];
+                self.memory.increment_timers(1);
+
                 let destination = u16::from_le_bytes([next_byte, 0xFF]);
                 self.memory.write_byte(destination, self.registers.af.a());
+                self.memory.increment_timers(1);
+
                 self.registers.pc += 2;
             }
-            LdNnA => {
-                let next_two_bytes = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
-                self.memory
-                    .write_byte(next_two_bytes, self.registers.af.a());
+            Opcode::LdNnA => {
+                // TICKS MANUALLY
+                self.memory.increment_timers(1);
+
+                let first_byte = self.memory[pc + 1];
+                self.memory.increment_timers(1);
+
+                let second_byte = self.memory[pc + 2];
+                self.memory.increment_timers(1);
+
+                let address = u16::from_le_bytes([first_byte, second_byte]);
+                self.memory.write_byte(address, self.registers.af.a());
+                self.memory.increment_timers(1);
+
                 self.registers.pc += 3;
             }
-            LdhAC => {
+            Opcode::LdhAC => {
+                // TICKS MANUALLY
+                self.memory.increment_timers(1);
+
                 let address = u16::from_le_bytes([self.registers.bc.c(), 0xFF]);
                 let value = self.memory[address];
+                self.memory.increment_timers(1);
+
                 self.set_r8(R8::A, value);
+
                 self.registers.pc += 1;
             }
-            LdhAN => {
+            Opcode::LdhAN => {
+                // TICKS MANUALLY
+                self.memory.increment_timers(1);
+
                 let next_byte = self.memory[pc + 1];
+                self.memory.increment_timers(1);
+
                 let address = u16::from_le_bytes([next_byte, 0xFF]);
                 let value = self.memory[address];
                 self.registers.af.set_a(value);
+                self.memory.increment_timers(1);
+
                 self.registers.pc += 2;
             }
-            LdANn => {
-                let next_two_bytes = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
-                let value = self.memory[next_two_bytes];
+            Opcode::LdANn => {
+                // TICKS MANUALLY
+                self.memory.increment_timers(1);
 
+                let first_byte = self.memory[pc + 1];
+                self.memory.increment_timers(1);
+
+                let second_byte = self.memory[pc + 2];
+                self.memory.increment_timers(1);
+
+                let value = self.memory[u16::from_le_bytes([first_byte, second_byte])];
                 self.registers.af.set_a(value);
+                self.memory.increment_timers(1);
+
                 self.registers.pc += 3;
             }
-            AddSpE => {
+            Opcode::AddSpE => {
                 let next_byte = self.memory[pc + 1];
                 let e = next_byte.cast_signed();
                 let result = self.registers.sp.wrapping_add_signed(i16::from(e));
@@ -904,7 +986,7 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
-            LdHlSpPlusE => {
+            Opcode::LdHlSpPlusE => {
                 let next_byte = self.memory[pc + 1];
                 let e = next_byte.cast_signed();
                 let result = self.registers.sp.wrapping_add_signed(i16::from(e));
@@ -925,38 +1007,41 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
-            LdSpHl => {
+            Opcode::LdSpHl => {
                 self.registers.sp = self.registers.hl.into_bits();
                 self.registers.pc += 1;
             }
-            Di => {
+            Opcode::Di => {
                 self.ime = false;
                 self.registers.pc += 1;
             }
-            Ei => {
+            Opcode::Ei => {
                 // TODO: For accuracy, wait until the next instruction to actually enable interrupts
                 // See: https://rgbds.gbdev.io/docs/v0.9.4/gbz80.7#EI
+                info!(target: "cpu_ei", "Enabling interrupts on dot: {}", self.memory.ppu.dots_this_line());
+                info!("FLAGS {:b}", self.memory[io_regs::IF]);
                 self.ime = true;
                 self.registers.pc += 1;
             }
-            opcode => Err(format!("unimplemented opcode: {opcode:?}"))?,
         }
 
         self.memory.increment_timers(m_cycles);
-        Ok(m_cycles)
+        Ok(())
     }
 
     #[allow(clippy::too_many_lines)]
     fn execute_prefix(&mut self) {
-        use PrefixOpcode::*;
+        // Decoding the 0xCB instruction took 1 MCycle.
+        self.memory.increment_timers(1);
 
         let second_byte = self.memory[self.registers.pc + 1];
         let prefix_opcode = opcodes::decode_prefix(second_byte);
 
-        let m_cycles = prefix_m_cycles(prefix_opcode);
+        // Decoding the next byte took another.
+        self.memory.increment_timers(1);
 
         match prefix_opcode {
-            RlcR { x } => {
+            PrefixOpcode::RlcR { x } => {
                 // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
                 // output: [b7] [b6][b5][b4][b3][b2][b1][b0][b7]
                 let value = self.r8(x);
@@ -975,7 +1060,7 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
-            RrcR { x } => {
+            PrefixOpcode::RrcR { x } => {
                 // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
                 // output: [b0] [b0][b7][b6][b5][b4][b3][b2][b1]
                 let value = self.r8(x);
@@ -994,7 +1079,7 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
-            RlR { x } => {
+            PrefixOpcode::RlR { x } => {
                 // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
                 // output: [b7] [b6][b5][b4][b3][b2][b1][b0][c]
                 let value = self.r8(x);
@@ -1017,7 +1102,7 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
-            RrR { x } => {
+            PrefixOpcode::RrR { x } => {
                 // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
                 // output: [b0]  [c][b7][b6][b5][b4][b3][b2][b1]
                 let value = self.r8(x);
@@ -1040,7 +1125,7 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
-            SlaR { x } => {
+            PrefixOpcode::SlaR { x } => {
                 // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
                 // output: [b7] [b6][b5][b4][b3][b2][b1][b0][0]
                 let value = self.r8(x);
@@ -1059,7 +1144,7 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
-            SraR { x } => {
+            PrefixOpcode::SraR { x } => {
                 // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
                 // output: [b0] [b7][b7][b6][b5][b4][b3][b2][b1]
                 // Rust only arithmetically shifts signed integers, so cast r8 signed.
@@ -1079,7 +1164,7 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
-            SwapR { x } => {
+            PrefixOpcode::SwapR { x } => {
                 // input:  [b7][b6][b5][b4][b3][b2][b1][b0]
                 // output: [b3][b2][b1][b0][b7][b6][b5][b4]
                 let value = self.r8(x);
@@ -1097,7 +1182,7 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
-            SrlR { x } => {
+            PrefixOpcode::SrlR { x } => {
                 // input:  [c]  [b7][b6][b5][b4][b3][b2][b1][b0]
                 // output: [b0] [0][b7][b6][b5][b4][b3][b2][b1]
                 let value = self.r8(x);
@@ -1116,7 +1201,7 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
-            BitBR { b: bit_index, x } => {
+            PrefixOpcode::BitBR { b: bit_index, x } => {
                 let value = self.r8(x);
                 let nth_bit = value >> bit_index.value() & 1;
                 let nth_bit_set = nth_bit != 0;
@@ -1131,7 +1216,7 @@ impl Cpu {
                 );
                 self.registers.pc += 2;
             }
-            ResBR { b: bit_index, x } => {
+            PrefixOpcode::ResBR { b: bit_index, x } => {
                 let value = self.r8(x);
                 let mask = !(1 << bit_index.value());
                 let result = value & mask;
@@ -1139,7 +1224,7 @@ impl Cpu {
                 self.set_r8(x, result);
                 self.registers.pc += 2;
             }
-            SetBR { b: bit_index, x } => {
+            PrefixOpcode::SetBR { b: bit_index, x } => {
                 let value = self.r8(x);
                 let bit = 1 << bit_index.value();
                 let result = value | bit;
@@ -1148,8 +1233,6 @@ impl Cpu {
                 self.registers.pc += 2;
             }
         }
-
-        self.memory.increment_timers(m_cycles);
     }
 }
 

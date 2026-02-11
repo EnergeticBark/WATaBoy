@@ -1,9 +1,9 @@
-use crate::lcd::{bg_tile_map, window_tile_map};
-use crate::{lcd, tiles};
+use crate::lcd_control::{bg_tile_map, window_tile_map};
+use crate::{lcd_control, tiles};
+use crate::palette::Palette;
 
 use hw_constants::io_regs;
 use std::collections::VecDeque;
-use crate::palette::Palette;
 
 #[derive(Copy, Clone)]
 pub struct Pixel {
@@ -55,7 +55,7 @@ impl BackgroundFetcher {
             let pixel = Pixel {
                 low: (self.tile_data_low >> nth_bit) & 1 == 1,
                 high: (self.tile_data_high >> nth_bit) & 1 == 1,
-                palette: Palette::BGP,
+                palette: Palette::Bgp,
                 priority: false,
             };
 
@@ -96,7 +96,7 @@ impl BackgroundFetcher {
     }
 
     fn current_tile<'a>(&self, memory: &'a [u8]) -> &'a [u8; 16] {
-        if lcd::bg_and_window_tiles(memory) {
+        if lcd_control::bg_and_window_tiles(memory) {
             tiles::unsigned_nth_tile(memory, self.tile_id as usize)
         } else {
             tiles::signed_nth_tile(memory, self.tile_id.cast_signed() as isize)
@@ -144,7 +144,7 @@ impl BackgroundFetcher {
                         self.state = FetcherState::Push;
                     }
                 }
-                _ => {}
+                FetcherState::Push => {} // Already handled in the if-let.
             }
         }
     }

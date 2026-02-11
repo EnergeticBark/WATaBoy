@@ -1,16 +1,22 @@
-use crate::common::post_boot::PostBoot;
-use crate::mbc::Mbc1;
+use crate::mbc::Mbc;
 use crate::timers::Timers;
+use crate::joypad::{ButtonsHeld, Joyp};
 
-use hw_constants::io_regs;
+use hw_constants::{PostBoot, io_regs};
+use log::info;
+use ppu::ppu::Ppu;
+use rkyv::{Archive, Deserialize, Serialize, with::Skip};
 use std::ops::{Index, Range};
 
-const MEM_MAP_SIZE: usize = 0x10000;
-
+#[derive(Archive, Deserialize, Serialize)]
 pub struct AddressBus {
-    pub buffer: [u8; MEM_MAP_SIZE],
-    pub timers: Timers,
-    pub mbc: Mbc1,
+    pub buffer: Box<[u8; hw_constants::MEM_MAP_SIZE]>,
+    timers: Timers,
+    // Number of MCycles the PPU needs to run to catch up with the CPU.
+    #[rkyv(with = Skip)]
+    pub ppu: Ppu,
+    mbc: Mbc,
+    half_ticked: bool,
 }
 
 impl AddressBus {
@@ -21,50 +27,18 @@ impl AddressBus {
 
     pub fn write_byte(&mut self, index: u16, value: u8) {
         match index {
-            // Handle writes to ROM address space.
-            0x0000..0x2000 => {
-                if value & 0x0F == 0xA && !self.mbc.ram_enabled {
-                    let bank = self.mbc.nth_ram_bank(self.mbc.current_ram_bank);
-                    self.buffer[0xA000..0xC000].clone_from_slice(bank);
-                    self.mbc.enable_ram();
-                } else if self.mbc.ram_enabled {
-                    self.mbc
-                        .write_ram_bank(&self.buffer[0xA000..0xC000].try_into().unwrap());
-                    self.buffer[0xA000..0xC000].fill(0xFF);
-                    self.mbc.disable_ram();
-                }
-            }
-            0x2000..0x4000 => {
-                println!("Switching ROM bank using value: {value}");
-                let bank = self.mbc.nth_rom_bank(value);
-                self.buffer[0x4000..0x8000].clone_from_slice(bank);
-            }
-            0x4000..0x6000 => {
-                println!("Switching RAM bank using value: {value}");
-                if self.mbc.banking_mode {
-                    // Backup old bank... Ew, I know I can do better than this.
-                    self.mbc
-                        .write_ram_bank(&self.buffer[0xA000..0xC000].try_into().unwrap());
-
-                    let bank = self.mbc.nth_ram_bank(value);
-                    self.buffer[0xA000..0xC000].clone_from_slice(bank);
-                } else {
-                    println!("Actually no, we're in simple mode!!!");
-                }
-            }
-            0x6000..0x8000 => self.mbc.set_banking_mode(value),
-            0xA000..0xC000 => {
-                if self.mbc.ram_enabled {
-                    self.buffer[index as usize] = value;
-                }
+            // Delegate write in the ROM range and the SRAM range to the MBC.
+            0x0000..0x8000 | 0xA000..0xC000 => {
+                self.mbc.write_byte(self.buffer.as_mut_slice(), index, value);
             }
 
+            // Initiate OAM transfer.
             0xFF46 => {
                 // Actually write the value to this address before starting the OAM DMA transfer.
                 self.buffer[index as usize] = value;
 
                 // TODO: Accurately make this take a few cycles.
-                println!("OAM DMA Transfer from 0x{value}00!");
+                info!(target: "oam_events", "DMA Transfer from 0x{value:X}00!");
                 let oam_size = 0xA0;
                 let src_start = u16::from_le_bytes([0x00, value]) as usize;
                 let src_end = src_start + oam_size;
@@ -80,7 +54,12 @@ impl AddressBus {
             io_regs::TAC => self.buffer[index as usize] = value | 0b1111_1000,
             io_regs::DIV => self.timers.system_clock = 0,
             io_regs::IF => self.buffer[index as usize] = value | 0b1110_0000,
-            io_regs::STAT | io_regs::NR10 => self.buffer[index as usize] = value | 0b1000_0000,
+            io_regs::STAT => {
+                self.buffer[index as usize] &= 0b1000_0111;
+                let masked_value = value & 0b0111_1000;
+                self.buffer[index as usize] |= masked_value;
+            }
+            io_regs::NR10 => self.buffer[index as usize] = value | 0b1000_0000,
             io_regs::NR30 => self.buffer[index as usize] = value | 0b0111_1111,
             io_regs::NR32 => self.buffer[index as usize] = value | 0b1001_1111,
             io_regs::NR44 => self.buffer[index as usize] = value | 0b0011_1111,
@@ -95,7 +74,39 @@ impl AddressBus {
         }
     }
 
+    pub fn half_increment_timers(&mut self) {
+        for _ in 0..2 {
+            self.ppu.tick(self.buffer.as_mut_slice());
+        }
+
+        if !self.half_ticked {
+            self.half_ticked = true;
+            return;
+        }
+        self.half_ticked = false;
+
+        self.timers
+            .update_timer_counter(self.buffer[io_regs::TIMA as usize]);
+        self.timers
+            .update_timer_modulo(self.buffer[io_regs::TMA as usize]);
+        self.timers
+            .update_timer_control(self.buffer[io_regs::TAC as usize]);
+
+        self.timers.increment(1);
+
+        self.buffer[io_regs::DIV as usize] = self.timers.div();
+        self.buffer[io_regs::TIMA as usize] = self.timers.tima();
+
+        if self.timers.process_interrupt() {
+            self.buffer[io_regs::IF as usize] |= 0b0000_0100;
+        }
+    }
+
     pub fn increment_timers(&mut self, m_cycles: u16) {
+        for _ in 0..m_cycles * 4 {
+            self.ppu.tick(self.buffer.as_mut_slice());
+        }
+
         self.timers
             .update_timer_counter(self.buffer[io_regs::TIMA as usize]);
         self.timers
@@ -112,14 +123,34 @@ impl AddressBus {
             self.buffer[io_regs::IF as usize] |= 0b0000_0100;
         }
     }
+
+    pub fn update_joypad(&mut self, held_buttons: ButtonsHeld) {
+        let mut joypad = Joyp::from_bits(self.buffer[io_regs::JOYP as usize]);
+        if !joypad.select_buttons() {
+            joypad.set_start_down(!held_buttons.start);
+            joypad.set_select_up(!held_buttons.select);
+            joypad.set_b_left(!held_buttons.b);
+            joypad.set_a_right(!held_buttons.a);
+        }
+        if !joypad.select_dpad() {
+            joypad.set_start_down(!held_buttons.down);
+            joypad.set_select_up(!held_buttons.up);
+            joypad.set_b_left(!held_buttons.left);
+            joypad.set_a_right(!held_buttons.right);
+        }
+        // TODO: Fire the joypad interrupt on a high-to-low change
+        self.buffer[io_regs::JOYP as usize] = joypad.into_bits();
+    }
 }
 
 impl Default for AddressBus {
     fn default() -> Self {
         Self {
-            buffer: [0; MEM_MAP_SIZE],
+            buffer: vec![0; hw_constants::MEM_MAP_SIZE].into_boxed_slice().try_into().unwrap(),
             timers: Timers::default(),
-            mbc: Mbc1::default(),
+            ppu: Ppu::default(),
+            mbc: Mbc::default(),
+            half_ticked: false,
         }
     }
 }
@@ -127,13 +158,9 @@ impl Default for AddressBus {
 impl PostBoot for AddressBus {
     fn post_boot_dmg() -> Self {
         Self {
-            buffer: {
-                let mut buffer = [0; MEM_MAP_SIZE];
-                buffer[0xA000..0xC000].fill(0xFF);
-                buffer
-            },
-            // TODO: some memory values should be set. Try to pass the mooneye test.
+            buffer: hw_constants::post_boot_hwio(),
             timers: Timers::post_boot_dmg(),
+            ppu: Ppu::post_boot_dmg(),
             ..Default::default()
         }
     }

@@ -9,146 +9,145 @@ use crate::parameters::{Condition, R8, R16, R16Mem, R16Stack};
 /// The complete list of invalid first byte values is:
 /// `0xD3`, `0xDB`, `0xDD`, `0xE3`, `0xE4`, `0xEB`, `0xEC`, `0xED`, `0xF4`, `0xFC`, and `0xFD`.
 #[allow(clippy::too_many_lines)]
+#[allow(clippy::verbose_bit_mask)] // Clippy warns about the bitmask from expanding the bitmatch macro. :(
 #[bitmatch]
 pub fn decode(first_byte: u8) -> Result<Opcode, String> {
-    use Opcode::*;
-
     let invalid_instruction_error = Err(String::from("Invalid instruction"));
 
     let op = #[bitmatch]
     match first_byte {
         // Block 0
-        "0000_0000" => Nop,
+        "0000_0000" => Opcode::Nop,
 
-        "00xx_0001" => LdRrNn {
+        "00xx_0001" => Opcode::LdRrNn {
             x: R16::from_bits(x),
         },
-        "00xx_0010" => LdMemA {
+        "00xx_0010" => Opcode::LdMemA {
             x: R16Mem::from_bits(x),
         },
-        "00xx_1010" => LdAMem {
+        "00xx_1010" => Opcode::LdAMem {
             x: R16Mem::from_bits(x),
         },
-        "0000_1000" => LdNnSp,
+        "0000_1000" => Opcode::LdNnSp,
 
-        "00xx_0011" => IncRr {
+        "00xx_0011" => Opcode::IncRr {
             x: R16::from_bits(x),
         },
-        "00xx_1011" => DecRr {
+        "00xx_1011" => Opcode::DecRr {
             x: R16::from_bits(x),
         },
-        "00xx_1001" => AddHlRr {
+        "00xx_1001" => Opcode::AddHlRr {
             x: R16::from_bits(x),
         },
 
-        "00xx_x100" => IncR {
+        "00xx_x100" => Opcode::IncR {
             x: R8::from_bits(x),
         },
-        "00xx_x101" => DecR {
-            x: R8::from_bits(x),
-        },
-
-        "00xx_x110" => LdRN {
+        "00xx_x101" => Opcode::DecR {
             x: R8::from_bits(x),
         },
 
-        "0000_0111" => Rlca,
-        "0000_1111" => Rrca,
-        "0001_0111" => Rla,
-        "0001_1111" => Rra,
-        "0010_0111" => Daa,
-        "0010_1111" => Cpl,
-        "0011_0111" => Scf,
-        "0011_1111" => Ccf,
+        "00xx_x110" => Opcode::LdRN {
+            x: R8::from_bits(x),
+        },
 
-        "0001_1000" => JrE,
-        "001x_x000" => JrCcE {
+        "0000_0111" => Opcode::Rlca,
+        "0000_1111" => Opcode::Rrca,
+        "0001_0111" => Opcode::Rla,
+        "0001_1111" => Opcode::Rra,
+        "0010_0111" => Opcode::Daa,
+        "0010_1111" => Opcode::Cpl,
+        "0011_0111" => Opcode::Scf,
+        "0011_1111" => Opcode::Ccf,
+
+        "0001_1000" => Opcode::JrE,
+        "001x_x000" => Opcode::JrCcE {
             c: Condition::from_bits(x),
         },
 
-        "0001_0000" => Stop,
+        "0001_0000" => Opcode::Stop,
 
         // Block 1
-        "0111_0110" => Halt,
-        "01xx_xyyy" => LdRR {
+        "0111_0110" => Opcode::Halt,
+        "01xx_xyyy" => Opcode::LdRR {
             x: R8::from_bits(x),
             y: R8::from_bits(y),
         },
 
         // Block 2
-        "1000_0xxx" => AddR {
+        "1000_0xxx" => Opcode::AddR {
             x: R8::from_bits(x),
         },
-        "1000_1xxx" => AdcR {
+        "1000_1xxx" => Opcode::AdcR {
             x: R8::from_bits(x),
         },
-        "1001_0xxx" => SubR {
+        "1001_0xxx" => Opcode::SubR {
             x: R8::from_bits(x),
         },
-        "1001_1xxx" => SbcR {
+        "1001_1xxx" => Opcode::SbcR {
             x: R8::from_bits(x),
         },
-        "1010_0xxx" => AndR {
+        "1010_0xxx" => Opcode::AndR {
             x: R8::from_bits(x),
         },
-        "1010_1xxx" => XorR {
+        "1010_1xxx" => Opcode::XorR {
             x: R8::from_bits(x),
         },
-        "1011_0xxx" => OrR {
+        "1011_0xxx" => Opcode::OrR {
             x: R8::from_bits(x),
         },
-        "1011_1xxx" => CpR {
+        "1011_1xxx" => Opcode::CpR {
             x: R8::from_bits(x),
         },
 
         // Block 3
-        "1100_0110" => AddN,
-        "1100_1110" => AdcN,
-        "1101_0110" => SubN,
-        "1101_1110" => SbcN,
-        "1110_0110" => AndN,
-        "1110_1110" => XorN,
-        "1111_0110" => OrN,
-        "1111_1110" => CpN,
+        "1100_0110" => Opcode::AddN,
+        "1100_1110" => Opcode::AdcN,
+        "1101_0110" => Opcode::SubN,
+        "1101_1110" => Opcode::SbcN,
+        "1110_0110" => Opcode::AndN,
+        "1110_1110" => Opcode::XorN,
+        "1111_0110" => Opcode::OrN,
+        "1111_1110" => Opcode::CpN,
 
-        "110x_x000" => RetCc {
+        "110x_x000" => Opcode::RetCc {
             c: Condition::from_bits(x),
         },
-        "1100_1001" => Ret,
-        "1101_1001" => Reti,
-        "110x_x010" => JpCcNn {
+        "1100_1001" => Opcode::Ret,
+        "1101_1001" => Opcode::Reti,
+        "110x_x010" => Opcode::JpCcNn {
             c: Condition::from_bits(x),
         },
-        "1100_0011" => JpNn,
-        "1110_1001" => JpHl,
-        "110x_x100" => CallCcNn {
+        "1100_0011" => Opcode::JpNn,
+        "1110_1001" => Opcode::JpHl,
+        "110x_x100" => Opcode::CallCcNn {
             c: Condition::from_bits(x),
         },
-        "1100_1101" => CallNn,
-        "11xx_x111" => RstN { x: u3::new(x) },
+        "1100_1101" => Opcode::CallNn,
+        "11xx_x111" => Opcode::RstN { x: u3::new(x) },
 
-        "11xx_0001" => PopRr {
+        "11xx_0001" => Opcode::PopRr {
             x: R16Stack::from_bits(x),
         },
-        "11xx_0101" => PushRr {
+        "11xx_0101" => Opcode::PushRr {
             x: R16Stack::from_bits(x),
         },
 
-        "1100_1011" => Prefix,
+        "1100_1011" => Opcode::Prefix,
 
-        "1110_0010" => LdhCA,
-        "1110_0000" => LdhNA,
-        "1110_1010" => LdNnA,
-        "1111_0010" => LdhAC,
-        "1111_0000" => LdhAN,
-        "1111_1010" => LdANn,
+        "1110_0010" => Opcode::LdhCA,
+        "1110_0000" => Opcode::LdhNA,
+        "1110_1010" => Opcode::LdNnA,
+        "1111_0010" => Opcode::LdhAC,
+        "1111_0000" => Opcode::LdhAN,
+        "1111_1010" => Opcode::LdANn,
 
-        "1110_1000" => AddSpE,
-        "1111_1000" => LdHlSpPlusE,
-        "1111_1001" => LdSpHl,
+        "1110_1000" => Opcode::AddSpE,
+        "1111_1000" => Opcode::LdHlSpPlusE,
+        "1111_1001" => Opcode::LdSpHl,
 
-        "1111_0011" => Di,
-        "1111_1011" => Ei,
+        "1111_0011" => Opcode::Di,
+        "1111_1011" => Opcode::Ei,
 
         _ => invalid_instruction_error?,
     };
@@ -247,43 +246,42 @@ pub enum Opcode {
 #[must_use]
 #[bitmatch]
 pub fn decode_prefix(second_byte: u8) -> PrefixOpcode {
-    use PrefixOpcode::*;
     #[bitmatch]
     match second_byte {
-        "0000_0xxx" => RlcR {
+        "0000_0xxx" => PrefixOpcode::RlcR {
             x: R8::from_bits(x),
         },
-        "0000_1xxx" => RrcR {
+        "0000_1xxx" => PrefixOpcode::RrcR {
             x: R8::from_bits(x),
         },
-        "0001_0xxx" => RlR {
+        "0001_0xxx" => PrefixOpcode::RlR {
             x: R8::from_bits(x),
         },
-        "0001_1xxx" => RrR {
+        "0001_1xxx" => PrefixOpcode::RrR {
             x: R8::from_bits(x),
         },
-        "0010_0xxx" => SlaR {
+        "0010_0xxx" => PrefixOpcode::SlaR {
             x: R8::from_bits(x),
         },
-        "0010_1xxx" => SraR {
+        "0010_1xxx" => PrefixOpcode::SraR {
             x: R8::from_bits(x),
         },
-        "0011_0xxx" => SwapR {
+        "0011_0xxx" => PrefixOpcode::SwapR {
             x: R8::from_bits(x),
         },
-        "0011_1xxx" => SrlR {
+        "0011_1xxx" => PrefixOpcode::SrlR {
             x: R8::from_bits(x),
         },
 
-        "01bb_bxxx" => BitBR {
+        "01bb_bxxx" => PrefixOpcode::BitBR {
             b: u3::new(b),
             x: R8::from_bits(x),
         },
-        "10bb_bxxx" => ResBR {
+        "10bb_bxxx" => PrefixOpcode::ResBR {
             b: u3::new(b),
             x: R8::from_bits(x),
         },
-        "11bb_bxxx" => SetBR {
+        "11bb_bxxx" => PrefixOpcode::SetBR {
             b: u3::new(b),
             x: R8::from_bits(x),
         },

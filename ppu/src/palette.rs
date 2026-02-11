@@ -3,9 +3,9 @@ use hw_constants::io_regs;
 
 #[derive(Copy, Clone)]
 pub enum Palette {
-    BGP,
-    OBP0,
-    OBP1,
+    Bgp,
+    Obp0,
+    Obp1,
 }
 
 #[bitenum]
@@ -25,7 +25,7 @@ pub fn map_to_palette(palette: u8, value: u8) -> Color {
         1 => Color::from_bits((palette >> 2) & 0b0000_0011),
         2 => Color::from_bits((palette >> 4) & 0b0000_0011),
         3 => Color::from_bits((palette >> 6) & 0b0000_0011),
-        _ => unreachable!()
+        _ => unreachable!(),
     }
 }
 
