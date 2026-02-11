@@ -41,5 +41,5 @@ pub extern "C" fn test_make_add() -> i32 {
     let len = bytecode.len() as u32;
     let func_idx = unsafe { instantiate_and_link_module(ptr, len) };
 
-    return call_indirect(func_idx);
+    call_indirect(func_idx)
 }
