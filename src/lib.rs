@@ -15,8 +15,6 @@ pub fn call_indirect(index: i32) -> i32 {
     let mut e: i32 = 0;
     let mut h: i32 = 0;
     let mut l: i32 = 0;
-    // Clippy REALLY doesn't like us using the `local` register class.
-    #[cfg(not(clippy))]
     unsafe {
         asm!("local.get {8}",
             "local.get {7}",
