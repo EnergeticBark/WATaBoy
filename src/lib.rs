@@ -5,16 +5,17 @@ use std::arch::asm;
 mod codegen;
 pub mod runtime;
 
-#[unsafe(no_mangle)]
-pub fn call_indirect(index: i32) -> i32 {
-    let mut a: i32 = 100;
-    let mut f: i32 = 50;
-    let mut b: i32 = 75;
-    let mut c: i32 = 0;
-    let mut d: i32 = 0;
-    let mut e: i32 = 0;
-    let mut h: i32 = 0;
-    let mut l: i32 = 0;
+fn call_indirect(
+    index: i32,
+    mut a: i32,
+    mut f: i32,
+    mut b: i32,
+    mut c: i32,
+    mut d: i32,
+    mut e: i32,
+    mut h: i32,
+    mut l: i32,
+) -> (i32, i32, i32, i32, i32, i32, i32, i32) {
     unsafe {
         asm!("local.get {8}",
             "local.get {7}",
@@ -45,5 +46,5 @@ pub fn call_indirect(index: i32) -> i32 {
             inout(local) a,
         );
     }
-    a
+    (a, f, b, c, d, e, h, l)
 }

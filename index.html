@@ -5,22 +5,22 @@
 	<script type="module">
 		const instantiate_and_link_module = (bufferPtr, bufferLen) => {
 			console.log("Instantiate and link called...");
-			console.log("Ptr: " + bufferPtr);
-			console.log("Len " + bufferLen);
+			//console.log("Ptr: " + bufferPtr);
+			//console.log("Len " + bufferLen);
 						
 			const bytecode = new Uint8Array(instance.exports.memory.buffer, bufferPtr, bufferLen);
-			console.log(bytecode);
+			//console.log(bytecode);
 			
 			const anotherMod = new WebAssembly.Module(bytecode);
 			const anotherInstance = new WebAssembly.Instance(anotherMod, {});
-			console.log(anotherInstance);
+			//console.log(anotherInstance);
 			
 			// This used to call the grow method, but that's busted in WebKit.
 			// See: https://bugs.webkit.org/show_bug.cgi?id=290681
-			__indirect_function_table.set(17, anotherInstance.exports.add_r)
+			__indirect_function_table.set(57, anotherInstance.exports.add_r)
 			
 			// Hardcoded func_idx for now.
-			return 17;
+			return 57;
 		}
 		
 		const __indirect_function_table = new WebAssembly.Table({ initial: 100, element: "anyfunc" });
@@ -30,10 +30,13 @@
 		const source = fetch("../target/wasm32-unknown-unknown/release/sm83_jit.wasm");
 		const {instance} = await WebAssembly.instantiateStreaming(source, importObj);
 		
-		// instance.exports.call_indirect(1);
-		const a = instance.exports.test_make_add();
-		console.log("a value: " + a);
-
+		const jitRuntime = instance.exports.make_runtime();
+		
+		//for (let i = 0; i < 1000000; i += 1) {
+			const a = instance.exports.test_execute(jitRuntime);
+			console.log("a value: " + a);
+		//}
+		
 		console.log("done :)");
 	</script>
 	<title>Title</title>
