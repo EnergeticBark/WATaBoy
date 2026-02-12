@@ -5,6 +5,8 @@ use std::arch::asm;
 mod codegen;
 pub mod runtime;
 
+// I might clean this up later, I still haven't determined whether its faster passing the registers in raw or not.
+#[allow(clippy::too_many_arguments)]
 fn call_indirect(
     index: i32,
     mut a: i32,

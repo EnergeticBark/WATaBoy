@@ -68,15 +68,22 @@ pub extern "C" fn make_runtime() -> *const JitRuntime {
             cpu
         },
     });
+    // Leak the JitRuntime and return its pointer to the embedder.
     Box::into_raw(runtime)
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn test_execute(runtime: &mut JitRuntime) -> u8 {
-    for _ in 0..5000000 {
+pub extern "C" fn step_vblank(runtime: &mut JitRuntime) {
+    loop {
+        let ly_before_vblank = runtime.dmg_state.memory.ppu.ly() == 143;
         runtime.execute();
+        if ly_before_vblank && runtime.dmg_state.memory.ppu.ly() == 144 {
+            return;
+        }
     }
+}
 
-    // Return the A register for funsies.
-    runtime.dmg_state.registers.af.a()
+#[unsafe(no_mangle)]
+pub extern "C" fn get_lcd_buffer(runtime: &mut JitRuntime) -> *const u8 {
+    runtime.dmg_state.memory.ppu.lcd_buffer.as_ptr()
 }

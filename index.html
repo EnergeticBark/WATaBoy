@@ -3,6 +3,10 @@
 <head>
 	<meta charset="UTF-8">
 	<script type="module">
+		const lcdImage = new ImageData(160, 144);
+		const lcdCanvas = document.querySelector("#lcd");
+		const ctx = lcdCanvas.getContext("2d", { alpha: false });
+	
 		const instantiate_and_link_module = (bufferPtr, bufferLen) => {
 			console.log("Instantiate and link called...");
 			//console.log("Ptr: " + bufferPtr);
@@ -32,16 +36,42 @@
 		
 		const jitRuntime = instance.exports.make_runtime();
 		
-		//for (let i = 0; i < 1000000; i += 1) {
-			const a = instance.exports.test_execute(jitRuntime);
-			console.log("a value: " + a);
-		//}
+		const update_lcd = () => {
+			const lcdBufferPtr = instance.exports.get_lcd_buffer(jitRuntime);
+			const greyscalePixels = new Uint8Array(instance.exports.memory.buffer, lcdBufferPtr, 160 * 144);
+			
+			for (let greyscaleIndex = 0; greyscaleIndex < 160 * 144; greyscaleIndex += 1) { 
+				lcdImage.data[greyscaleIndex * 4] = greyscalePixels[greyscaleIndex];
+				lcdImage.data[greyscaleIndex * 4 + 1] = greyscalePixels[greyscaleIndex];
+				lcdImage.data[greyscaleIndex * 4 + 2] = greyscalePixels[greyscaleIndex];
+				
+				// Alpha is always 255.
+				lcdImage.data[greyscaleIndex * 4 + 3] = 255;
+			}
+			
+			ctx.putImageData(lcdImage, 0, 0)
+		}
+		
+		setInterval(() => {
+			const a = instance.exports.step_vblank(jitRuntime);
+			update_lcd();
+		}, 16);
 		
 		console.log("done :)");
 	</script>
+	<style>
+		#lcd {
+			border: 1px solid;
+			/* 5x scale. */
+			width: 640px;
+			height: 576px;
+			/* It looks kinda funny blurry. */
+			/*image-rendering: pixelated;*/
+		}
+	</style>
 	<title>Title</title>
 </head>
 <body>
-
+	<canvas id="lcd" width="160" height="144"></canvas>
 </body>
 </html>
