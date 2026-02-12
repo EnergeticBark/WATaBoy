@@ -51,6 +51,8 @@ pub fn generate_add_r(r8: R8) -> Vec<u8> {
     let params = vec![ValType::I32; 8];
     // Return those same registers, but modified.
     let results = vec![ValType::I32; 8];
+    const A: u32 = 0;
+    const F: u32 = 1;
     types.ty().function(params, results);
     module.section(&types);
 
@@ -67,15 +69,73 @@ pub fn generate_add_r(r8: R8) -> Vec<u8> {
 
     // Encode the code section.
     let mut codes = CodeSection::new();
-    let locals = vec![];
+    let locals = vec![(2, ValType::I32)];
+    let prev_a = 8;
+    let prev_r8 = 9;
     let mut add_r = Function::new(locals);
     add_r
         .instructions()
-        .local_get(0) // First param to add: Reg A.
+        // *** Store original values of A and R8 so they can be used to calculate the half-carry. ***
+        .local_get(A) // First param to add: Reg A.
+        .local_tee(prev_a)
         .local_get(r8_to_reg_param(r8)) // Second param to add: R8.
+        .local_tee(prev_r8)
+        /* Perform the addition (result not yet truncated):
+         * A = A + R8
+         */
         .i32_add() // Now the result is on the stack.
-        // TODO: Do flag stuff!
-        .local_get(1) // Put all the non-A registers onto the stack to be returned.
+        .local_tee(A) // Assign the result back to A, keeping the result on the stack.
+        // *** Calculate Overflow Flag. ***
+        .i32_const(0b1111_1111)
+        .i32_gt_u() // If result > 255 (overflow), then 1, otherwise 0.
+        /* Assign Overflow Flag:
+         * F = (gt_u_result << 4)
+         */
+        .i32_const(4)
+        .i32_shl()
+        .local_set(F)
+        /* Truncate A to 8-bits.
+         * A &= 0b1111_1111
+         */
+        .local_get(A)
+        .i32_const(0b1111_1111)
+        .i32_and()
+        .local_tee(A)
+        // *** Calculate Zero Flag. ***
+        .i32_eqz() // If the A is zero, then 1, otherwise 0.
+        /* Update Zero Flag:
+         * F |= (eqz_result << 7)
+         */
+        .i32_const(7)
+        .i32_shl()
+        .local_get(F)
+        .i32_or()
+        .local_set(F)
+        /* Calculate Half-Carry Flag:
+            ((A & 0x0f) + (R8 & 0x0f)) & 0x10 == 0x10;
+        */
+        .local_get(prev_a)
+        .i32_const(0x0f)
+        .i32_and() // Leave it on the stack to add
+        .local_get(prev_r8)
+        .i32_const(0x0f)
+        .i32_and()
+        .i32_add()
+        .i32_const(0x10)
+        .i32_and()
+        .i32_const(0x10)
+        .i32_eq()
+        /* Update Half-Carry Flag:
+         * F |= (eq_result << 5)
+         */
+        .i32_const(5)
+        .i32_shl()
+        .local_get(F)
+        .i32_or()
+        .local_set(F)
+        // Return all the registers. :)
+        .local_get(A)
+        .local_get(F)
         .local_get(2)
         .local_get(3)
         .local_get(4)
