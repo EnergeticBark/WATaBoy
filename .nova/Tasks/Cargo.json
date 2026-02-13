@@ -1,0 +1,7 @@
+{
+  "extension" : {
+    "identifier" : "xyz.valknight.rust",
+    "name" : "Rust 3 (??)"
+  },
+  "extensionTemplate" : "cargo"
+}

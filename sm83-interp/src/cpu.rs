@@ -507,7 +507,7 @@ impl Cpu {
                 let a = self.registers.af.a();
                 let r8 = self.r8(x);
                 let (result, carry) = a.overflowing_add(r8);
-                let half_carry = ((a & 0x0f) + (r8 & 0x0f)) & 0x10 == 0x10;
+                let half_carry = ((a & 0x0f) + (r8 & 0x0f)) > 0x0f;
 
                 self.registers.af.set_a(result);
                 self.registers.af.set_f(
