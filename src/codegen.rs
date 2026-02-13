@@ -76,17 +76,19 @@ pub fn generate_add_r(r8: R8) -> Vec<u8> {
     add_r
         .instructions()
         // *** Store original values of A and R8 so they can be used to calculate the half-carry. ***
-        .local_get(A) // First param to add: Reg A.
+        .local_get(A)
         .local_tee(prev_a)
-        .local_get(r8_to_reg_param(r8)) // Second param to add: R8.
+        .local_get(r8_to_reg_param(r8))
         .local_tee(prev_r8)
         /* Perform the addition (result not yet truncated):
          * A = A + R8
          */
-        .i32_add() // Now the result is on the stack.
-        .local_tee(A) // Assign the result back to A, keeping the result on the stack.
-        // *** Calculate Overflow Flag. ***
-        .i32_const(0b1111_1111)
+        .i32_add()
+        .local_tee(A)
+        /* Calculate Overflow Flag:
+         * A > 0xff
+         */
+        .i32_const(0xff)
         .i32_gt_u() // If result > 255 (overflow), then 1, otherwise 0.
         /* Assign Overflow Flag:
          * F = (gt_u_result << 4)
@@ -94,11 +96,11 @@ pub fn generate_add_r(r8: R8) -> Vec<u8> {
         .i32_const(4)
         .i32_shl()
         .local_set(F)
-        /* Truncate A to 8-bits.
-         * A &= 0b1111_1111
+        /* Truncate A to 8-bits:
+         * A &= 0xff
          */
         .local_get(A)
-        .i32_const(0b1111_1111)
+        .i32_const(0xff)
         .i32_and()
         .local_tee(A)
         // *** Calculate Zero Flag. ***
@@ -112,21 +114,19 @@ pub fn generate_add_r(r8: R8) -> Vec<u8> {
         .i32_or()
         .local_set(F)
         /* Calculate Half-Carry Flag:
-            ((A & 0x0f) + (R8 & 0x0f)) & 0x10 == 0x10;
-        */
+         * ((A & 0x0f) + (R8 & 0x0f)) > 0x0f
+         */
         .local_get(prev_a)
         .i32_const(0x0f)
-        .i32_and() // Leave it on the stack to add
+        .i32_and() // (A & 0x0f)
         .local_get(prev_r8)
         .i32_const(0x0f)
-        .i32_and()
+        .i32_and() // (R8 & 0x0f)
         .i32_add()
-        .i32_const(0x10)
-        .i32_and()
-        .i32_const(0x10)
-        .i32_eq()
+        .i32_const(0x0f)
+        .i32_gt_u()
         /* Update Half-Carry Flag:
-         * F |= (eq_result << 5)
+         * F |= (gt_u_result << 5)
          */
         .i32_const(5)
         .i32_shl()
