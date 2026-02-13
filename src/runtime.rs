@@ -38,8 +38,6 @@ impl JitRuntime {
         self.dmg_state.registers.de.set_e(e as u8);
         self.dmg_state.registers.hl.set_h(h as u8);
         self.dmg_state.registers.hl.set_l(l as u8);
-
-        self.dmg_state.registers.pc += 1; // Hard-coded to 1 for now.
     }
 
     // TODO: Checks whether the PC points to the start of a cached, JIT-compiled block.
@@ -53,7 +51,8 @@ impl JitRuntime {
 
             self.execute_cached_block(func_idx);
 
-            // Update dmg_state's register values to the register values returned by that call.
+            // Eventually move `total_pc_count` to a struct with the func_idx so it can be cached alongside it.
+            self.dmg_state.registers.pc += jit_block.total_pc_count;
         } else {
             // Fallback to interpreter.
             self.dmg_state.execute().unwrap();

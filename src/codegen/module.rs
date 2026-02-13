@@ -25,3 +25,9 @@ pub(crate) fn empty_jit_block_module() -> Module {
 
     module
 }
+
+pub(crate) fn empty_jit_block_function() -> Function {
+    // Provide two locals, 8 and 9, to be used as "scratch registers".
+    let locals = vec![(2, ValType::I32)];
+    Function::new(locals)
+}
