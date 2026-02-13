@@ -2,7 +2,13 @@ use sm83_interp::cpu::Cpu;
 use sm83_interp::opcodes;
 use sm83_interp::parameters::R8;
 
-use crate::codegen_utils::{FlagBit, Sm83Macros};
+mod macros;
+mod module;
+mod registers;
+
+use macros::{FlagBit, Sm83Macros};
+use module::empty_jit_block_module;
+use registers::A;
 
 use wasm_encoder::*;
 
@@ -43,31 +49,7 @@ fn r8_to_reg_param(r8: R8) -> u32 {
 }
 
 pub fn generate_add_r(r8: R8) -> Vec<u8> {
-    // For now, I'm just generating the whole module in here, but later, it would append to an existing function.
-
-    let mut module = Module::new();
-
-    // Encode the type section.
-    let mut types = TypeSection::new();
-    // Parameters: (0: A), (1: F), (2: B), (3: C), (4: D), (5: E), (6: H), and (7: L) registers.
-    let params = vec![ValType::I32; 8];
-    // Return those same registers, but modified.
-    let results = vec![ValType::I32; 8];
-    const A: u32 = 0;
-    const F: u32 = 1;
-    types.ty().function(params, results);
-    module.section(&types);
-
-    // Encode the function section.
-    let mut functions = FunctionSection::new();
-    let type_index = 0;
-    functions.function(type_index);
-    module.section(&functions);
-
-    // Encode the export section
-    let mut exports = ExportSection::new();
-    exports.export("add_r", ExportKind::Func, 0);
-    module.section(&exports);
+    let mut module = empty_jit_block_module();
 
     // Encode the code section.
     let mut codes = CodeSection::new();
@@ -77,10 +59,7 @@ pub fn generate_add_r(r8: R8) -> Vec<u8> {
     let mut add_r = Function::new(locals);
     add_r
         .instructions()
-        // *** Clear flags. ***
-        // Maybe add a macro for *assigning* flags too, so we don't have to do this separately from setting the first flag.
-        .i32_const(0x00)
-        .local_set(F)
+        .clear_flags() // Maybe add a macro for *assigning* flags too so we don't have to do this separately from setting the first flag.
         // *** Store original values of A and R8 so they can be used to calculate the half-carry. ***
         .local_get(A)
         .local_tee(prev_a)
@@ -120,15 +99,7 @@ pub fn generate_add_r(r8: R8) -> Vec<u8> {
         .i32_const(0x0f)
         .i32_gt_u()
         .set_flag(FlagBit::HalfCarry)
-        // Return all the registers. :)
-        .local_get(A)
-        .local_get(F)
-        .local_get(2)
-        .local_get(3)
-        .local_get(4)
-        .local_get(5)
-        .local_get(6)
-        .local_get(7)
+        .return_regs()
         .end();
     codes.function(&add_r);
 
