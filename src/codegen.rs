@@ -2,6 +2,8 @@ use sm83_interp::cpu::Cpu;
 use sm83_interp::opcodes;
 use sm83_interp::parameters::R8;
 
+use crate::codegen_utils::{FlagBit, Sm83Macros};
+
 use wasm_encoder::*;
 
 pub struct JitBlock {
@@ -75,6 +77,10 @@ pub fn generate_add_r(r8: R8) -> Vec<u8> {
     let mut add_r = Function::new(locals);
     add_r
         .instructions()
+        // *** Clear flags. ***
+        // Maybe add a macro for *assigning* flags too, so we don't have to do this separately from setting the first flag.
+        .i32_const(0x00)
+        .local_set(F)
         // *** Store original values of A and R8 so they can be used to calculate the half-carry. ***
         .local_get(A)
         .local_tee(prev_a)
@@ -90,12 +96,7 @@ pub fn generate_add_r(r8: R8) -> Vec<u8> {
          */
         .i32_const(0xff)
         .i32_gt_u() // If result > 255 (overflow), then 1, otherwise 0.
-        /* Assign Overflow Flag:
-         * F = (gt_u_result << 4)
-         */
-        .i32_const(4)
-        .i32_shl()
-        .local_set(F)
+        .set_flag(FlagBit::Carry)
         /* Truncate A to 8-bits:
          * A &= 0xff
          */
@@ -105,14 +106,7 @@ pub fn generate_add_r(r8: R8) -> Vec<u8> {
         .local_tee(A)
         // *** Calculate Zero Flag. ***
         .i32_eqz() // If the A is zero, then 1, otherwise 0.
-        /* Update Zero Flag:
-         * F |= (eqz_result << 7)
-         */
-        .i32_const(7)
-        .i32_shl()
-        .local_get(F)
-        .i32_or()
-        .local_set(F)
+        .set_flag(FlagBit::Zero)
         /* Calculate Half-Carry Flag:
          * ((A & 0x0f) + (R8 & 0x0f)) > 0x0f
          */
@@ -125,14 +119,7 @@ pub fn generate_add_r(r8: R8) -> Vec<u8> {
         .i32_add()
         .i32_const(0x0f)
         .i32_gt_u()
-        /* Update Half-Carry Flag:
-         * F |= (gt_u_result << 5)
-         */
-        .i32_const(5)
-        .i32_shl()
-        .local_get(F)
-        .i32_or()
-        .local_set(F)
+        .set_flag(FlagBit::HalfCarry)
         // Return all the registers. :)
         .local_get(A)
         .local_get(F)

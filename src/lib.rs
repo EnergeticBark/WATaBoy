@@ -3,6 +3,7 @@
 use std::arch::asm;
 
 mod codegen;
+mod codegen_utils;
 pub mod runtime;
 
 // I might clean this up later, I still haven't determined whether its faster passing the registers in raw or not.
