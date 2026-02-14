@@ -15,39 +15,42 @@ use wasm_encoder::*;
 pub struct JitBlock {
     // Wasm bytecode.
     pub buffer: Vec<u8>,
-    pub total_pc_count: u16,
+    pub pc_delta: u16,
 }
 
 // TODO: Takes a PC address and CPU state as input and produces a JitBlock.
 // TODO: JitBlock includes the raw bytes of Wasm as well as metadata, e.g. how many total cycles it takes to execute.
 // TODO: Read one opcode at a time until a branching statement is reached. -> Codegen Wasm for each instruction.
 pub fn recompile(dmg_state: &mut Cpu) -> Option<JitBlock> {
+    let mut function = empty_jit_block_function();
+    let mut instruction_sink = function.instructions();
+
+    let mut pc_delta = 0;
+
+    let pc = dmg_state.registers.pc;
+    loop {
+        let bytecode = dmg_state.memory[pc + pc_delta];
+        let opcode = opcodes::decode(bytecode).unwrap();
+
+        match opcode {
+            // Ignore ADD (HL) for now...
+            opcodes::Opcode::AddR { x: R8::IndirectHL } => break,
+            opcodes::Opcode::AddR { x } => {
+                instruction_sink.add_r(x);
+                pc_delta += 1;
+            }
+            _ => break,
+        }
+    }
+
+    if pc_delta == 0 {
+        return None;
+    }
+
     let mut module = empty_jit_block_module();
 
     // Encode the code section.
     let mut codes = CodeSection::new();
-    let mut function = empty_jit_block_function();
-    let mut instruction_sink = function.instructions();
-
-    let mut total_pc_count = 0;
-
-    let pc = dmg_state.registers.pc;
-    let bytecode = dmg_state.memory[pc];
-    let opcode = opcodes::decode(bytecode).unwrap();
-
-    match opcode {
-        // Ignore ADD (HL) for now...
-        opcodes::Opcode::AddR { x: R8::IndirectHL } => (),
-        opcodes::Opcode::AddR { x } => {
-            instruction_sink.add_r(x);
-            total_pc_count += 1;
-        }
-        _ => (),
-    }
-
-    if total_pc_count == 0 {
-        return None;
-    }
 
     instruction_sink.return_regs().end();
     codes.function(&function);
@@ -55,7 +58,7 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<JitBlock> {
 
     Some(JitBlock {
         buffer: module.finish(),
-        total_pc_count,
+        pc_delta,
     })
 }
 

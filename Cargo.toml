@@ -6,7 +6,10 @@ edition = "2024"
 [lib]
 crate-type = ["cdylib", "lib"]
 
+[profile.release]
+lto = true
+
 [dependencies]
-wasm-encoder = "0.244"
+wasm-encoder = "0.245.1"
 sm83-interp = { path = "../wasmboy/sm83-interp" }
 hw-constants = { path = "../wasmboy/hw-constants" }

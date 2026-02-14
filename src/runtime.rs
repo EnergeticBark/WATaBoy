@@ -52,7 +52,7 @@ impl JitRuntime {
             self.execute_cached_block(func_idx);
 
             // Eventually move `total_pc_count` to a struct with the func_idx so it can be cached alongside it.
-            self.dmg_state.registers.pc += jit_block.total_pc_count;
+            self.dmg_state.registers.pc += jit_block.pc_delta;
         } else {
             // Fallback to interpreter.
             self.dmg_state.execute().unwrap();
