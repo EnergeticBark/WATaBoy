@@ -22,12 +22,21 @@ pub struct JitBlock {
 // TODO: JitBlock includes the raw bytes of Wasm as well as metadata, e.g. how many total cycles it takes to execute.
 // TODO: Read one opcode at a time until a branching statement is reached. -> Codegen Wasm for each instruction.
 pub fn recompile(dmg_state: &mut Cpu) -> Option<JitBlock> {
+    let pc = dmg_state.registers.pc;
+    let bytecode = dmg_state.memory[pc];
+    let opcode = opcodes::decode(bytecode).unwrap();
+
+    // Early return if the first opcode is incompatible so we don't have to create the function.
+    match opcode {
+        opcodes::Opcode::AddR { x: R8::IndirectHL } => return None,
+        opcodes::Opcode::AddR { .. } => (),
+        _ => return None,
+    }
+
     let mut function = empty_jit_block_function();
     let mut instruction_sink = function.instructions();
 
     let mut pc_delta = 0;
-
-    let pc = dmg_state.registers.pc;
     loop {
         let bytecode = dmg_state.memory[pc + pc_delta];
         let opcode = opcodes::decode(bytecode).unwrap();
@@ -41,10 +50,6 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<JitBlock> {
             }
             _ => break,
         }
-    }
-
-    if pc_delta == 0 {
-        return None;
     }
 
     let mut module = empty_jit_block_module();
