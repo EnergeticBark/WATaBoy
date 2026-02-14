@@ -2,63 +2,7 @@
 <html lang="en">
 <head>
 	<meta charset="UTF-8">
-	<script type="module">
-		const lcdImage = new ImageData(160, 144);
-		const lcdCanvas = document.querySelector("#lcd");
-		const ctx = lcdCanvas.getContext("2d", { alpha: false });
-	
-		const instantiate_and_link_module = (bufferPtr, bufferLen) => {
-			console.log("Instantiate and link called...");
-			//console.log("Ptr: " + bufferPtr);
-			//console.log("Len " + bufferLen);
-						
-			const bytecode = new Uint8Array(instance.exports.memory.buffer, bufferPtr, bufferLen);
-			//console.log(bytecode);
-			
-			const anotherMod = new WebAssembly.Module(bytecode);
-			const anotherInstance = new WebAssembly.Instance(anotherMod, {});
-			//console.log(anotherInstance);
-			
-			// This used to call the grow method, but that's busted in WebKit.
-			// See: https://bugs.webkit.org/show_bug.cgi?id=290681
-			__indirect_function_table.set(57, anotherInstance.exports.execute_block)
-			
-			// Hardcoded func_idx for now.
-			return 57;
-		}
-		
-		const __indirect_function_table = new WebAssembly.Table({ initial: 100, element: "anyfunc" });
-	
-		const importObj = {env: {instantiate_and_link_module, __indirect_function_table}};
-		
-		const source = fetch("./target/wasm32-unknown-unknown/release/sm83_jit.wasm");
-		const {instance} = await WebAssembly.instantiateStreaming(source, importObj);
-		
-		const jitRuntime = instance.exports.make_runtime();
-		
-		const update_lcd = () => {
-			const lcdBufferPtr = instance.exports.get_lcd_buffer(jitRuntime);
-			const greyscalePixels = new Uint8Array(instance.exports.memory.buffer, lcdBufferPtr, 160 * 144);
-			
-			for (let greyscaleIndex = 0; greyscaleIndex < 160 * 144; greyscaleIndex += 1) { 
-				lcdImage.data[greyscaleIndex * 4] = greyscalePixels[greyscaleIndex];
-				lcdImage.data[greyscaleIndex * 4 + 1] = greyscalePixels[greyscaleIndex];
-				lcdImage.data[greyscaleIndex * 4 + 2] = greyscalePixels[greyscaleIndex];
-				
-				// Alpha is always 255.
-				lcdImage.data[greyscaleIndex * 4 + 3] = 255;
-			}
-			
-			ctx.putImageData(lcdImage, 0, 0)
-		}
-		
-		setInterval(() => {
-			instance.exports.step_vblank(jitRuntime);
-			update_lcd();
-		}, 16);
-		
-		console.log("done :)");
-	</script>
+	<script type="module" src="js/main.js"></script>
 	<style>
 		#lcd {
 			border: 1px solid;
@@ -69,7 +13,7 @@
 			/*image-rendering: pixelated;*/
 		}
 	</style>
-	<title>Title</title>
+	<title>WATaBoy</title>
 </head>
 <body>
 	<canvas id="lcd" width="160" height="144"></canvas>
