@@ -1,6 +1,6 @@
+use crate::joypad::{ButtonsHeld, Joyp};
 use crate::mbc::Mbc;
 use crate::timers::Timers;
-use crate::joypad::{ButtonsHeld, Joyp};
 
 use hw_constants::{PostBoot, io_regs};
 use log::info;
@@ -17,6 +17,8 @@ pub struct AddressBus {
     pub ppu: Ppu,
     mbc: Mbc,
     half_ticked: bool,
+    #[rkyv(with = Skip)]
+    pub buttons_held: ButtonsHeld,
 }
 
 impl AddressBus {
@@ -29,7 +31,8 @@ impl AddressBus {
         match index {
             // Delegate write in the ROM range and the SRAM range to the MBC.
             0x0000..0x8000 | 0xA000..0xC000 => {
-                self.mbc.write_byte(self.buffer.as_mut_slice(), index, value);
+                self.mbc
+                    .write_byte(self.buffer.as_mut_slice(), index, value);
             }
 
             // Initiate OAM transfer.
@@ -124,19 +127,19 @@ impl AddressBus {
         }
     }
 
-    pub fn update_joypad(&mut self, held_buttons: ButtonsHeld) {
+    pub(crate) fn update_joypad(&mut self) {
         let mut joypad = Joyp::from_bits(self.buffer[io_regs::JOYP as usize]);
         if !joypad.select_buttons() {
-            joypad.set_start_down(!held_buttons.start);
-            joypad.set_select_up(!held_buttons.select);
-            joypad.set_b_left(!held_buttons.b);
-            joypad.set_a_right(!held_buttons.a);
+            joypad.set_start_down(!self.buttons_held.start);
+            joypad.set_select_up(!self.buttons_held.select);
+            joypad.set_b_left(!self.buttons_held.b);
+            joypad.set_a_right(!self.buttons_held.a);
         }
         if !joypad.select_dpad() {
-            joypad.set_start_down(!held_buttons.down);
-            joypad.set_select_up(!held_buttons.up);
-            joypad.set_b_left(!held_buttons.left);
-            joypad.set_a_right(!held_buttons.right);
+            joypad.set_start_down(!self.buttons_held.down);
+            joypad.set_select_up(!self.buttons_held.up);
+            joypad.set_b_left(!self.buttons_held.left);
+            joypad.set_a_right(!self.buttons_held.right);
         }
         // TODO: Fire the joypad interrupt on a high-to-low change
         self.buffer[io_regs::JOYP as usize] = joypad.into_bits();
@@ -146,11 +149,15 @@ impl AddressBus {
 impl Default for AddressBus {
     fn default() -> Self {
         Self {
-            buffer: vec![0; hw_constants::MEM_MAP_SIZE].into_boxed_slice().try_into().unwrap(),
+            buffer: vec![0; hw_constants::MEM_MAP_SIZE]
+                .into_boxed_slice()
+                .try_into()
+                .unwrap(),
             timers: Timers::default(),
             ppu: Ppu::default(),
             mbc: Mbc::default(),
             half_ticked: false,
+            buttons_held: ButtonsHeld::default(),
         }
     }
 }

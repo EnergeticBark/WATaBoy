@@ -106,6 +106,8 @@ impl Cpu {
     }
 
     fn handle_interrupts(&mut self) {
+        self.memory.update_joypad(); // Is this the best place to put this?
+
         if self.halted {
             // DMG checks interrupt flags *between* M-Cycles in halt mode.
             self.memory.half_increment_timers();
