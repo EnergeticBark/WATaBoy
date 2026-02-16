@@ -1,3 +1,5 @@
+import { buttonsHeld } from "./keyboard.js";
+
 const LCD_WIDTH = 160;
 const LCD_HEIGHT = 144;
 
@@ -53,6 +55,17 @@ const update_lcd = () => {
 setInterval(() => {
 	instance.exports.step_vblank(jitRuntime);
 	update_lcd();
+	instance.exports.update_joypad(
+		jitRuntime,
+		buttonsHeld.start,
+		buttonsHeld.select,
+		buttonsHeld.b,
+		buttonsHeld.a,
+		buttonsHeld.down,
+		buttonsHeld.up,
+		buttonsHeld.left,
+		buttonsHeld.right,
+	);
 }, 1);
 
 console.log("done :)");

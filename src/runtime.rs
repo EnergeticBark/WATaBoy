@@ -2,6 +2,7 @@ use crate::{call_indirect, codegen};
 
 use hw_constants::PostBoot;
 use sm83_interp::cpu::Cpu;
+use sm83_interp::joypad::ButtonsHeld;
 use sm83_interp::registers::Flags;
 
 const TEST_ROM: &[u8; 32768] = include_bytes!("../09-op r,r.gb");
@@ -82,6 +83,31 @@ pub extern "C" fn step_vblank(runtime: &mut JitRuntime) {
             return;
         }
     }
+}
+
+// TODO: Figure out a nice way to pass C structs across runtime boundaries without resorting to wasm-bindgen.
+#[unsafe(no_mangle)]
+pub extern "C" fn update_joypad(
+    runtime: &mut JitRuntime,
+    start: bool,
+    select: bool,
+    b: bool,
+    a: bool,
+    down: bool,
+    up: bool,
+    left: bool,
+    right: bool,
+) {
+    runtime.dmg_state.memory.buttons_held = ButtonsHeld {
+        start,
+        select,
+        b,
+        a,
+        down,
+        up,
+        left,
+        right,
+    };
 }
 
 #[unsafe(no_mangle)]
