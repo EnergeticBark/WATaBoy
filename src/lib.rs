@@ -5,6 +5,17 @@ use std::arch::asm;
 mod codegen;
 pub mod runtime;
 
+unsafe extern "C" {
+    fn console_log_glue(buffer: *const u8, len: u32);
+}
+
+/// This function is expensive to call, it should have no usages in the codebase unless it's actively being used for debugging.
+pub fn console_log(message: &str) {
+    unsafe {
+        console_log_glue(message.as_ptr(), message.len() as u32);
+    }
+}
+
 // I might clean this up later, I still haven't determined whether its faster passing the registers in raw or not.
 #[allow(clippy::too_many_arguments)]
 fn call_indirect(

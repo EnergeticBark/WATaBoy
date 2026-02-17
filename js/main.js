@@ -1,4 +1,5 @@
 import { buttonsHeld } from "./keyboard.js";
+import { console_log_glue } from "./glue.js";
 
 const LCD_WIDTH = 160;
 const LCD_HEIGHT = 144;
@@ -32,7 +33,7 @@ const instantiate_and_link_module = (bufferPtr, bufferLen) => {
 
 const __indirect_function_table = new WebAssembly.Table({ initial: 100, element: "anyfunc" });
 
-const importObj = {env: {instantiate_and_link_module, __indirect_function_table}};
+const importObj = {env: {console_log_glue, instantiate_and_link_module, __indirect_function_table}};
 
 const source = fetch("./target/wasm32-unknown-unknown/release/sm83_jit.wasm");
 const {instance} = await WebAssembly.instantiateStreaming(source, importObj);
