@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+
+use crate::cache::CompiledBlock;
 use crate::{call_indirect, codegen};
 
 use hw_constants::PostBoot;
@@ -18,10 +21,12 @@ unsafe extern "C" {
 
 pub struct JitRuntime {
     dmg_state: Cpu,
+    block_cache: HashMap<u16, CompiledBlock>,
 }
 
 impl JitRuntime {
-    fn execute_cached_block(&mut self, func_idx: i32) {
+    fn execute_compiled_block(&mut self, compiled_block: CompiledBlock) {
+        // Provide registers for the JIT's prologue.
         let a = self.dmg_state.registers.af.a().into();
         let f = self.dmg_state.registers.af.f().into_bits().into();
         let b = self.dmg_state.registers.bc.b().into();
@@ -30,7 +35,9 @@ impl JitRuntime {
         let e = self.dmg_state.registers.de.e().into();
         let h = self.dmg_state.registers.hl.h().into();
         let l = self.dmg_state.registers.hl.l().into();
-        let (a, f, b, c, d, e, h, l) = call_indirect(func_idx, a, f, b, c, d, e, h, l);
+        let (a, f, b, c, d, e, h, l) =
+            call_indirect(compiled_block.func_idx, a, f, b, c, d, e, h, l);
+        // Update dmg_state's registers based on the values returned in the JIT's epilogue.
         self.dmg_state.registers.af.set_a(a as u8);
         self.dmg_state.registers.af.set_f(Flags::from_bits(f as u8));
         self.dmg_state.registers.bc.set_b(b as u8);
@@ -39,21 +46,34 @@ impl JitRuntime {
         self.dmg_state.registers.de.set_e(e as u8);
         self.dmg_state.registers.hl.set_h(h as u8);
         self.dmg_state.registers.hl.set_l(l as u8);
+
+        // Update the program counter.
+        self.dmg_state.registers.pc += compiled_block.pc_delta;
     }
 
     // TODO: Checks whether the PC points to the start of a cached, JIT-compiled block.
     // If so, it executes it. Otherwise, it calls recompile(&Cpu) to JIT and cache a block.
     // If neither of these are possible for some reason, it will just call the interpreter’s execute function.
     fn execute(&mut self) {
+        let pc = self.dmg_state.registers.pc;
+
+        if let Some(&compiled_block) = self.block_cache.get(&pc) {
+            self.execute_compiled_block(compiled_block);
+        }
+
         if let Some(jit_block) = codegen::recompile(&mut self.dmg_state) {
             let ptr = jit_block.buffer.as_ptr();
             let len = jit_block.buffer.len() as u32;
             let func_idx = unsafe { instantiate_and_link_module(ptr, len) };
+            let compiled_block = CompiledBlock {
+                func_idx,
+                pc_delta: jit_block.pc_delta,
+            };
 
-            self.execute_cached_block(func_idx);
+            // Add the block we just compiled to the cache.
+            self.block_cache.insert(pc, compiled_block);
 
-            // Eventually move `total_pc_count` to a struct with the func_idx so it can be cached alongside it.
-            self.dmg_state.registers.pc += jit_block.pc_delta;
+            self.execute_compiled_block(compiled_block);
         } else {
             // Fallback to interpreter.
             self.dmg_state.execute().unwrap();
@@ -61,15 +81,23 @@ impl JitRuntime {
     }
 }
 
+// TODO: Should probably implement PostBoot too/instead...
+impl Default for JitRuntime {
+    fn default() -> Self {
+        Self {
+            dmg_state: {
+                let mut cpu = Cpu::post_boot_dmg();
+                cpu.memory.load_rom(TEST_ROM);
+                cpu
+            },
+            block_cache: Default::default(),
+        }
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn make_runtime() -> *const JitRuntime {
-    let runtime = Box::new(JitRuntime {
-        dmg_state: {
-            let mut cpu = Cpu::post_boot_dmg();
-            cpu.memory.load_rom(TEST_ROM);
-            cpu
-        },
-    });
+    let runtime = Box::new(JitRuntime::default());
     // Leak the JitRuntime and return its pointer to the embedder.
     Box::into_raw(runtime)
 }

@@ -11,6 +11,8 @@ lcdImage.data.fill(255);
 const lcdCanvas = document.querySelector("#lcd");
 const ctx = lcdCanvas.getContext("2d", { alpha: false });
 
+// TODO: Determine this value at runtime instead of hardcoding it.
+let lowestSafeFuncIdx = 57;
 const instantiate_and_link_module = (bufferPtr, bufferLen) => {
 	//console.log("Instantiate and link called...");
 	//console.log("Ptr: " + bufferPtr);
@@ -25,10 +27,11 @@ const instantiate_and_link_module = (bufferPtr, bufferLen) => {
 	
 	// This used to call the grow method, but that's busted in WebKit.
 	// See: https://bugs.webkit.org/show_bug.cgi?id=290681
-	__indirect_function_table.set(57, anotherInstance.exports.execute_block)
+	__indirect_function_table.set(lowestSafeFuncIdx, anotherInstance.exports.execute_block)
 	
-	// Hardcoded func_idx for now.
-	return 57;
+	const prevIdx = lowestSafeFuncIdx;
+	lowestSafeFuncIdx += 1;
+	return prevIdx;
 }
 
 const __indirect_function_table = new WebAssembly.Table({ initial: 100, element: "anyfunc" });

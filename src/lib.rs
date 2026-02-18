@@ -2,6 +2,7 @@
 
 use std::arch::asm;
 
+mod cache;
 mod codegen;
 pub mod runtime;
 

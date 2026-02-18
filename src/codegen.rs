@@ -12,21 +12,31 @@ use registers::A;
 
 use wasm_encoder::*;
 
-pub struct JitBlock {
+// Stores the raw Wasm bytecode dynamically recompiled from a
+// block of SM83 instructions and the metadata needed to execute
+// it, e.g. how many M-cycles it takes to execute.
+pub struct WasmBlock {
     // Wasm bytecode.
     pub buffer: Vec<u8>,
     pub pc_delta: u16,
+    // TODO: Store M-cycles.
 }
 
-// TODO: Takes a PC address and CPU state as input and produces a JitBlock.
-// TODO: JitBlock includes the raw bytes of Wasm as well as metadata, e.g. how many total cycles it takes to execute.
+// Try to produce a WasmBlock starting at dmg_state's current program counter.
 // TODO: Read one opcode at a time until a branching statement is reached. -> Codegen Wasm for each instruction.
-pub fn recompile(dmg_state: &mut Cpu) -> Option<JitBlock> {
+pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
     let pc = dmg_state.registers.pc;
+    // Only cache from ROM bank 00 for now.
+    if pc >= 0x4000 {
+        return None;
+    }
+
     let bytecode = dmg_state.memory[pc];
     let opcode = opcodes::decode(bytecode).unwrap();
 
     // Early return if the first opcode is incompatible so we don't have to create the function.
+    // I really don't like that this means we call decode() twice... theres probably a better way to do this.
+    // Maybe look into how LazyLock would perform?
     match opcode {
         opcodes::Opcode::AddR { x: R8::IndirectHL } => return None,
         opcodes::Opcode::AddR { .. } => (),
@@ -61,7 +71,7 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<JitBlock> {
     codes.function(&function);
     module.section(&codes);
 
-    Some(JitBlock {
+    Some(WasmBlock {
         buffer: module.finish(),
         pc_delta,
     })
