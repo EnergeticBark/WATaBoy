@@ -1,16 +1,16 @@
 use std::collections::HashMap;
 
 use crate::cache::CompiledBlock;
-use crate::{call_indirect, codegen};
+use crate::{call_indirect, codegen, console_log};
 
 use hw_constants::PostBoot;
 use sm83_interp::cpu::Cpu;
 use sm83_interp::joypad::ButtonsHeld;
 use sm83_interp::registers::Flags;
 
-const TEST_ROM: &[u8; 32768] = include_bytes!("../09-op r,r.gb");
-/*const TEST_ROM: &[u8; 1048576] =
-include_bytes!("../Pokemon - Blue Version (USA, Europe) (SGB Enhanced).sgb");*/
+//const TEST_ROM: &[u8; 32768] = include_bytes!("../09-op r,r.gb");
+const TEST_ROM: &[u8; 1048576] =
+    include_bytes!("../Pokemon - Blue Version (USA, Europe) (SGB Enhanced).sgb");
 
 unsafe extern "C" {
     // Compiles and instantiates a Wasm module using the bytecode in `buffer`, then adds its function to table 1 of *this* module.
@@ -62,6 +62,9 @@ impl JitRuntime {
         }
 
         if let Some(jit_block) = codegen::recompile(&mut self.dmg_state) {
+            #[cfg(feature = "jit-trace")]
+            console_log(&wasmprinter::print_bytes(&jit_block.buffer).unwrap());
+
             let ptr = jit_block.buffer.as_ptr();
             let len = jit_block.buffer.len() as u32;
             let func_idx = unsafe { instantiate_and_link_module(ptr, len) };

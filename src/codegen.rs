@@ -12,6 +12,9 @@ use registers::A;
 
 use wasm_encoder::*;
 
+#[cfg(feature = "jit-trace")]
+use crate::console_log;
+
 // Stores the raw Wasm bytecode dynamically recompiled from a
 // block of SM83 instructions and the metadata needed to execute
 // it, e.g. how many M-cycles it takes to execute.
@@ -43,6 +46,9 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
         _ => return None,
     }
 
+    #[cfg(feature = "jit-trace")]
+    let mut sm83_disassembly = String::new();
+
     let mut function = empty_jit_block_function();
     let mut instruction_sink = function.instructions();
 
@@ -60,7 +66,13 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
             }
             _ => break,
         }
+
+        #[cfg(feature = "jit-trace")]
+        sm83_disassembly.push_str(&format!("{:?}\n", opcode))
     }
+
+    #[cfg(feature = "jit-trace")]
+    console_log(&sm83_disassembly);
 
     let mut module = empty_jit_block_module();
 
