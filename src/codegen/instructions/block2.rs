@@ -61,6 +61,7 @@ impl Block2 for InstructionSink<'_> {
     }
 
     fn adc_r(&mut self, r8: R8) -> &mut Self {
+        // Name our scratch register.
         const PREV_CARRY: u32 = 8;
         self.check_flag(FlagBit::Carry) // *** Store original value of Carry. ***
             .local_set(PREV_CARRY)

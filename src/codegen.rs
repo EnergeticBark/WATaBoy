@@ -56,6 +56,13 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 pc_delta += 1;
             }
 
+            // Ignore INC (HL) for now...
+            Opcode::IncR { x: R8::IndirectHL } => break,
+            Opcode::IncR { x } => {
+                instruction_sink.inc_r(x);
+                pc_delta += 1;
+            }
+
             // Block 1
             // Ignore LD (HL), y and LD x, (HL) for now...
             Opcode::LdRR {
