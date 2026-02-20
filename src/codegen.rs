@@ -76,6 +76,12 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 instruction_sink.add_r(x);
                 pc_delta += 1;
             }
+            // Ignore AND (HL) for now...
+            Opcode::AndR { x: R8::IndirectHL } => break,
+            Opcode::AndR { x } => {
+                instruction_sink.and_r(x);
+                pc_delta += 1;
+            }
 
             // Block 3
             Opcode::AddN => {

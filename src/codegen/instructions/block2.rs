@@ -9,6 +9,7 @@ use wasm_encoder::*;
 // See: https://gbdev.io/pandocs/CPU_Instruction_Set.html#block-2-8-bit-arithmetic
 pub trait Block2 {
     fn add_r(&mut self, r8: R8) -> &mut Self;
+    fn and_r(&mut self, r8: R8) -> &mut Self;
 }
 
 impl Block2 for InstructionSink<'_> {
@@ -56,5 +57,19 @@ impl Block2 for InstructionSink<'_> {
             .i32_const(0x0f)
             .i32_gt_u()
             .set_flag(FlagBit::HalfCarry)
+    }
+
+    fn and_r(&mut self, r8: R8) -> &mut Self {
+        self.assign_flags(false, false, true, false) // Always set half-carry to 1.
+            .local_get(A)
+            .local_get(r8_to_reg_param(r8))
+            /* Perform the and:
+             * A = A & R8
+             */
+            .i32_and()
+            .local_tee(A)
+            // *** Calculate Zero Flag. ***
+            .i32_eqz() // If the A is zero, then 1, otherwise 0.
+            .set_flag(FlagBit::Zero)
     }
 }

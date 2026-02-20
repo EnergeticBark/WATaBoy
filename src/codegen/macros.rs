@@ -11,6 +11,13 @@ pub(crate) enum FlagBit {
 
 pub(crate) trait Sm83Macros {
     fn clear_flags(&mut self) -> &mut Self;
+    fn assign_flags(
+        &mut self,
+        zero: bool,
+        subtraction: bool,
+        half_carry: bool,
+        carry: bool,
+    ) -> &mut Self;
     fn set_flag(&mut self, flag_bit: FlagBit) -> &mut Self;
     fn return_regs(&mut self) -> &mut Self;
 }
@@ -27,6 +34,39 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     fn clear_flags(&mut self) -> &mut Self {
         self.i32_const(0x00).local_set(F)
+    }
+
+    /// Assign the bits in the flag register, overwriting any previous value.
+    /// # Signature
+    /// ```
+    /// () -> ()
+    /// ```
+    /// # Pseudocode
+    /// ```
+    /// F = flag_bits
+    /// ```
+    fn assign_flags(
+        &mut self,
+        zero: bool,
+        subtraction: bool,
+        half_carry: bool,
+        carry: bool,
+    ) -> &mut Self {
+        let mut flags: u8 = 0b0000_0000;
+        if zero {
+            flags |= 1 << FlagBit::Zero as usize;
+        }
+        if subtraction {
+            flags |= 1 << FlagBit::Subtraction as usize;
+        }
+        if half_carry {
+            flags |= 1 << FlagBit::HalfCarry as usize;
+        }
+        if carry {
+            flags |= 1 << FlagBit::Carry as usize;
+        }
+
+        self.i32_const(flags as i32).local_set(F)
     }
 
     /// Set the selected bit in the flag register. This will only change a 0 to a 1, not vice-versa.
