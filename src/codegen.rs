@@ -1,5 +1,6 @@
 use sm83_interp::cpu::Cpu;
 use sm83_interp::opcodes;
+use sm83_interp::opcodes::Opcode;
 use sm83_interp::parameters::R8;
 
 mod instructions;
@@ -7,7 +8,7 @@ mod macros;
 mod module;
 mod registers;
 
-use instructions::{Block1, Block2, Block3};
+use instructions::{Block0, Block1, Block2, Block3};
 use macros::Sm83Macros;
 use module::{empty_jit_block_function, empty_jit_block_module};
 
@@ -48,27 +49,36 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
         let opcode = opcodes::decode(bytecode).unwrap();
 
         match opcode {
+            // Block 0
+            Opcode::Nop => {
+                // Need to use fully-qualified syntax to call *our* nop function.
+                <InstructionSink as Block0>::nop(&mut instruction_sink);
+                pc_delta += 1;
+            }
+
             // Block 1
             // Ignore LD (HL), y and LD x, (HL) for now...
-            opcodes::Opcode::LdRR {
+            Opcode::LdRR {
                 x: R8::IndirectHL, ..
             }
-            | opcodes::Opcode::LdRR {
+            | Opcode::LdRR {
                 y: R8::IndirectHL, ..
             } => break,
-            opcodes::Opcode::LdRR { x, y } => {
+            Opcode::LdRR { x, y } => {
                 instruction_sink.ld_r_r(x, y);
                 pc_delta += 1;
             }
+
             // Block 2
             // Ignore ADD (HL) for now...
-            opcodes::Opcode::AddR { x: R8::IndirectHL } => break,
-            opcodes::Opcode::AddR { x } => {
+            Opcode::AddR { x: R8::IndirectHL } => break,
+            Opcode::AddR { x } => {
                 instruction_sink.add_r(x);
                 pc_delta += 1;
             }
+
             // Block 3
-            opcodes::Opcode::AddN => {
+            Opcode::AddN => {
                 pc_delta += 1;
                 let current_pc = dmg_state.registers.pc + pc_delta;
                 let imm = dmg_state.memory[current_pc];
