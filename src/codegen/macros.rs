@@ -19,6 +19,7 @@ pub(crate) trait Sm83Macros {
         carry: bool,
     ) -> &mut Self;
     fn set_flag(&mut self, flag_bit: FlagBit) -> &mut Self;
+    fn check_flag(&mut self, flag_bit: FlagBit) -> &mut Self;
     fn return_regs(&mut self) -> &mut Self;
 }
 
@@ -84,6 +85,23 @@ impl Sm83Macros for InstructionSink<'_> {
             .local_get(F)
             .i32_or()
             .local_set(F)
+    }
+
+    /// Check if the selected flag's bit is set in the flag register.
+    /// # Signature
+    /// ```
+    /// () -> (bool: i32)
+    /// ```
+    /// # Pseudocode
+    /// ```
+    /// return (F >> flag_bit) & 1
+    /// ```
+    fn check_flag(&mut self, flag_bit: FlagBit) -> &mut Self {
+        self.local_get(F)
+            .i32_const(flag_bit as i32)
+            .i32_shr_u()
+            .i32_const(0x01)
+            .i32_and()
     }
 
     /// Return all of the registers to satisfy the calling convention.
