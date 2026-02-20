@@ -2,14 +2,14 @@ use wasm_encoder::InstructionSink;
 
 use crate::codegen::registers::{A, B, C, D, E, F, H, L};
 
-pub enum FlagBit {
+pub(crate) enum FlagBit {
     Zero = 7,
     Subtraction = 6,
     HalfCarry = 5,
     Carry = 4,
 }
 
-pub trait Sm83Macros {
+pub(crate) trait Sm83Macros {
     fn clear_flags(&mut self) -> &mut Self;
     fn set_flag(&mut self, flag_bit: FlagBit) -> &mut Self;
     fn return_regs(&mut self) -> &mut Self;
