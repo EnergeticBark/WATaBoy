@@ -32,6 +32,7 @@ pub struct WasmBlock {
 pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
     let pc = dmg_state.registers.pc;
     // Only cache from ROM bank 00 for now.
+    #[cfg(feature = "caching")]
     if pc >= 0x4000 {
         return None;
     }
@@ -87,6 +88,12 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
             Opcode::AdcR { x: R8::IndirectHL } => break,
             Opcode::AdcR { x } => {
                 instruction_sink.adc_r(x);
+                pc_delta += 1;
+            }
+            // Ignore SUB (HL) for now...
+            Opcode::SubR { x: R8::IndirectHL } => break,
+            Opcode::SubR { x } => {
+                instruction_sink.sub_r(x);
                 pc_delta += 1;
             }
             // Ignore AND (HL) for now...

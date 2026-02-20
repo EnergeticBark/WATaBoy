@@ -18,3 +18,4 @@ wasmprinter = { version = "0.243.0", optional = true }
 
 [features]
 jit-trace = ["dep:wasmprinter"]
+caching = []
