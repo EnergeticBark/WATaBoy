@@ -96,10 +96,33 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 instruction_sink.sub_r(x);
                 pc_delta += 1;
             }
+            // Ignore SBC (HL) for now...
+            Opcode::SbcR { x: R8::IndirectHL } => break,
+            Opcode::SbcR { x } => {
+                instruction_sink.sbc_r(x);
+                pc_delta += 1;
+            }
             // Ignore AND (HL) for now...
             Opcode::AndR { x: R8::IndirectHL } => break,
             Opcode::AndR { x } => {
                 instruction_sink.and_r(x);
+                pc_delta += 1;
+            }
+            // Ignore XOR (HL) for now...
+            Opcode::XorR { x: R8::IndirectHL } => break,
+            Opcode::XorR { x } => {
+                instruction_sink.xor_r(x);
+                pc_delta += 1;
+            }
+            // Ignore OR (HL) for now...
+            Opcode::OrR { x: R8::IndirectHL } => break,
+            Opcode::OrR { x } => {
+                instruction_sink.or_r(x);
+                pc_delta += 1;
+            }
+            Opcode::CpR { x: R8::IndirectHL } => break,
+            Opcode::CpR { x } => {
+                instruction_sink.cp_r(x);
                 pc_delta += 1;
             }
 
