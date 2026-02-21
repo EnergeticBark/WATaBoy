@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use crate::bus::AddressBus;
 use crate::cycles::m_cycles;
 use crate::opcodes::{Opcode, PrefixOpcode};
@@ -200,7 +202,7 @@ impl Cpu {
     ///
     /// Will return an error if the instruction at the current program counter is unimplemented.
     #[allow(clippy::too_many_lines)]
-    pub fn execute(&mut self) -> Result<(), String> {
+    pub fn execute(&mut self) -> Result<(), Box<dyn Error>> {
         // Our halted CPU just early return forever unless handle_interrupts gets us out of halted mode.
         // This function may tick other components if we're halted and/or servicing an interrupt.
         self.handle_interrupts();
@@ -490,7 +492,7 @@ impl Cpu {
                 }
                 self.registers.pc += 2;
             }
-            Opcode::Stop => Err("STOP opcode reached.".to_string())?,
+            Opcode::Stop => unimplemented!("STOP opcode reached."),
 
             // Block 1
             Opcode::LdRR { x: dest, y: src } => {

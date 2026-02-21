@@ -58,7 +58,7 @@ impl Obj {
 }
 
 /// # Panics
-/// 
+///
 /// Will panic if the provided index causes an out of bounds memory read.
 #[must_use]
 pub fn nth_obj(memory: &[u8], index: usize) -> Obj {
@@ -69,20 +69,22 @@ pub fn nth_obj(memory: &[u8], index: usize) -> Obj {
     Obj::from_bytes(obj_bytes)
 }
 
-#[must_use]
-pub fn oam_scan(memory: &[u8], ly: u8) -> VecDeque<Obj> {
+// Place objects into a sorted queue so we can pop them in-order as we draw the scanline.
+pub fn oam_scan(obj_buffer: &mut VecDeque<Obj>, memory: &[u8], ly: u8) {
     let obj_size = obj_size(memory);
 
-    let mut first_10: Vec<_> = (0..40)
-        .map(|index| nth_obj(memory, index))
+    obj_buffer.clear();
+    for index in 0..40 {
+        let obj = nth_obj(memory, index);
         // Only consider objects on screen (y value between 1 and 160).
-        .filter(|obj| (1..160).contains(&obj.y_pos))
-        .filter(|obj| obj.intersects_y(ly, obj_size))
-        .take(10)
-        .collect();
+        if (1..160).contains(&obj.y_pos) && obj.intersects_y(ly, obj_size) {
+            obj_buffer.push_back(obj);
+            if obj_buffer.len() == 10 {
+                break;
+            }
+        }
+    }
 
-    // Make a nice sorted queue so we can pop objects in-order as we draw the scanline.
     // This sort is stable, so "objects earlier in the OAM should have higher priority" still holds.
-    first_10.sort_by_key(|obj| obj.x_pos);
-    VecDeque::from(first_10)
+    obj_buffer.make_contiguous().sort_by_key(|obj| obj.x_pos);
 }

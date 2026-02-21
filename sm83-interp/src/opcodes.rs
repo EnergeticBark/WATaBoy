@@ -1,7 +1,21 @@
+use std::fmt;
+
 use arbitrary_int::u3;
 use bitmatch::bitmatch;
+use std::error::Error;
 
 use crate::parameters::{Condition, R8, R16, R16Mem, R16Stack};
+
+#[derive(Debug)]
+struct InvalidOpcode;
+
+impl fmt::Display for InvalidOpcode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "invalid instruction")
+    }
+}
+
+impl Error for InvalidOpcode {}
 
 /// # Errors
 ///
@@ -11,9 +25,7 @@ use crate::parameters::{Condition, R8, R16, R16Mem, R16Stack};
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::verbose_bit_mask)] // Clippy warns about the bitmask from expanding the bitmatch macro. :(
 #[bitmatch]
-pub fn decode(first_byte: u8) -> Result<Opcode, String> {
-    let invalid_instruction_error = Err(String::from("Invalid instruction"));
-
+pub fn decode(first_byte: u8) -> Result<Opcode, Box<dyn Error>> {
     let op = #[bitmatch]
     match first_byte {
         // Block 0
@@ -149,7 +161,7 @@ pub fn decode(first_byte: u8) -> Result<Opcode, String> {
         "1111_0011" => Opcode::Di,
         "1111_1011" => Opcode::Ei,
 
-        _ => invalid_instruction_error?,
+        _ => Err(InvalidOpcode)?,
     };
 
     Ok(op)

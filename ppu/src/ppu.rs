@@ -112,7 +112,8 @@ impl Ppu {
         self.dots_in_mode = 0;
 
         // This is the last cycle of the OAM scan, so lets actually do the OAM scan.
-        self.obj_buffer = oam::oam_scan(memory, self.ly());
+        let ly = self.ly();
+        oam::oam_scan(&mut self.obj_buffer, memory, ly);
 
         // Prepare for Drawing.
         self.pixels_to_drop = memory[io_regs::SCX as usize] & 7;
