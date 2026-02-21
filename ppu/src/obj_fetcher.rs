@@ -1,14 +1,13 @@
 use crate::bg_fetcher::Pixel;
-use crate::oam::Obj;
-use crate::tiles;
 use crate::lcd_control::obj_size;
+use crate::oam::Obj;
 use crate::palette::Palette;
+use crate::tiles;
 
 use std::collections::VecDeque;
 
-// The ObjectFetcher's pixel FIFO always contains 8 pixels.
-// Each time a pixel is popped from the queue, a transparent pixel is pushed to the back of the
-// queue to maintain a constant length of 8 pixels.
+// From ObjectFetcher's perspective, its pixel FIFO always contains 8 pixels.
+// Before an object is pushed to the queue, transparent pixels are pushed to the back to maintain a length of 8 pixels.
 // Any transparent pixels can be overwritten by opaque object pixels in the push() function.
 
 const TRANSPARENT: Pixel = Pixel {
@@ -63,10 +62,7 @@ impl ObjectFetcher {
 
     // Shift out a pixel from the Obj FIFO.
     pub fn shift_out(&mut self) -> Option<Pixel> {
-        let front = self.fifo.pop_front();
-        self.fifo.push_back(TRANSPARENT);
-
-        front
+        self.fifo.pop_front()
     }
 
     // Push a row of 8 pixels from a tile to the Obj FIFO.
@@ -82,6 +78,11 @@ impl ObjectFetcher {
     }
 
     fn push_bit_range<T: Iterator<Item = u8>>(&mut self, bit_range: T, obj: Obj) {
+        // Fill the back of the queue with transparent pixels.
+        while self.fifo.len() < 8 {
+            self.fifo.push_back(TRANSPARENT);
+        }
+
         let old_pixels = self.fifo.iter_mut();
         let new_pixels = bit_range.map(|nth_bit| Pixel {
             low: (self.tile_data_low >> nth_bit) & 1 == 1,
@@ -217,7 +218,7 @@ impl Default for ObjectFetcher {
         Self {
             obj_buffer: VecDeque::with_capacity(10),
             state: ObjectFetcherState::Idle,
-            fifo: VecDeque::from([TRANSPARENT; 8]),
+            fifo: VecDeque::with_capacity(8),
             tile_data_low: 0,
             tile_data_high: 0,
         }
