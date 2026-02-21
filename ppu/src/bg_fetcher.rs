@@ -13,8 +13,11 @@ pub struct Pixel {
 }
 
 pub enum FetcherState {
+    BeforeGetTile,
     GetTile,
+    BeforeGetTileDataLow,
     GetTileDataLow,
+    BeforeGetTileDataHigh,
     GetTileDataHigh,
     Push,
 }
@@ -23,7 +26,6 @@ pub struct BackgroundFetcher {
     state: FetcherState,
     pub drawing_window: bool,
     pub warmup: bool,
-    ticks: u8,
     bg_fifo: Vec<Pixel>,
     tile_id: u8,
     tile_line: u8,
@@ -113,37 +115,34 @@ impl BackgroundFetcher {
     }
 
     pub fn tick(&mut self, memory: &[u8], current_scanline: u8, window_y: u8) {
-        self.ticks += 1;
-
-        if let FetcherState::Push = self.state
-            && self.push()
-        {
-            self.ticks = 0;
-            self.state = FetcherState::GetTile;
-        }
-
-        if self.ticks >= 2 {
-            self.ticks = 0;
-            match self.state {
-                FetcherState::GetTile => {
-                    self.get_tile(memory, current_scanline, window_y);
-                    self.state = FetcherState::GetTileDataLow;
+        self.state = match self.state {
+            FetcherState::BeforeGetTile => FetcherState::GetTile,
+            FetcherState::GetTile => {
+                self.get_tile(memory, current_scanline, window_y);
+                FetcherState::BeforeGetTileDataLow
+            }
+            FetcherState::BeforeGetTileDataLow => FetcherState::GetTileDataLow,
+            FetcherState::GetTileDataLow => {
+                self.get_tile_data_low(memory);
+                FetcherState::BeforeGetTileDataHigh
+            }
+            FetcherState::BeforeGetTileDataHigh => FetcherState::GetTileDataHigh,
+            FetcherState::GetTileDataHigh => {
+                self.get_tile_data_high(memory);
+                // First fetch of the line. Restart and waste six cycles for some reason. :)
+                if self.warmup {
+                    self.warmup = false;
+                    FetcherState::BeforeGetTile
+                } else {
+                    FetcherState::Push
                 }
-                FetcherState::GetTileDataLow => {
-                    self.get_tile_data_low(memory);
-                    self.state = FetcherState::GetTileDataHigh;
+            }
+            FetcherState::Push => {
+                if self.push() {
+                    FetcherState::BeforeGetTile
+                } else {
+                    FetcherState::Push
                 }
-                FetcherState::GetTileDataHigh => {
-                    self.get_tile_data_high(memory);
-                    // First fetch of the line. Restart and waste six cycles for some reason. :)
-                    if self.warmup {
-                        self.state = FetcherState::GetTile;
-                        self.warmup = false;
-                    } else {
-                        self.state = FetcherState::Push;
-                    }
-                }
-                FetcherState::Push => {} // Already handled in the if-let.
             }
         }
     }
@@ -152,10 +151,9 @@ impl BackgroundFetcher {
 impl Default for BackgroundFetcher {
     fn default() -> Self {
         Self {
-            state: FetcherState::GetTile,
+            state: FetcherState::BeforeGetTile,
             drawing_window: false,
             warmup: true,
-            ticks: 0,
             bg_fifo: Vec::with_capacity(8),
             tile_id: 0,
             tile_line: 0,
