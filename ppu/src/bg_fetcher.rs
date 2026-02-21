@@ -1,9 +1,8 @@
 use crate::lcd_control::{bg_tile_map, window_tile_map};
-use crate::{lcd_control, tiles};
 use crate::palette::Palette;
+use crate::{lcd_control, tiles};
 
 use hw_constants::io_regs;
-use std::collections::VecDeque;
 
 #[derive(Copy, Clone)]
 pub struct Pixel {
@@ -25,7 +24,7 @@ pub struct BackgroundFetcher {
     pub drawing_window: bool,
     pub warmup: bool,
     ticks: u8,
-    pub bg_fifo: VecDeque<Pixel>,
+    bg_fifo: Vec<Pixel>,
     tile_id: u8,
     tile_line: u8,
     tile_x: u8,
@@ -42,7 +41,7 @@ pub struct BackgroundFetcher {
 impl BackgroundFetcher {
     // Shift out a pixel from the background FIFO, if it contains more than 8 pixels.
     pub fn shift_out(&mut self) -> Option<Pixel> {
-        self.bg_fifo.pop_front()
+        self.bg_fifo.pop()
     }
 
     // Push a row of 8 pixels from a tile to the background FIFO, if its empty.
@@ -51,7 +50,7 @@ impl BackgroundFetcher {
             return false;
         }
 
-        for nth_bit in (0..8).rev() {
+        for nth_bit in 0..8 {
             let pixel = Pixel {
                 low: (self.tile_data_low >> nth_bit) & 1 == 1,
                 high: (self.tile_data_high >> nth_bit) & 1 == 1,
@@ -59,7 +58,7 @@ impl BackgroundFetcher {
                 priority: false,
             };
 
-            self.bg_fifo.push_back(pixel);
+            self.bg_fifo.push(pixel);
         }
         self.tile_x += 1;
         true
@@ -157,7 +156,7 @@ impl Default for BackgroundFetcher {
             drawing_window: false,
             warmup: true,
             ticks: 0,
-            bg_fifo: VecDeque::with_capacity(8),
+            bg_fifo: Vec::with_capacity(8),
             tile_id: 0,
             tile_line: 0,
             tile_x: 0,
