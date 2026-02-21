@@ -12,6 +12,8 @@ use instructions::{Block0, Block1, Block2, Block3};
 use macros::Sm83Macros;
 use module::{empty_jit_block_function, empty_jit_block_module};
 
+use std::cell::LazyCell;
+
 use wasm_encoder::*;
 
 #[cfg(feature = "jit-trace")]
@@ -40,9 +42,9 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
     #[cfg(feature = "jit-trace")]
     let mut sm83_disassembly = String::new();
 
-    // TODO: At some point, either make this a LazyLock or early return before we create `function`.
-    let mut function = empty_jit_block_function();
-    let mut instruction_sink = function.instructions();
+    // Create these lazily so we don't alloc if pc_delta ends up being 0.
+    let mut function = LazyCell::new(empty_jit_block_function);
+    let mut instruction_sink = LazyCell::new(|| function.instructions());
 
     let mut pc_delta = 0;
     loop {
