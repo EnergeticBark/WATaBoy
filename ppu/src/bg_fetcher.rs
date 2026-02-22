@@ -2,7 +2,7 @@ use crate::lcd_control::{bg_tile_map, window_tile_map};
 use crate::palette::Palette;
 use crate::{lcd_control, tiles};
 
-use hw_constants::io_regs;
+use hw_constants::{MEM_MAP_SIZE, io_regs};
 
 #[derive(Copy, Clone)]
 pub struct Pixel {
@@ -30,7 +30,6 @@ pub struct BackgroundFetcher {
     tile_id: u8,
     tile_line: u8,
     tile_x: u8,
-    second_tile_map: bool,
     tile_data_low: u8,
     tile_data_high: u8,
 }
@@ -41,7 +40,7 @@ pub struct BackgroundFetcher {
    this.
 */
 impl BackgroundFetcher {
-    // Shift out a pixel from the background FIFO, if it contains more than 8 pixels.
+    // Shift out a pixel from the background FIFO.
     pub fn shift_out(&mut self) -> Option<Pixel> {
         self.bg_fifo.pop()
     }
@@ -69,7 +68,7 @@ impl BackgroundFetcher {
     fn get_tile(&mut self, memory: &[u8], current_scanline: u8, window_y: u8) {
         let bg_second_tile_map = bg_tile_map(memory) && !self.drawing_window;
         let window_second_tile_map = window_tile_map(memory) && self.drawing_window;
-        self.second_tile_map = bg_second_tile_map || window_second_tile_map;
+        let second_tile_map = bg_second_tile_map || window_second_tile_map;
 
         let tile_x = if self.drawing_window {
             self.tile_x
@@ -84,7 +83,7 @@ impl BackgroundFetcher {
         };
         let tile_y = ly / 8;
 
-        let tile_map = if self.second_tile_map {
+        let tile_map = if second_tile_map {
             tiles::tile_map_1(memory)
         } else {
             tiles::tile_map_0(memory)
@@ -114,7 +113,7 @@ impl BackgroundFetcher {
         self.tile_data_high = tile[self.tile_line as usize * 2 + 1];
     }
 
-    pub fn tick(&mut self, memory: &[u8], current_scanline: u8, window_y: u8) {
+    pub fn tick(&mut self, memory: &[u8; MEM_MAP_SIZE], current_scanline: u8, window_y: u8) {
         self.state = match self.state {
             FetcherState::BeforeGetTile => FetcherState::GetTile,
             FetcherState::GetTile => {
@@ -158,7 +157,6 @@ impl Default for BackgroundFetcher {
             tile_id: 0,
             tile_line: 0,
             tile_x: 0,
-            second_tile_map: false,
             tile_data_low: 0,
             tile_data_high: 0,
         }

@@ -79,7 +79,7 @@ impl AddressBus {
 
     pub fn half_increment_timers(&mut self) {
         for _ in 0..2 {
-            self.ppu.tick(self.buffer.as_mut_slice());
+            self.ppu.tick(self.buffer.as_mut_array().unwrap());
         }
 
         if !self.half_ticked {
@@ -107,7 +107,7 @@ impl AddressBus {
 
     pub fn increment_timers(&mut self, m_cycles: u16) {
         for _ in 0..m_cycles * 4 {
-            self.ppu.tick(self.buffer.as_mut_slice());
+            self.ppu.tick(self.buffer.as_mut_array().unwrap());
         }
 
         self.timers

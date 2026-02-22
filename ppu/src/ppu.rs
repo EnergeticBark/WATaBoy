@@ -4,7 +4,7 @@ use crate::obj_fetcher::ObjectFetcher;
 use crate::palette::Palette;
 use crate::{lcd_control, lcd_status, oam, palette};
 
-use hw_constants::{PostBoot, SCREEN_SIZE, SCREEN_WIDTH, io_regs};
+use hw_constants::{MEM_MAP_SIZE, PostBoot, SCREEN_SIZE, SCREEN_WIDTH, io_regs};
 use log::{info, trace};
 use std::collections::VecDeque;
 
@@ -160,7 +160,7 @@ impl Ppu {
     #[allow(clippy::too_many_lines)]
     // Only panics if internal assertions fail, and they never should.
     #[allow(clippy::missing_panics_doc)]
-    pub fn tick(&mut self, memory: &mut [u8]) {
+    pub fn tick(&mut self, memory: &mut [u8; MEM_MAP_SIZE]) {
         if !lcd_control::lcd_and_ppu_enabled(memory) {
             if !self.disabled {
                 info!(target: "ppu_disabled", "Disabled on dot: {}", self.dot_counter);
