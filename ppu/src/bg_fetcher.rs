@@ -65,7 +65,7 @@ impl BackgroundFetcher {
         true
     }
 
-    fn get_tile(&mut self, memory: &[u8], current_scanline: u8, window_y: u8) {
+    fn get_tile(&mut self, memory: &[u8; MEM_MAP_SIZE], current_scanline: u8, window_y: u8) {
         let bg_second_tile_map = bg_tile_map(memory) && !self.drawing_window;
         let window_second_tile_map = window_tile_map(memory) && self.drawing_window;
         let second_tile_map = bg_second_tile_map || window_second_tile_map;
@@ -95,7 +95,7 @@ impl BackgroundFetcher {
         // TODO: If VRAM is blocked tile index is 0xFF...
     }
 
-    fn current_tile<'a>(&self, memory: &'a [u8]) -> &'a [u8; 16] {
+    fn current_tile<'a>(&self, memory: &'a [u8; MEM_MAP_SIZE]) -> &'a [u8; 16] {
         if lcd_control::bg_and_window_tiles(memory) {
             tiles::unsigned_nth_tile(memory, self.tile_id as usize)
         } else {
@@ -103,12 +103,12 @@ impl BackgroundFetcher {
         }
     }
 
-    fn get_tile_data_low(&mut self, memory: &[u8]) {
+    fn get_tile_data_low(&mut self, memory: &[u8; MEM_MAP_SIZE]) {
         let tile = self.current_tile(memory);
         self.tile_data_low = tile[self.tile_line as usize * 2];
     }
 
-    fn get_tile_data_high(&mut self, memory: &[u8]) {
+    fn get_tile_data_high(&mut self, memory: &[u8; MEM_MAP_SIZE]) {
         let tile = self.current_tile(memory);
         self.tile_data_high = tile[self.tile_line as usize * 2 + 1];
     }

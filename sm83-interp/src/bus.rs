@@ -32,7 +32,7 @@ impl AddressBus {
             // Delegate write in the ROM range and the SRAM range to the MBC.
             0x0000..0x8000 | 0xA000..0xC000 => {
                 self.mbc
-                    .write_byte(self.buffer.as_mut_slice(), index, value);
+                    .write_byte(self.buffer.as_mut_array().unwrap(), index, value);
             }
 
             // Initiate OAM transfer.

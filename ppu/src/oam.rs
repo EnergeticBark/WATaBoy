@@ -2,6 +2,8 @@ use crate::lcd_control::obj_size;
 
 use std::collections::VecDeque;
 
+use hw_constants::MEM_MAP_SIZE;
+
 const OBJ_SIZE: usize = 4;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -61,7 +63,7 @@ impl Obj {
 ///
 /// Will panic if the provided index causes an out of bounds memory read.
 #[must_use]
-pub fn nth_obj(memory: &[u8], index: usize) -> Obj {
+pub fn nth_obj(memory: &[u8; MEM_MAP_SIZE], index: usize) -> Obj {
     let offset = index * OBJ_SIZE;
     let obj_start = hw_constants::OAM as usize + offset;
     let obj_end = obj_start + OBJ_SIZE;
@@ -70,7 +72,7 @@ pub fn nth_obj(memory: &[u8], index: usize) -> Obj {
 }
 
 // Place objects into a sorted queue so we can pop them in-order as we draw the scanline.
-pub fn oam_scan(obj_buffer: &mut VecDeque<Obj>, memory: &[u8], ly: u8) {
+pub fn oam_scan(obj_buffer: &mut VecDeque<Obj>, memory: &[u8; MEM_MAP_SIZE], ly: u8) {
     let obj_size = obj_size(memory);
 
     obj_buffer.clear();

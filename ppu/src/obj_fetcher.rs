@@ -6,6 +6,8 @@ use crate::tiles;
 
 use std::collections::VecDeque;
 
+use hw_constants::MEM_MAP_SIZE;
+
 // From ObjectFetcher's perspective, its pixel FIFO always contains 8 pixels.
 // Before an object is pushed to the queue, transparent pixels are pushed to the back to maintain a length of 8 pixels.
 // Any transparent pixels can be overwritten by opaque object pixels in the push() function.
@@ -120,7 +122,7 @@ impl ObjectFetcher {
         }
     }
 
-    fn current_tile(memory: &[u8], obj: Obj, obj_line: u8) -> &[u8; 16] {
+    fn current_tile(memory: &[u8; MEM_MAP_SIZE], obj: Obj, obj_line: u8) -> &[u8; 16] {
         let mut tile_index = obj.tile_index;
         if obj_size(memory) {
             // Override the first bit as described in PanDocs.
@@ -135,19 +137,19 @@ impl ObjectFetcher {
         tiles::unsigned_nth_tile(memory, tile_index as usize)
     }
 
-    fn get_tile_data_low(&mut self, memory: &[u8], obj: Obj, obj_line: u8) {
+    fn get_tile_data_low(&mut self, memory: &[u8; MEM_MAP_SIZE], obj: Obj, obj_line: u8) {
         let tile = Self::current_tile(memory, obj, obj_line);
         let tile_line = obj_line % 8;
         self.tile_data_low = tile[tile_line as usize * 2];
     }
 
-    fn get_tile_data_high(&mut self, memory: &[u8], obj: Obj, obj_line: u8) {
+    fn get_tile_data_high(&mut self, memory: &[u8; MEM_MAP_SIZE], obj: Obj, obj_line: u8) {
         let tile = Self::current_tile(memory, obj, obj_line);
         let tile_line = obj_line % 8;
         self.tile_data_high = tile[tile_line as usize * 2 + 1];
     }
 
-    pub fn tick(&mut self, memory: &[u8], current_scanline: u8) {
+    pub fn tick(&mut self, memory: &[u8; MEM_MAP_SIZE], current_scanline: u8) {
         match self.state {
             ObjectFetcherState::Idle => {
                 if let Some(obj) = self.obj_buffer.pop_front() {

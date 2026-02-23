@@ -1,6 +1,8 @@
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize};
 
+use hw_constants::MEM_MAP_SIZE;
+
 const MBC_TYPE_ADDR: usize = 0x0147;
 const ROM_SIZE_ADDR: usize = 0x0148;
 const RAM_SIZE_ADDR: usize = 0x0149;
@@ -114,7 +116,7 @@ impl Mbc {
         }
     }
 
-    pub fn write_byte(&mut self, memory: &mut [u8], index: u16, value: u8) {
+    pub fn write_byte(&mut self, memory: &mut [u8; MEM_MAP_SIZE], index: u16, value: u8) {
         match index {
             // MBC1: Ram Enable
             0x0000..0x2000 => {

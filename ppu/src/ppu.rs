@@ -48,7 +48,7 @@ pub struct Ppu {
     just_enabled: bool,
 }
 
-fn drawing_window(memory: &[u8], x: u8, y: u8) -> bool {
+fn drawing_window(memory: &[u8; MEM_MAP_SIZE], x: u8, y: u8) -> bool {
     lcd_control::window_enabled(memory)
         && x + 7 == memory[io_regs::WX as usize]
         && y >= memory[io_regs::WY as usize]
@@ -94,7 +94,7 @@ impl Ppu {
         self.obj_fetcher = ObjectFetcher::default();
     }
 
-    fn transition_vblank(&mut self, memory: &mut [u8]) {
+    fn transition_vblank(&mut self, memory: &mut [u8; MEM_MAP_SIZE]) {
         self.mode = PpuMode::VBlank;
         self.dots_in_mode = 0;
         // Update LCD Y coordinate.
@@ -107,7 +107,7 @@ impl Ppu {
         trace!(target: "ppu_oamscan", "Set to Mode 2 on dot: {}", self.dots_this_line());
     }
 
-    fn transition_drawing(&mut self, memory: &mut [u8]) {
+    fn transition_drawing(&mut self, memory: &mut [u8; MEM_MAP_SIZE]) {
         self.mode = PpuMode::Drawing;
         self.dots_in_mode = 0;
 
@@ -119,11 +119,11 @@ impl Ppu {
         self.pixels_to_drop = memory[io_regs::SCX as usize] & 7;
     }
 
-    fn update_ly_register(&self, memory: &mut [u8]) {
+    fn update_ly_register(&self, memory: &mut [u8; MEM_MAP_SIZE]) {
         memory[io_regs::LY as usize] = self.ly();
     }
 
-    fn update_stat_mode(memory: &mut [u8], mode: PpuMode) {
+    fn update_stat_mode(memory: &mut [u8; MEM_MAP_SIZE], mode: PpuMode) {
         match mode {
             PpuMode::HBlank => lcd_status::set_ppu_mode(memory, 0),
             PpuMode::VBlank => lcd_status::set_ppu_mode(memory, 1),
@@ -132,7 +132,7 @@ impl Ppu {
         }
     }
 
-    fn update_stat_interrupt(&mut self, memory: &mut [u8]) {
+    fn update_stat_interrupt(&mut self, memory: &mut [u8; MEM_MAP_SIZE]) {
         let coincidence = self.ly_to_compare_lyc == memory[io_regs::LYC as usize];
         lcd_status::set_coincidence(memory, coincidence);
 
