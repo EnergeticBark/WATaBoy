@@ -54,19 +54,28 @@ impl PPUViewApp {
                 .map(|tile_index| {
                     cc.egui_ctx.load_texture(
                         format!("Tile {tile_index}"),
-                        ColorImage::filled([TILE_SIZE as usize, TILE_SIZE as usize], Color32::BLACK),
+                        ColorImage::filled(
+                            [TILE_SIZE as usize, TILE_SIZE as usize],
+                            Color32::BLACK,
+                        ),
                         TextureOptions::NEAREST,
                     )
                 })
                 .collect(),
             tile_map_0: cc.egui_ctx.load_texture(
                 "Tile Map 0",
-                ColorImage::filled([TILE_MAP_SIZE as usize, TILE_MAP_SIZE as usize], Color32::BLACK),
+                ColorImage::filled(
+                    [TILE_MAP_SIZE as usize, TILE_MAP_SIZE as usize],
+                    Color32::BLACK,
+                ),
                 TextureOptions::NEAREST,
             ),
             tile_map_1: cc.egui_ctx.load_texture(
                 "Tile Map 1",
-                ColorImage::filled([TILE_MAP_SIZE as usize, TILE_MAP_SIZE as usize], Color32::BLACK),
+                ColorImage::filled(
+                    [TILE_MAP_SIZE as usize, TILE_MAP_SIZE as usize],
+                    Color32::BLACK,
+                ),
                 TextureOptions::NEAREST,
             ),
             screen: cc.egui_ctx.load_texture(
@@ -122,7 +131,7 @@ fn step_once(dmg_state: &mut Cpu, buttons_held: ButtonsHeld) {
     if let Err(message) = dmg_state.execute() {
         error!("{message}");
     }
-    dmg_state.memory.update_joypad(buttons_held);
+    dmg_state.memory.buttons_held = buttons_held;
 }
 
 fn step_multiple(steps: u32, dmg_state: &mut Cpu, buttons_held: ButtonsHeld) {
