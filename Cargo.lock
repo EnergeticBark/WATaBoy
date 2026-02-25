@@ -42,14 +42,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "boot_interp"
-version = "0.1.0"
-dependencies = [
- "log",
- "sm83-interp",
-]
-
-[[package]]
 name = "bumpalo"
 version = "3.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -32,7 +32,7 @@ impl Cpu {
             R8::H => self.registers.hl.h(),
             R8::L => self.registers.hl.l(),
             R8::IndirectHL => {
-                let value = self.memory[self.registers.hl.into_bits()];
+                let value = self.memory.read_byte(self.registers.hl.into_bits());
                 self.memory.increment_timers(1);
                 value
             }
@@ -58,16 +58,16 @@ impl Cpu {
 
     pub(crate) fn r16_mem(&mut self, r16_mem: R16Mem) -> u8 {
         match r16_mem {
-            R16Mem::Bc => self.memory[self.registers.bc.into_bits()],
-            R16Mem::De => self.memory[self.registers.de.into_bits()],
+            R16Mem::Bc => self.memory.read_byte(self.registers.bc.into_bits()),
+            R16Mem::De => self.memory.read_byte(self.registers.de.into_bits()),
             R16Mem::HlInc => {
-                let value = self.memory[self.registers.hl.into_bits()];
+                let value = self.memory.read_byte(self.registers.hl.into_bits());
                 self.registers.hl =
                     registers::Hl::from_bits(self.registers.hl.into_bits().wrapping_add(1));
                 value
             }
             R16Mem::HlDec => {
-                let value = self.memory[self.registers.hl.into_bits()];
+                let value = self.memory.read_byte(self.registers.hl.into_bits());
                 self.registers.hl =
                     registers::Hl::from_bits(self.registers.hl.into_bits().wrapping_sub(1));
                 value
@@ -116,7 +116,9 @@ impl Cpu {
         }
 
         // If an interrupt's enabled and flag bit is set, it needs to be serviced.
-        let to_service = self.memory[hw_constants::IE] & self.memory[io_regs::IF] & 0b0001_1111;
+        let to_service = self.memory.buffer[hw_constants::IE as usize]
+            & self.memory.buffer[io_regs::IF as usize]
+            & 0b0001_1111;
 
         if self.halted {
             // Another half tick to complete the M-Cycle.
@@ -212,7 +214,7 @@ impl Cpu {
         }
 
         let pc = self.registers.pc;
-        let bytecode = self.memory[pc];
+        let bytecode = self.memory.read_byte(pc);
         let opcode = opcodes::decode(bytecode)?;
 
         let mut m_cycles = self.calculate_m_cycles(opcode);
@@ -228,7 +230,10 @@ impl Cpu {
                 self.registers.pc += 1;
             }
             Opcode::LdRrNn { x } => {
-                let next_two_bytes = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
+                let next_two_bytes = u16::from_le_bytes([
+                    self.memory.read_byte(pc + 1),
+                    self.memory.read_byte(pc + 2),
+                ]);
                 *self.registers.r16_mut(x) = next_two_bytes;
 
                 self.registers.pc += 3;
@@ -245,7 +250,10 @@ impl Cpu {
             Opcode::LdNnSp => {
                 let [low_sp, high_sp] = self.registers.sp.to_le_bytes();
 
-                let destination = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
+                let destination = u16::from_le_bytes([
+                    self.memory.read_byte(pc + 1),
+                    self.memory.read_byte(pc + 2),
+                ]);
 
                 self.memory.write_byte(destination, low_sp);
                 self.memory.write_byte(destination + 1, high_sp);
@@ -312,7 +320,7 @@ impl Cpu {
                 // TICKS MANUALLY
                 self.memory.increment_timers(1);
 
-                let next_byte = self.memory[pc + 1];
+                let next_byte = self.memory.read_byte(pc + 1);
                 self.memory.increment_timers(1);
 
                 self.set_r8(x, next_byte);
@@ -474,7 +482,7 @@ impl Cpu {
                 self.registers.pc += 1;
             }
             Opcode::JrE => {
-                let jump_offset = self.memory[pc + 1].cast_signed();
+                let jump_offset = self.memory.read_byte(pc + 1).cast_signed();
                 self.registers.pc = self
                     .registers
                     .pc
@@ -482,7 +490,7 @@ impl Cpu {
                 self.registers.pc += 2;
             }
             Opcode::JrCcE { c } => {
-                let jump_offset = self.memory[pc + 1].cast_signed();
+                let jump_offset = self.memory.read_byte(pc + 1).cast_signed();
 
                 if self.check_condition(c) {
                     self.registers.pc = self
@@ -649,7 +657,7 @@ impl Cpu {
             // Block 3
             Opcode::AddN => {
                 let a = self.registers.af.a();
-                let next_byte = self.memory[pc + 1];
+                let next_byte = self.memory.read_byte(pc + 1);
                 let (result, carry) = a.overflowing_add(next_byte);
                 let half_carry = ((a & 0x0f) + (next_byte & 0x0f)) & 0x10 == 0x10;
 
@@ -667,7 +675,7 @@ impl Cpu {
             }
             Opcode::AdcN => {
                 let a = self.registers.af.a();
-                let next_byte = self.memory[pc + 1];
+                let next_byte = self.memory.read_byte(pc + 1);
                 let prev_carry = self.registers.af.f().c();
 
                 let (result, carry) = a.carrying_add(next_byte, prev_carry);
@@ -689,7 +697,7 @@ impl Cpu {
             }
             Opcode::SubN => {
                 let a = self.registers.af.a();
-                let next_byte = self.memory[pc + 1];
+                let next_byte = self.memory.read_byte(pc + 1);
                 let (result, carry) = a.overflowing_sub(next_byte);
 
                 self.registers.af.set_a(result);
@@ -706,7 +714,7 @@ impl Cpu {
             }
             Opcode::SbcN => {
                 let a = self.registers.af.a();
-                let next_byte = self.memory[pc + 1];
+                let next_byte = self.memory.read_byte(pc + 1);
                 let prev_carry = self.registers.af.f().c();
 
                 let (result, carry) = a.borrowing_sub(next_byte, prev_carry);
@@ -725,7 +733,7 @@ impl Cpu {
                 self.registers.pc += 2;
             }
             Opcode::AndN => {
-                let next_byte = self.memory[pc + 1];
+                let next_byte = self.memory.read_byte(pc + 1);
                 let result = self.registers.af.a() & next_byte;
 
                 self.registers.af.set_a(result);
@@ -741,7 +749,7 @@ impl Cpu {
                 self.registers.pc += 2;
             }
             Opcode::XorN => {
-                let next_byte = self.memory[pc + 1];
+                let next_byte = self.memory.read_byte(pc + 1);
                 let result = self.registers.af.a() ^ next_byte;
 
                 self.registers.af.set_a(result);
@@ -757,7 +765,7 @@ impl Cpu {
                 self.registers.pc += 2;
             }
             Opcode::OrN => {
-                let next_byte = self.memory[pc + 1];
+                let next_byte = self.memory.read_byte(pc + 1);
                 let result = self.registers.af.a() | next_byte;
 
                 self.registers.af.set_a(result);
@@ -774,7 +782,7 @@ impl Cpu {
             }
             Opcode::CpN => {
                 let a = self.registers.af.a();
-                let next_byte = self.memory[pc + 1];
+                let next_byte = self.memory.read_byte(pc + 1);
 
                 self.registers.af.set_f(
                     self.registers
@@ -792,8 +800,8 @@ impl Cpu {
 
                 if self.check_condition(c) {
                     let destination = u16::from_le_bytes([
-                        self.memory[self.registers.sp],
-                        self.memory[self.registers.sp + 1],
+                        self.memory.read_byte(self.registers.sp),
+                        self.memory.read_byte(self.registers.sp + 1),
                     ]);
                     self.registers.sp += 2;
 
@@ -802,8 +810,8 @@ impl Cpu {
             }
             Opcode::Ret => {
                 let destination = u16::from_le_bytes([
-                    self.memory[self.registers.sp],
-                    self.memory[self.registers.sp + 1],
+                    self.memory.read_byte(self.registers.sp),
+                    self.memory.read_byte(self.registers.sp + 1),
                 ]);
                 self.registers.sp += 2;
 
@@ -811,8 +819,8 @@ impl Cpu {
             }
             Opcode::Reti => {
                 let destination = u16::from_le_bytes([
-                    self.memory[self.registers.sp],
-                    self.memory[self.registers.sp + 1],
+                    self.memory.read_byte(self.registers.sp),
+                    self.memory.read_byte(self.registers.sp + 1),
                 ]);
                 self.registers.sp += 2;
 
@@ -820,7 +828,10 @@ impl Cpu {
                 self.registers.pc = destination;
             }
             Opcode::JpCcNn { c } => {
-                let destination = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
+                let destination = u16::from_le_bytes([
+                    self.memory.read_byte(pc + 1),
+                    self.memory.read_byte(pc + 2),
+                ]);
                 self.registers.pc += 3;
 
                 if self.check_condition(c) {
@@ -828,14 +839,20 @@ impl Cpu {
                 }
             }
             Opcode::JpNn => {
-                let destination = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
+                let destination = u16::from_le_bytes([
+                    self.memory.read_byte(pc + 1),
+                    self.memory.read_byte(pc + 2),
+                ]);
                 self.registers.pc = destination;
             }
             Opcode::JpHl => {
                 self.registers.pc = self.registers.hl.into_bits();
             }
             Opcode::CallCcNn { c } => {
-                let destination = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
+                let destination = u16::from_le_bytes([
+                    self.memory.read_byte(pc + 1),
+                    self.memory.read_byte(pc + 2),
+                ]);
 
                 self.registers.pc += 3;
 
@@ -856,7 +873,10 @@ impl Cpu {
                 self.memory.write_byte(self.registers.sp, low);
                 self.memory.write_byte(self.registers.sp + 1, high);
 
-                let destination = u16::from_le_bytes([self.memory[pc + 1], self.memory[pc + 2]]);
+                let destination = u16::from_le_bytes([
+                    self.memory.read_byte(pc + 1),
+                    self.memory.read_byte(pc + 2),
+                ]);
                 self.registers.pc = destination;
             }
             Opcode::RstN { x } => {
@@ -874,8 +894,8 @@ impl Cpu {
                 self.registers.pc = destination;
             }
             Opcode::PopRr { x } => {
-                let low = self.memory[self.registers.sp];
-                let high = self.memory[self.registers.sp + 1];
+                let low = self.memory.read_byte(self.registers.sp);
+                let high = self.memory.read_byte(self.registers.sp + 1);
                 self.registers.sp += 2;
 
                 self.registers
@@ -902,7 +922,7 @@ impl Cpu {
                 // TICKS MANUALLY
                 self.memory.increment_timers(1);
 
-                let next_byte = self.memory[pc + 1];
+                let next_byte = self.memory.read_byte(pc + 1);
                 self.memory.increment_timers(1);
 
                 let destination = u16::from_le_bytes([next_byte, 0xFF]);
@@ -915,10 +935,10 @@ impl Cpu {
                 // TICKS MANUALLY
                 self.memory.increment_timers(1);
 
-                let first_byte = self.memory[pc + 1];
+                let first_byte = self.memory.read_byte(pc + 1);
                 self.memory.increment_timers(1);
 
-                let second_byte = self.memory[pc + 2];
+                let second_byte = self.memory.read_byte(pc + 2);
                 self.memory.increment_timers(1);
 
                 let address = u16::from_le_bytes([first_byte, second_byte]);
@@ -932,7 +952,7 @@ impl Cpu {
                 self.memory.increment_timers(1);
 
                 let address = u16::from_le_bytes([self.registers.bc.c(), 0xFF]);
-                let value = self.memory[address];
+                let value = self.memory.read_byte(address);
                 self.memory.increment_timers(1);
 
                 self.set_r8(R8::A, value);
@@ -943,11 +963,11 @@ impl Cpu {
                 // TICKS MANUALLY
                 self.memory.increment_timers(1);
 
-                let next_byte = self.memory[pc + 1];
+                let next_byte = self.memory.read_byte(pc + 1);
                 self.memory.increment_timers(1);
 
                 let address = u16::from_le_bytes([next_byte, 0xFF]);
-                let value = self.memory[address];
+                let value = self.memory.read_byte(address);
                 self.registers.af.set_a(value);
                 self.memory.increment_timers(1);
 
@@ -957,20 +977,22 @@ impl Cpu {
                 // TICKS MANUALLY
                 self.memory.increment_timers(1);
 
-                let first_byte = self.memory[pc + 1];
+                let first_byte = self.memory.read_byte(pc + 1);
                 self.memory.increment_timers(1);
 
-                let second_byte = self.memory[pc + 2];
+                let second_byte = self.memory.read_byte(pc + 2);
                 self.memory.increment_timers(1);
 
-                let value = self.memory[u16::from_le_bytes([first_byte, second_byte])];
+                let value = self
+                    .memory
+                    .read_byte(u16::from_le_bytes([first_byte, second_byte]));
                 self.registers.af.set_a(value);
                 self.memory.increment_timers(1);
 
                 self.registers.pc += 3;
             }
             Opcode::AddSpE => {
-                let next_byte = self.memory[pc + 1];
+                let next_byte = self.memory.read_byte(pc + 1);
                 let e = next_byte.cast_signed();
                 let result = self.registers.sp.wrapping_add_signed(i16::from(e));
 
@@ -991,7 +1013,7 @@ impl Cpu {
                 self.registers.pc += 2;
             }
             Opcode::LdHlSpPlusE => {
-                let next_byte = self.memory[pc + 1];
+                let next_byte = self.memory.read_byte(pc + 1);
                 let e = next_byte.cast_signed();
                 let result = self.registers.sp.wrapping_add_signed(i16::from(e));
 
@@ -1023,7 +1045,7 @@ impl Cpu {
                 // TODO: For accuracy, wait until the next instruction to actually enable interrupts
                 // See: https://rgbds.gbdev.io/docs/v0.9.4/gbz80.7#EI
                 info!(target: "cpu_ei", "Enabling interrupts on dot: {}", self.memory.ppu.dots_this_line());
-                info!("FLAGS {:b}", self.memory[io_regs::IF]);
+                info!("FLAGS {:b}", self.memory.buffer[io_regs::IF as usize]);
                 self.ime = true;
                 self.registers.pc += 1;
             }
@@ -1038,7 +1060,7 @@ impl Cpu {
         // Decoding the 0xCB instruction took 1 MCycle.
         self.memory.increment_timers(1);
 
-        let second_byte = self.memory[self.registers.pc + 1];
+        let second_byte = self.memory.read_byte(self.registers.pc + 1);
         let prefix_opcode = opcodes::decode_prefix(second_byte);
 
         // Decoding the next byte took another.

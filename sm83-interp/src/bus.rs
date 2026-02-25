@@ -6,13 +6,11 @@ use hw_constants::{PostBoot, io_regs};
 use log::info;
 use ppu::ppu::Ppu;
 use rkyv::{Archive, Deserialize, Serialize, with::Skip};
-use std::ops::{Index, Range};
 
 #[derive(Archive, Deserialize, Serialize)]
 pub struct AddressBus {
     pub buffer: Box<[u8; hw_constants::MEM_MAP_SIZE]>,
     timers: Timers,
-    // Number of MCycles the PPU needs to run to catch up with the CPU.
     #[rkyv(with = Skip)]
     pub ppu: Ppu,
     mbc: Mbc,
@@ -25,6 +23,10 @@ impl AddressBus {
     pub fn load_rom(&mut self, rom: &[u8]) {
         self.buffer[0..0x8000].copy_from_slice(&rom[0..0x8000]);
         self.mbc.load_rom(rom);
+    }
+
+    pub fn read_byte(&self, index: u16) -> u8 {
+        self.buffer[index as usize]
     }
 
     pub fn write_byte(&mut self, index: u16, value: u8) {
@@ -170,21 +172,5 @@ impl PostBoot for AddressBus {
             ppu: Ppu::post_boot_dmg(),
             ..Default::default()
         }
-    }
-}
-
-impl Index<u16> for AddressBus {
-    type Output = u8;
-
-    fn index(&self, index: u16) -> &Self::Output {
-        &self.buffer[index as usize]
-    }
-}
-
-impl Index<Range<u16>> for AddressBus {
-    type Output = [u8];
-
-    fn index(&self, index: Range<u16>) -> &Self::Output {
-        &self.buffer[index.start as usize..index.end as usize]
     }
 }

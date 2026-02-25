@@ -1,8 +1,0 @@
-[package]
-name = "boot_interp"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-sm83-interp = { path = "../sm83-interp" }
-log = "0.4.29"
