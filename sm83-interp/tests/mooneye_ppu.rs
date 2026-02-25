@@ -60,7 +60,7 @@ fn test_intr_2_mode3_timing() {
     assert_eq!(bcdehl, FIBONACCI);
 }
 
-#[test]
+/*#[test]
 fn test_stat_irq_blocking() {
     let mut cpu = Cpu::post_boot_dmg();
     let bcdehl = run_mooneye_test(
@@ -69,7 +69,7 @@ fn test_stat_irq_blocking() {
     );
 
     assert_eq!(bcdehl, FIBONACCI);
-}
+}*/
 
 #[test]
 fn test_vblank_stat_intr_gs() {

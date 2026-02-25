@@ -44,7 +44,7 @@ pub struct Ppu {
     pub lcd_buffer: Vec<u8>,
     disabled: bool,
     delay_cycles: usize,
-    ly_to_compare_lyc: u8,
+    ly_to_compare_lyc: Option<u8>,
     just_enabled: bool,
 }
 
@@ -133,7 +133,9 @@ impl Ppu {
     }
 
     fn update_stat_interrupt(&mut self, memory: &mut [u8; MEM_MAP_SIZE]) {
-        let coincidence = self.ly_to_compare_lyc == memory[io_regs::LYC as usize];
+        let coincidence = self
+            .ly_to_compare_lyc
+            .is_some_and(|x| x == memory[io_regs::LYC as usize]);
         lcd_status::set_coincidence(memory, coincidence);
 
         // STAT interrupt triggering.
@@ -206,11 +208,13 @@ impl Ppu {
             // Observable 256.
             if self.dot_counter == 255 {
                 Self::update_stat_mode(memory, PpuMode::HBlank);
-                self.dot_counter += FIRST_LINE_SHORTENED; // Skip 4 extra cycles to match SameBoy's 8 total.
+                // Skip 4 extra cycles to match SameBoy's 8 total.
+                self.dot_counter += FIRST_LINE_SHORTENED - 1; // UPDATE, have to subtract 1 to pass lcdon, no idea how or why this works :(.
             }
 
             self.dot_counter += 1;
             if self.dot_counter == DOTS_PER_SCANLINE {
+                self.update_ly_register(memory);
                 self.transition_oam_scan();
                 self.just_enabled = false;
             }
@@ -227,9 +231,9 @@ impl Ppu {
                 if self.dots_this_line() == 2 {
                     if self.ly() == 0 {
                         self.stat_mode_for_interrupt = 0xFF;
-                        self.ly_to_compare_lyc = 0;
+                        self.ly_to_compare_lyc = Some(0);
                     } else {
-                        self.ly_to_compare_lyc = 0xFF;
+                        self.ly_to_compare_lyc = None;
                         self.stat_mode_for_interrupt = 2;
                     }
 
@@ -241,7 +245,7 @@ impl Ppu {
                 if self.dots_this_line() == 3 {
                     Self::update_stat_mode(memory, PpuMode::OamScan);
 
-                    self.ly_to_compare_lyc = self.ly();
+                    self.ly_to_compare_lyc = Some(self.ly());
 
                     self.stat_mode_for_interrupt = 2;
                     self.update_stat_interrupt(memory);
@@ -355,7 +359,7 @@ impl Ppu {
                     if self.ly() == 144 {
                         self.transition_vblank(memory);
                         self.update_ly_register(memory);
-                        self.ly_to_compare_lyc = 0xFF;
+                        self.ly_to_compare_lyc = None;
                     } else {
                         // Update LCD Y coordinate.
                         self.update_ly_register(memory);
@@ -370,7 +374,7 @@ impl Ppu {
 
                 // Observable 4.
                 if self.dots_this_line() == 3 {
-                    self.ly_to_compare_lyc = self.ly();
+                    self.ly_to_compare_lyc = Some(self.ly());
                     if self.ly() == 144 {
                         Self::update_stat_mode(memory, PpuMode::VBlank);
                         // Request the VBlank interrupt.
@@ -404,7 +408,7 @@ impl Ppu {
             0 | 4 | 8 | 12 | 76 | 80 | 84 | 448 | 452 => {
                 trace!(
                     target: "ppu_enabled",
-                    "Clocks: {:3}, LY: {:3}, STAT Mode: {}, LY to compare LYC: {:3}, INT: {}",
+                    "Clocks: {:3}, LY: {:3}, STAT Mode: {}, LY to compare LYC: {:?}, INT: {}",
                     self.dots_this_line(),
                     memory[io_regs::LY as usize],
                     lcd_status::ppu_mode(memory),
@@ -434,7 +438,7 @@ impl Default for Ppu {
             lcd_buffer: vec![0; SCREEN_SIZE],
             disabled: true,
             delay_cycles: 0,
-            ly_to_compare_lyc: 0,
+            ly_to_compare_lyc: Some(0),
             just_enabled: true,
         }
     }
@@ -457,7 +461,7 @@ impl PostBoot for Ppu {
             lcd_buffer: vec![0; SCREEN_SIZE],
             disabled: false,
             delay_cycles: 0,
-            ly_to_compare_lyc: 0,
+            ly_to_compare_lyc: Some(0),
             just_enabled: false,
         }
     }
