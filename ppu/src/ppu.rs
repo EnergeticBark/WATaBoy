@@ -14,8 +14,6 @@ const DOTS_PER_FRAME: usize = DOTS_PER_SCANLINE * SCANLINES_PER_FRAME;
 
 const OAM_SCAN_DOTS: usize = 80;
 
-const FIRST_LINE_SHORTENED: usize = 4;
-
 #[derive(Debug, Copy, Clone)]
 enum PpuMode {
     HBlank,
@@ -38,13 +36,12 @@ pub struct Ppu {
     // whatever the PPU puts into its queue.
     obj_buffer: VecDeque<Obj>,
     obj_fetcher: ObjectFetcher,
-    stat_mode_for_interrupt: u8,
     stat_interrupt_line: bool,
+    stat_mode_for_interrupt: u8,
+    ly_to_compare_lyc: Option<u8>,
     // Buffer of greyscale pixel values, i.e. what the PPU would output to the LCD.
     pub lcd_buffer: Vec<u8>,
     disabled: bool,
-    delay_cycles: usize,
-    ly_to_compare_lyc: Option<u8>,
     just_enabled: bool,
 }
 
@@ -179,13 +176,8 @@ impl Ppu {
             info!(target: "ppu_enabled", "Enabled");
         }
 
-        if self.delay_cycles > 0 {
-            self.delay_cycles -= 1;
-            return;
-        }
-
         // Do evil initial line 0 shenanigans.
-        // TODO: None of this is right for line 0. It doesn't pass lcdon yet.
+        // This timing matches GameRoy's PPU implementation.
         if self.just_enabled {
             // Observable 1.
             if self.dot_counter == 0 {
@@ -200,16 +192,17 @@ impl Ppu {
                 self.update_stat_interrupt(memory);
             }
 
-            // 85 will be observed as 89, (4 dots skipped).
-            if self.dot_counter == 84 {
-                self.dot_counter += FIRST_LINE_SHORTENED;
+            // Observable 84.
+            if self.dot_counter == 83 {
+                // Skip 5 extra cycles, 84 will be observed as 89.
+                self.dot_counter += 5;
             }
 
-            // Observable 256.
+            // Observable 251.
             if self.dot_counter == 255 {
                 Self::update_stat_mode(memory, PpuMode::HBlank);
-                // Skip 4 extra cycles to match SameBoy's 8 total.
-                self.dot_counter += FIRST_LINE_SHORTENED - 1; // UPDATE, have to subtract 1 to pass lcdon, no idea how or why this works :(.
+                // Skip 2 extra cycles.
+                self.dot_counter += 2;
             }
 
             self.dot_counter += 1;
@@ -433,12 +426,11 @@ impl Default for Ppu {
             bg_fetcher: BackgroundFetcher::default(),
             obj_buffer: VecDeque::with_capacity(10),
             obj_fetcher: ObjectFetcher::default(),
-            stat_mode_for_interrupt: 0xFF,
             stat_interrupt_line: false,
+            stat_mode_for_interrupt: 0xFF,
+            ly_to_compare_lyc: Some(0),
             lcd_buffer: vec![0; SCREEN_SIZE],
             disabled: true,
-            delay_cycles: 0,
-            ly_to_compare_lyc: Some(0),
             just_enabled: true,
         }
     }
@@ -456,12 +448,11 @@ impl PostBoot for Ppu {
             bg_fetcher: BackgroundFetcher::default(),
             obj_buffer: VecDeque::with_capacity(10),
             obj_fetcher: ObjectFetcher::default(),
-            stat_mode_for_interrupt: 1,
             stat_interrupt_line: false,
+            stat_mode_for_interrupt: 1,
+            ly_to_compare_lyc: Some(0),
             lcd_buffer: vec![0; SCREEN_SIZE],
             disabled: false,
-            delay_cycles: 0,
-            ly_to_compare_lyc: Some(0),
             just_enabled: false,
         }
     }
