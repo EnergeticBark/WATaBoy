@@ -48,6 +48,14 @@ impl AddressBus {
                     .write_byte(self.buffer.as_mut_array().unwrap(), index, value);
             }
 
+            // Ignore writes to VRAM when access is blocked by the PPU.
+            0x8000..0xA000 => match self.ppu.vram_access {
+                PpuMemAccess::Blocked => (),
+                PpuMemAccess::WriteOnly | PpuMemAccess::ReadWrite => {
+                    self.buffer[index as usize] = value;
+                }
+            },
+
             // Ignore writes to OAM when access is blocked by the PPU.
             0xFE00..0xFF00 => match self.ppu.oam_access {
                 PpuMemAccess::Blocked => (),

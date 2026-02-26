@@ -282,6 +282,7 @@ impl Ppu {
                 // Observable 84.
                 if self.dots_this_line() == 83 {
                     self.oam_access = PpuMemAccess::Blocked;
+                    self.vram_access = PpuMemAccess::Blocked;
 
                     Self::update_stat_mode(memory, PpuMode::Drawing);
 
