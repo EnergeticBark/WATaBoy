@@ -100,7 +100,9 @@ impl AddressBus {
             }
             io_regs::LYC => {
                 self.buffer[index as usize] = value;
-                self.ppu.update_stat_interrupt(&mut self.buffer);
+                if !self.ppu.disabled {
+                    self.ppu.update_stat_interrupt(&mut self.buffer);
+                }
             }
 
             // There is *nothing* at these addresses, so they don't have names.

@@ -50,7 +50,7 @@ pub struct Ppu {
     pub vram_access: PpuMemAccess,
     // Buffer of greyscale pixel values, i.e. what the PPU would output to the LCD.
     pub lcd_buffer: Vec<u8>,
-    disabled: bool,
+    pub disabled: bool,
     just_enabled: bool,
 }
 
@@ -173,8 +173,12 @@ impl Ppu {
             if !self.disabled {
                 info!(target: "ppu_disabled", "Disabled on dot: {}", self.dot_counter);
 
-                // Reset the PPU state.
-                *self = Ppu::default();
+                // Reset the PPU state, preserving only the stat interrupt line.
+                *self = Ppu {
+                    stat_interrupt_line: self.stat_interrupt_line,
+                    ..Default::default()
+                };
+
                 lcd_status::set_ppu_mode(memory, 0);
                 self.update_ly_register(memory);
             }

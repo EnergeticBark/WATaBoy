@@ -105,6 +105,17 @@ fn test_stat_irq_blocking() {
 }*/
 
 #[test]
+fn test_stat_lyc_onoff() {
+    let mut cpu = Cpu::post_boot_dmg();
+    let bcdehl = run_mooneye_test(
+        &mut cpu,
+        include_bytes!("roms/mooneye/ppu/stat_lyc_onoff.gb"),
+    );
+
+    assert_eq!(bcdehl, FIBONACCI);
+}
+
+#[test]
 fn test_vblank_stat_intr_gs() {
     let mut cpu = Cpu::post_boot_dmg();
     let bcdehl = run_mooneye_test(
