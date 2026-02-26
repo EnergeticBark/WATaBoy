@@ -61,6 +61,17 @@ fn test_intr_2_mode3_timing() {
 }
 
 #[test]
+fn test_intr_2_oam_ok_timing() {
+    let mut cpu = Cpu::post_boot_dmg();
+    let bcdehl = run_mooneye_test(
+        &mut cpu,
+        include_bytes!("roms/mooneye/ppu/intr_2_oam_ok_timing.gb"),
+    );
+
+    assert_eq!(bcdehl, FIBONACCI);
+}
+
+#[test]
 fn test_lcdon_timing_gs() {
     let mut cpu = Cpu::post_boot_dmg();
     let bcdehl = run_mooneye_test(
