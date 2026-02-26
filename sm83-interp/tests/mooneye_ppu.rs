@@ -93,7 +93,7 @@ fn test_lcdon_write_timing_gs() {
     assert_eq!(bcdehl, FIBONACCI);
 }
 
-/*#[test]
+#[test]
 fn test_stat_irq_blocking() {
     let mut cpu = Cpu::post_boot_dmg();
     let bcdehl = run_mooneye_test(
@@ -102,7 +102,7 @@ fn test_stat_irq_blocking() {
     );
 
     assert_eq!(bcdehl, FIBONACCI);
-}*/
+}
 
 #[test]
 fn test_stat_lyc_onoff() {

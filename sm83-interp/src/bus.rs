@@ -97,6 +97,10 @@ impl AddressBus {
                 self.buffer[index as usize] &= 0b1000_0111;
                 let masked_value = value & 0b0111_1000;
                 self.buffer[index as usize] |= masked_value;
+
+                if !self.ppu.disabled {
+                    self.ppu.update_stat_interrupt(&mut self.buffer);
+                }
             }
             io_regs::LYC => {
                 self.buffer[index as usize] = value;
