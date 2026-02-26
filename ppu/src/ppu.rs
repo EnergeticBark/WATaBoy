@@ -253,6 +253,8 @@ impl Ppu {
 
                 // Observable 4.
                 if self.dots_this_line() == 3 {
+                    self.oam_access = PpuMemAccess::Blocked;
+
                     Self::update_stat_mode(memory, PpuMode::OamScan);
 
                     self.ly_to_compare_lyc = Some(self.ly());
@@ -266,6 +268,7 @@ impl Ppu {
 
                 // Observable 80.
                 if self.dots_this_line() == 79 {
+                    self.oam_access = PpuMemAccess::WriteOnly;
                     self.vram_access = PpuMemAccess::WriteOnly;
                 }
 
@@ -278,6 +281,8 @@ impl Ppu {
             PpuMode::Drawing => {
                 // Observable 84.
                 if self.dots_this_line() == 83 {
+                    self.oam_access = PpuMemAccess::Blocked;
+
                     Self::update_stat_mode(memory, PpuMode::Drawing);
 
                     self.stat_mode_for_interrupt = 3;
