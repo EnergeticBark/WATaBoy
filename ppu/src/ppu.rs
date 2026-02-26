@@ -138,7 +138,7 @@ impl Ppu {
         }
     }
 
-    fn update_stat_interrupt(&mut self, memory: &mut [u8; MEM_MAP_SIZE]) {
+    pub fn update_stat_interrupt(&mut self, memory: &mut [u8; MEM_MAP_SIZE]) {
         let coincidence = self
             .ly_to_compare_lyc
             .is_some_and(|x| x == memory[io_regs::LYC as usize]);
