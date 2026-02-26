@@ -14,6 +14,13 @@ const DOTS_PER_FRAME: usize = DOTS_PER_SCANLINE * SCANLINES_PER_FRAME;
 
 const OAM_SCAN_DOTS: usize = 80;
 
+// OAM Access is never "ReadOnly", so we represent it as a ternary value rather than 2 bools for readable and writable.
+pub enum OamAccess {
+    ReadWrite,
+    WriteOnly,
+    Blocked,
+}
+
 #[derive(Debug, Copy, Clone)]
 enum PpuMode {
     HBlank,
@@ -39,6 +46,7 @@ pub struct Ppu {
     stat_interrupt_line: bool,
     stat_mode_for_interrupt: u8,
     ly_to_compare_lyc: Option<u8>,
+    pub oam_access: OamAccess,
     // Buffer of greyscale pixel values, i.e. what the PPU would output to the LCD.
     pub lcd_buffer: Vec<u8>,
     disabled: bool,
@@ -187,6 +195,8 @@ impl Ppu {
 
             // Observable 79.
             if self.dot_counter == 78 {
+                self.oam_access = OamAccess::Blocked;
+
                 Self::update_stat_mode(memory, PpuMode::Drawing);
                 self.stat_mode_for_interrupt = 3;
                 self.update_stat_interrupt(memory);
@@ -200,6 +210,8 @@ impl Ppu {
 
             // Observable 251.
             if self.dot_counter == 255 {
+                self.oam_access = OamAccess::ReadWrite;
+
                 Self::update_stat_mode(memory, PpuMode::HBlank);
                 // Skip 2 extra cycles.
                 self.dot_counter += 2;
@@ -222,6 +234,8 @@ impl Ppu {
 
                 // Observable 3.
                 if self.dots_this_line() == 2 {
+                    self.oam_access = OamAccess::WriteOnly;
+
                     if self.ly() == 0 {
                         self.stat_mode_for_interrupt = 0xFF;
                         self.ly_to_compare_lyc = Some(0);
@@ -341,6 +355,8 @@ impl Ppu {
             PpuMode::HBlank => {
                 // Observable 4 dots into HBlank, or 256 with the shortest mode 3.
                 if self.dots_in_mode == 3 {
+                    self.oam_access = OamAccess::ReadWrite;
+
                     Self::update_stat_mode(memory, PpuMode::HBlank);
                     self.stat_mode_for_interrupt = 0;
                     self.update_stat_interrupt(memory);
@@ -429,6 +445,7 @@ impl Default for Ppu {
             stat_interrupt_line: false,
             stat_mode_for_interrupt: 0xFF,
             ly_to_compare_lyc: Some(0),
+            oam_access: OamAccess::ReadWrite,
             lcd_buffer: vec![0; SCREEN_SIZE],
             disabled: true,
             just_enabled: true,
@@ -451,6 +468,7 @@ impl PostBoot for Ppu {
             stat_interrupt_line: false,
             stat_mode_for_interrupt: 1,
             ly_to_compare_lyc: Some(0),
+            oam_access: OamAccess::ReadWrite,
             lcd_buffer: vec![0; SCREEN_SIZE],
             disabled: false,
             just_enabled: false,

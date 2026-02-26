@@ -4,7 +4,7 @@ use crate::timers::Timers;
 
 use hw_constants::{PostBoot, io_regs};
 use log::info;
-use ppu::ppu::Ppu;
+use ppu::ppu::{OamAccess, Ppu};
 use rkyv::{Archive, Deserialize, Serialize, with::Skip};
 
 #[derive(Archive, Deserialize, Serialize)]
@@ -25,8 +25,15 @@ impl AddressBus {
         self.mbc.load_rom(rom);
     }
 
+    // TODO: delegate MBC bank switches.
     pub fn read_byte(&self, index: u16) -> u8 {
-        self.buffer[index as usize]
+        match index {
+            0xFE00..0xFF00 => match self.ppu.oam_access {
+                OamAccess::Blocked | OamAccess::WriteOnly => 0xFF,
+                OamAccess::ReadWrite => self.buffer[index as usize],
+            },
+            _ => self.buffer[index as usize],
+        }
     }
 
     pub fn write_byte(&mut self, index: u16, value: u8) {
