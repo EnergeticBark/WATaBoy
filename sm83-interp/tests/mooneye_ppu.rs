@@ -60,6 +60,17 @@ fn test_intr_2_mode3_timing() {
     assert_eq!(bcdehl, FIBONACCI);
 }
 
+#[test]
+fn test_lcdon_timing_gs() {
+    let mut cpu = Cpu::post_boot_dmg();
+    let bcdehl = run_mooneye_test(
+        &mut cpu,
+        include_bytes!("roms/mooneye/ppu/lcdon_timing-GS.gb"),
+    );
+
+    assert_eq!(bcdehl, FIBONACCI);
+}
+
 /*#[test]
 fn test_stat_irq_blocking() {
     let mut cpu = Cpu::post_boot_dmg();

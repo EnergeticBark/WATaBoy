@@ -4,7 +4,7 @@ use crate::timers::Timers;
 
 use hw_constants::{PostBoot, io_regs};
 use log::info;
-use ppu::ppu::{OamAccess, Ppu};
+use ppu::ppu::{Ppu, PpuMemAccess};
 use rkyv::{Archive, Deserialize, Serialize, with::Skip};
 
 #[derive(Archive, Deserialize, Serialize)]
@@ -29,8 +29,12 @@ impl AddressBus {
     pub fn read_byte(&self, index: u16) -> u8 {
         match index {
             0xFE00..0xFF00 => match self.ppu.oam_access {
-                OamAccess::Blocked | OamAccess::WriteOnly => 0xFF,
-                OamAccess::ReadWrite => self.buffer[index as usize],
+                PpuMemAccess::Blocked | PpuMemAccess::WriteOnly => 0xFF,
+                PpuMemAccess::ReadWrite => self.buffer[index as usize],
+            },
+            0x8000..0xA000 => match self.ppu.vram_access {
+                PpuMemAccess::Blocked | PpuMemAccess::WriteOnly => 0xFF,
+                PpuMemAccess::ReadWrite => self.buffer[index as usize],
             },
             _ => self.buffer[index as usize],
         }
