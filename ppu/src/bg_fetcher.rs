@@ -12,6 +12,7 @@ pub struct Pixel {
     pub priority: bool,
 }
 
+#[derive(Debug)]
 pub enum FetcherState {
     BeforeGetTile,
     GetTile,
@@ -23,10 +24,10 @@ pub enum FetcherState {
 }
 
 pub struct BackgroundFetcher {
-    state: FetcherState,
+    pub state: FetcherState,
     pub drawing_window: bool,
     pub warmup: bool,
-    bg_fifo: Vec<Pixel>,
+    pub bg_fifo: Vec<Pixel>,
     tile_id: u8,
     tile_line: u8,
     tile_x: u8,

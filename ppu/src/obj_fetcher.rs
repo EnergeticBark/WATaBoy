@@ -19,7 +19,8 @@ const TRANSPARENT: Pixel = Pixel {
     priority: false,
 };
 
-enum ObjectFetcherState {
+#[derive(Debug)]
+pub enum ObjectFetcherState {
     Idle,
     GetTile {
         ticks_remaining: u8,
@@ -41,9 +42,10 @@ enum ObjectFetcherState {
 }
 
 pub struct ObjectFetcher {
+    first_obj: bool,
     obj_buffer: VecDeque<Obj>,
-    state: ObjectFetcherState,
-    fifo: VecDeque<Pixel>,
+    pub state: ObjectFetcherState,
+    pub fifo: VecDeque<Pixel>,
     tile_data_low: u8,
     tile_data_high: u8,
 }
@@ -156,10 +158,18 @@ impl ObjectFetcher {
                     // This used to be ticks_remaining: 1. But Idle is taking its own tick, so it's
                     // probably more accurate to use ticks_remaining: 0 so GetTile finishes after
                     // two ticks instead of three.
-                    self.state = ObjectFetcherState::GetTile {
-                        ticks_remaining: 0,
-                        obj,
-                    };
+                    if self.first_obj && obj.x_pos == 0 {
+                        self.first_obj = false;
+                        self.state = ObjectFetcherState::GetTile {
+                            ticks_remaining: 5,
+                            obj,
+                        };
+                    } else {
+                        self.state = ObjectFetcherState::GetTile {
+                            ticks_remaining: 0,
+                            obj,
+                        };
+                    }
                 }
             }
             ObjectFetcherState::GetTile {
@@ -195,7 +205,14 @@ impl ObjectFetcher {
             }
             ObjectFetcherState::Push { obj } => {
                 self.push(obj);
-                self.state = ObjectFetcherState::Idle;
+                self.state = if let Some(obj) = self.obj_buffer.pop_front() {
+                    ObjectFetcherState::GetTile {
+                        ticks_remaining: 0,
+                        obj,
+                    }
+                } else {
+                    ObjectFetcherState::Idle
+                };
             }
 
             // Countdown
@@ -218,6 +235,7 @@ impl ObjectFetcher {
 impl Default for ObjectFetcher {
     fn default() -> Self {
         Self {
+            first_obj: true,
             obj_buffer: VecDeque::with_capacity(10),
             state: ObjectFetcherState::Idle,
             fifo: VecDeque::with_capacity(8),

@@ -1,4 +1,4 @@
-use crate::bg_fetcher::{BackgroundFetcher, Pixel};
+use crate::bg_fetcher::{BackgroundFetcher, FetcherState, Pixel};
 use crate::oam::Obj;
 use crate::obj_fetcher::ObjectFetcher;
 use crate::palette::Palette;
@@ -81,12 +81,7 @@ impl Ppu {
     }
 
     fn pop_next_obj(&mut self) -> Option<Obj> {
-        // Discard any fully off-screen sprites.
-        if self.obj_buffer.pop_front_if(|obj| obj.x_pos == 0).is_some() {
-            return None;
-        }
-
-        self.obj_buffer.pop_front_if(|obj| obj.intersects_x(self.x))
+        self.obj_buffer.pop_front_if(|obj| obj.x_pos <= self.x + 8)
     }
 
     fn transition_hblank(&mut self) {
@@ -294,10 +289,29 @@ impl Ppu {
                     self.update_stat_interrupt(memory);
                 }
 
-                if let Some(obj) = self.pop_next_obj() {
-                    self.obj_fetcher.push_obj(obj);
+                if !self.bg_fetcher.bg_fifo.is_empty() {
+                    if let Some(obj) = self.pop_next_obj() {
+                        println!("DOT: {}, Push obj", self.dots_in_mode);
+                        self.obj_fetcher.push_obj(obj);
+                    }
+
+                    println!(
+                        "DOT: {}, OBJ: {:?}",
+                        self.dots_in_mode, self.obj_fetcher.state
+                    );
+
+                    self.obj_fetcher.tick(memory, self.ly());
                 }
-                self.obj_fetcher.tick(memory, self.ly());
+                println!(
+                    "DOT: {}, OBJ FIFO LEN: {}",
+                    self.dots_in_mode,
+                    self.obj_fetcher.fifo.len()
+                );
+                println!(
+                    "DOT: {}, BG FIFO LEN: {:?}",
+                    self.dots_in_mode,
+                    self.bg_fetcher.bg_fifo.len()
+                );
 
                 if self.obj_fetcher.idle_and_empty() {
                     self.bg_fetcher.tick(memory, self.ly(), self.window_y);
@@ -349,6 +363,8 @@ impl Ppu {
                             self.x += 1;
                         }
                     }
+                } else {
+                    self.bg_fetcher.state = FetcherState::BeforeGetTile;
                 }
 
                 if drawing_window(memory, self.x, self.ly()) && !self.bg_fetcher.drawing_window {
@@ -499,8 +515,8 @@ impl PostBoot for Ppu {
 
 #[cfg(test)]
 mod tests {
-    // TODO: Reimplement these with the new initial timing.
-    /*
+    use hw_constants::io_regs::LCDC;
+
     use super::*;
 
     // Assert that the minimum Mode 3 length (172) with:
@@ -511,7 +527,7 @@ mod tests {
     // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
     #[test]
     fn test_minimum_bg_mode_3_dots() {
-        let mut ppu = Ppu::default();
+        let mut ppu = Ppu::post_boot_dmg();
         let mut memory = hw_constants::post_boot_hwio();
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
@@ -530,7 +546,7 @@ mod tests {
     // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
     #[test]
     fn test_scrolled_bg_mode_3_dots() {
-        let mut ppu = Ppu::default();
+        let mut ppu = Ppu::post_boot_dmg();
         let mut memory = hw_constants::post_boot_hwio();
         memory[io_regs::SCX as usize] = 7;
 
@@ -550,7 +566,7 @@ mod tests {
     // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
     #[test]
     fn test_minimum_bg_window_mode_3_dots() {
-        let mut ppu = Ppu::default();
+        let mut ppu = Ppu::post_boot_dmg();
         let mut memory = hw_constants::post_boot_hwio();
 
         // Enable the window.
@@ -574,7 +590,7 @@ mod tests {
     // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
     #[test]
     fn test_scrolled_bg_window_mode_3_dots() {
-        let mut ppu = Ppu::default();
+        let mut ppu = Ppu::post_boot_dmg();
         let mut memory = hw_constants::post_boot_hwio();
         memory[io_regs::SCX as usize] = 7;
 
@@ -589,5 +605,76 @@ mod tests {
 
         let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
         assert_eq!(mode_3_dots, 185);
+    }
+
+    // Assert that the minimum Mode 3 length (172) with:
+    // - unscrolled background tiles (0)
+    // - no window (0)
+    // - 1 object at position x=0 (11)
+    // is 183 dots.
+    // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
+    #[test]
+    fn test_bg_obj_x_0_mode_3_dots() {
+        let mut ppu = Ppu::post_boot_dmg();
+        let mut memory = hw_constants::post_boot_hwio();
+        memory[0xFE00] = 16; // OBJ Y
+        memory[0xFE01] = 0; // OBJ X
+        memory[LCDC as usize] = 0x93; // Enable OBJs.
+
+        while !matches!(ppu.mode, PpuMode::HBlank) {
+            ppu.tick(&mut memory);
+        }
+
+        let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
+        assert_eq!(mode_3_dots, 183);
+    }
+
+    // Assert that the minimum Mode 3 length (172) with:
+    // - unscrolled background tiles (0)
+    // - no window (0)
+    // - 2 object at position x=0 (11+6)
+    // is 189 dots.
+    // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
+    #[test]
+    fn test_bg_2_obj_x_0_mode_3_dots() {
+        let mut ppu = Ppu::post_boot_dmg();
+        let mut memory = hw_constants::post_boot_hwio();
+        memory[0xFE00] = 16; // OBJ Y
+        memory[0xFE01] = 0; // OBJ X
+        memory[0xFE04] = 16; // OBJ Y
+        memory[0xFE05] = 0; // OBJ X
+        memory[LCDC as usize] = 0x93; // Enable OBJs.
+
+        while !matches!(ppu.mode, PpuMode::HBlank) {
+            ppu.tick(&mut memory);
+        }
+
+        let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
+        assert_eq!(mode_3_dots, 189);
+    }
+
+    /*// Assert that the minimum Mode 3 length (172) with:
+    // - unscrolled background tiles (0)
+    // - no window (0)
+    // - 10 object at position x=1 (???)
+    // is 236??? dots.
+    // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
+    #[test]
+    fn test_bg_10_obj_x_1_mode_3_dots() {
+        let mut ppu = Ppu::post_boot_dmg();
+        let mut memory = hw_constants::post_boot_hwio();
+        for i in 0..10 {
+            let obj_idx = 0xFE00 + (i * 4);
+            memory[obj_idx] = 16; // OBJ Y
+            memory[obj_idx + 1] = 1; // OBJ X
+        }
+        memory[LCDC as usize] = 0x93; // Enable OBJs.
+
+        while !matches!(ppu.mode, PpuMode::HBlank) {
+            ppu.tick(&mut memory);
+        }
+
+        let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
+        assert_eq!(mode_3_dots, 189);
     }*/
 }
