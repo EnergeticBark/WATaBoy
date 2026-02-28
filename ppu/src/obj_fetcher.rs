@@ -42,7 +42,6 @@ pub enum ObjectFetcherState {
 }
 
 pub struct ObjectFetcher {
-    first_obj: bool,
     obj_buffer: VecDeque<Obj>,
     pub state: ObjectFetcherState,
     pub fifo: VecDeque<Pixel>,
@@ -227,7 +226,6 @@ impl ObjectFetcher {
 impl Default for ObjectFetcher {
     fn default() -> Self {
         Self {
-            first_obj: true,
             obj_buffer: VecDeque::with_capacity(10),
             state: ObjectFetcherState::Idle,
             fifo: VecDeque::with_capacity(8),

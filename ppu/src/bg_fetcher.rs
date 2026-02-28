@@ -126,16 +126,32 @@ impl BackgroundFetcher {
                 self.get_tile_data_low(memory);
                 FetcherState::BeforeGetTileDataHigh
             }
-            FetcherState::BeforeGetTileDataHigh => FetcherState::GetTileDataHigh,
-            FetcherState::GetTileDataHigh => {
-                self.get_tile_data_high(memory);
-                // First fetch of the line. Restart and waste six cycles for some reason. :)
+            FetcherState::BeforeGetTileDataHigh => {
                 if self.warmup {
+                    // First fetch of the line. Restart and waste six cycles (5 here, plus 1 discarding). :)
                     self.warmup = false;
+
+                    // Fill the FIFO with 8 transparent pixels for overscan.
+                    // These will be merged and discarded with any sprite pixels that are past the left edge of the LCD.
+                    for _ in 0..8 {
+                        let pixel = Pixel {
+                            low: false,
+                            high: false,
+                            palette: Palette::Bgp,
+                            priority: false,
+                        };
+
+                        self.bg_fifo.push(pixel);
+                    }
+
                     FetcherState::BeforeGetTile
                 } else {
-                    FetcherState::Push
+                    FetcherState::GetTileDataHigh
                 }
+            }
+            FetcherState::GetTileDataHigh => {
+                self.get_tile_data_high(memory);
+                FetcherState::Push
             }
             FetcherState::Push => {
                 if self.push() {

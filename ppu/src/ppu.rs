@@ -81,7 +81,8 @@ impl Ppu {
     }
 
     fn pop_next_obj(&mut self) -> Option<Obj> {
-        self.obj_buffer.pop_front_if(|obj| obj.x_pos <= self.x + 8)
+        self.obj_buffer
+            .pop_front_if(|obj| obj.x_pos + self.pixels_to_drop <= self.x + 8)
     }
 
     fn transition_hblank(&mut self) {
@@ -117,7 +118,7 @@ impl Ppu {
         oam::oam_scan(&mut self.obj_buffer, memory, ly);
 
         // Prepare for Drawing.
-        self.pixels_to_drop = memory[io_regs::SCX as usize] & 7;
+        self.pixels_to_drop = (memory[io_regs::SCX as usize] & 7) + 8;
     }
 
     fn update_ly_register(&self, memory: &mut [u8; MEM_MAP_SIZE]) {
@@ -290,41 +291,23 @@ impl Ppu {
                 }
 
                 if let Some(obj) = self.pop_next_obj() {
-                    println!("DOT: {}, Push obj", self.dots_in_mode);
+                    //println!("DOT: {}, Push obj", self.dots_in_mode);
                     self.obj_fetcher.push_obj(obj);
                 }
 
-                if self.obj_fetcher.idle_and_empty() {
+                if self.obj_fetcher.idle_and_empty()
+                    || self.bg_fetcher.bg_fifo.is_empty()
+                    || !matches!(
+                        self.bg_fetcher.state,
+                        FetcherState::BeforeGetTileDataHigh
+                            | FetcherState::GetTileDataHigh
+                            | FetcherState::Push
+                    )
+                {
                     self.bg_fetcher.tick(memory, self.ly(), self.window_y);
                 } else {
-                    if self.bg_fetcher.bg_fifo.is_empty()
-                        || !matches!(
-                            self.bg_fetcher.state,
-                            FetcherState::BeforeGetTileDataHigh
-                                | FetcherState::GetTileDataHigh
-                                | FetcherState::Push
-                        )
-                    {
-                        self.bg_fetcher.tick(memory, self.ly(), self.window_y);
-                    } else {
-                        self.obj_fetcher.tick(memory, self.ly());
-                        println!(
-                            "DOT: {}, OBJ: {:?}",
-                            self.dots_in_mode, self.obj_fetcher.state
-                        );
-                    }
+                    self.obj_fetcher.tick(memory, self.ly());
                 }
-                println!("DOT: {}, X pos: {}", self.dots_in_mode, self.x);
-                println!(
-                    "DOT: {}, OBJ FIFO LEN: {}",
-                    self.dots_in_mode,
-                    self.obj_fetcher.fifo.len()
-                );
-                println!(
-                    "DOT: {}, BG FIFO LEN: {:?}",
-                    self.dots_in_mode,
-                    self.bg_fetcher.bg_fifo.len()
-                );
 
                 if self.obj_fetcher.idle_and_empty() {
                     // Combine FIFOs.
@@ -665,8 +648,8 @@ mod tests {
     // Assert that the minimum Mode 3 length (172) with:
     // - unscrolled background tiles (0)
     // - no window (0)
-    // - 10 object at position x=1 (???)
-    // is 236??? dots.
+    // - 10 object at position x=1 (64)
+    // is 236 dots.
     // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
     #[test]
     fn test_bg_10_obj_x_1_mode_3_dots() {
@@ -684,7 +667,7 @@ mod tests {
         }
 
         let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
-        assert_eq!(mode_3_dots, 189);
+        assert_eq!(mode_3_dots, 236);
     }
 
     // Assert that the minimum Mode 3 length (172) with:
@@ -742,7 +725,7 @@ mod tests {
         let mut ppu = Ppu::post_boot_dmg();
         let mut memory = hw_constants::post_boot_hwio();
         memory[0xFE00] = 16; // OBJ Y
-        memory[0xFE01] = 0; // OBJ X
+        memory[0xFE01] = 9; // OBJ X
         memory[LCDC as usize] = 0x93; // Enable OBJs.
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
