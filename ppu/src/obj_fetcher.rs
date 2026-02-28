@@ -158,18 +158,10 @@ impl ObjectFetcher {
                     // This used to be ticks_remaining: 1. But Idle is taking its own tick, so it's
                     // probably more accurate to use ticks_remaining: 0 so GetTile finishes after
                     // two ticks instead of three.
-                    if self.first_obj && obj.x_pos == 0 {
-                        self.first_obj = false;
-                        self.state = ObjectFetcherState::GetTile {
-                            ticks_remaining: 5,
-                            obj,
-                        };
-                    } else {
-                        self.state = ObjectFetcherState::GetTile {
-                            ticks_remaining: 0,
-                            obj,
-                        };
-                    }
+                    self.state = ObjectFetcherState::GetTile {
+                        ticks_remaining: 0,
+                        obj,
+                    };
                 }
             }
             ObjectFetcherState::GetTile {
