@@ -406,38 +406,51 @@ impl Ppu {
                 }
             }
             PpuMode::VBlank => {
-                // TODO: Handle special line 453
-
                 // TODO: Observable 2.
 
-                // Observable 4.
-                if self.dots_this_line() == 3 {
-                    self.ly_to_compare_lyc = Some(self.ly());
-                    if self.ly() == 144 {
-                        Self::update_stat_mode(memory, PpuMode::VBlank);
-                        // Request the VBlank interrupt.
-                        memory[io_regs::IF as usize] |= 0b0000_0001;
-
-                        // A VBlank also triggers as an OAM Scan... for some reason?
-                        // See: https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
-                        self.stat_mode_for_interrupt = 2;
-                        self.update_stat_interrupt(memory);
-                        self.stat_mode_for_interrupt = 1;
+                // Last line
+                if self.ly() == 153 {
+                    // Observable 6.
+                    if self.dots_this_line() == 5 {
+                        // Force LY I/O register to 0 early.
+                        memory[io_regs::LY as usize] = 0;
+                        self.ly_to_compare_lyc = Some(153);
                         self.update_stat_interrupt(memory);
                     }
-                    // No idea why this is here
-                    self.update_stat_interrupt(memory);
+
+                    // Observable 12.
+                    if self.dots_this_line() == 11 {
+                        self.ly_to_compare_lyc = Some(0);
+                        self.update_stat_interrupt(memory);
+                    }
+                } else {
+                    // Observable 4.
+                    if self.dots_this_line() == 3 {
+                        self.ly_to_compare_lyc = Some(self.ly());
+                        if self.ly() == 144 {
+                            Self::update_stat_mode(memory, PpuMode::VBlank);
+                            // Request the VBlank interrupt.
+                            memory[io_regs::IF as usize] |= 0b0000_0001;
+
+                            // A VBlank also triggers as an OAM Scan... for some reason?
+                            // See: https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
+                            self.stat_mode_for_interrupt = 2;
+                            self.update_stat_interrupt(memory);
+                            self.stat_mode_for_interrupt = 1;
+                        }
+                        self.update_stat_interrupt(memory);
+                    }
                 }
 
                 self.dot_counter += 1;
-                if self.dots_this_line() == 0 {
-                    // Update LCD Y coordinate.
-                    self.update_ly_register(memory);
-                }
                 if self.dot_counter == DOTS_PER_FRAME {
                     self.dot_counter = 0;
                     self.window_y = 255;
                     self.transition_oam_scan();
+                }
+                if self.dots_this_line() == 0 {
+                    // Update LCD Y coordinate.
+                    self.update_ly_register(memory);
                 }
             }
         }
