@@ -12,7 +12,7 @@ use hw_constants::MEM_MAP_SIZE;
 // Before an object is pushed to the queue, transparent pixels are pushed to the back to maintain a length of 8 pixels.
 // Any transparent pixels can be overwritten by opaque object pixels in the push() function.
 
-const TRANSPARENT: Pixel = Pixel {
+pub const TRANSPARENT: Pixel = Pixel {
     low: false,
     high: false,
     palette: Palette::Obp0,
@@ -70,13 +70,10 @@ impl ObjectFetcher {
 
     // Push a row of 8 pixels from a tile to the Obj FIFO.
     fn push(&mut self, obj: Obj) {
-        // Discard offscreen pixels.
-        let to_discard = 8_u8.saturating_sub(obj.x_pos);
-
         if obj.x_flip() {
-            self.push_bit_range(to_discard..8, obj);
+            self.push_bit_range(0..8, obj);
         } else {
-            self.push_bit_range((0..8 - to_discard).rev(), obj);
+            self.push_bit_range((0..8).rev(), obj);
         }
     }
 

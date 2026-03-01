@@ -150,7 +150,7 @@ impl Cpu {
             self.memory.buffer[io_regs::IF as usize] &= flag_mask;
 
             // Push the PC to the stack.
-            self.registers.sp -= 2;
+            self.registers.sp = self.registers.sp.wrapping_sub(2);
             let [low, high] = self.registers.pc.to_le_bytes();
             self.memory.write_byte(self.registers.sp, low);
             self.memory.write_byte(self.registers.sp + 1, high);

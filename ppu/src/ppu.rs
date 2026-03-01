@@ -1,6 +1,6 @@
 use crate::bg_fetcher::{BackgroundFetcher, FetcherState, Pixel};
 use crate::oam::Obj;
-use crate::obj_fetcher::ObjectFetcher;
+use crate::obj_fetcher::{ObjectFetcher, TRANSPARENT};
 use crate::palette::Palette;
 use crate::{lcd_control, lcd_status, oam, palette};
 
@@ -81,8 +81,10 @@ impl Ppu {
     }
 
     fn pop_next_obj(&mut self) -> Option<Obj> {
-        self.obj_buffer
-            .pop_front_if(|obj| obj.x_pos + self.pixels_to_drop <= self.x + 8)
+        self.obj_buffer.pop_front_if(|obj| {
+            // Addition on the left might overflow so we cast to usize.
+            obj.x_pos as usize + self.pixels_to_drop as usize <= self.x as usize + 8
+        })
     }
 
     fn transition_hblank(&mut self) {
@@ -312,6 +314,8 @@ impl Ppu {
                 if self.obj_fetcher.idle_and_empty() {
                     // Combine FIFOs.
                     if let Some(bg_pixel) = self.bg_fetcher.shift_out() {
+                        let obj_pixel = self.obj_fetcher.shift_out().unwrap_or(TRANSPARENT);
+
                         if self.pixels_to_drop > 0 {
                             self.pixels_to_drop -= 1;
                         } else {
@@ -329,9 +333,7 @@ impl Ppu {
                                 }
                             };
 
-                            if let Some(obj_pixel) = self.obj_fetcher.shift_out()
-                                && lcd_control::obj_enabled(memory)
-                            {
+                            if lcd_control::obj_enabled(memory) {
                                 pixel_to_render = mix_pixels(pixel_to_render, obj_pixel);
                             }
 
