@@ -1,4 +1,4 @@
-use crate::opcodes::Opcode;
+use super::opcodes::Opcode;
 
 // Loading from IndirectHL takes extra machine cycles.
 // See: https://gekkio.fi/files/gb-docs/gbctr.pdf

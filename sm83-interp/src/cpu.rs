@@ -1,15 +1,18 @@
-use std::error::Error;
+mod cycles;
+pub mod opcodes;
+mod registers;
 
-use crate::bus::AddressBus;
-use crate::cycles::m_cycles;
-use crate::opcodes::{Opcode, PrefixOpcode};
-use crate::parameters::{Condition, R8, R16, R16Mem};
-use crate::registers::Registers;
-use crate::{opcodes, registers};
+use std::error::Error;
 
 use hw_constants::{PostBoot, io_regs};
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize};
+
+use crate::bus::AddressBus;
+use cycles::m_cycles;
+use opcodes::parameters::{Condition, R8, R16, R16Mem};
+use opcodes::{Opcode, PrefixOpcode};
+use registers::Registers;
 
 const DMG_BOOT_ROM: &[u8] = include_bytes!("../dmg.bin");
 
@@ -215,7 +218,7 @@ impl Cpu {
 
         let pc = self.registers.pc;
         let bytecode = self.memory.read_byte(pc);
-        let opcode = opcodes::decode(bytecode)?;
+        let opcode = Opcode::decode(bytecode)?;
 
         let mut m_cycles = self.calculate_m_cycles(opcode);
 
@@ -1061,7 +1064,7 @@ impl Cpu {
         self.memory.increment_timers(1);
 
         let second_byte = self.memory.read_byte(self.registers.pc + 1);
-        let prefix_opcode = opcodes::decode_prefix(second_byte);
+        let prefix_opcode = PrefixOpcode::decode(second_byte);
 
         // Decoding the next byte took another.
         self.memory.increment_timers(1);
