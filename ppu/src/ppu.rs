@@ -2,7 +2,7 @@ use crate::bg_fetcher::{BackgroundFetcher, FetcherState, Pixel};
 use crate::oam::Obj;
 use crate::obj_fetcher::{ObjectFetcher, TRANSPARENT};
 use crate::palette::Palette;
-use crate::{lcd_control, lcd_status, oam, palette};
+use crate::{lcd_control, lcd_status, oam, palette, tiles};
 
 use hw_constants::{MEM_MAP_SIZE, PostBoot, SCREEN_SIZE, SCREEN_WIDTH, io_regs};
 use log::{info, trace};
@@ -162,6 +162,65 @@ impl Ppu {
         }
     }
 
+    fn coarse_scanline(&mut self, memory: &mut [u8; MEM_MAP_SIZE]) {
+        let ly = self.ly().wrapping_add(memory[io_regs::SCY as usize]);
+
+        let line_start = self.ly() as usize * SCREEN_WIDTH as usize;
+        let line_end = line_start + SCREEN_WIDTH as usize;
+        let scanline = &mut self.lcd_buffer[line_start..line_end];
+
+        let mut tile_x = 0;
+
+        let tile_y_idx = ly / 8;
+
+        while tile_x * 8 < 160 {
+            let tile_map = if lcd_control::bg_tile_map(memory) {
+                tiles::tile_map_1(memory)
+            } else {
+                tiles::tile_map_0(memory)
+            };
+
+            let tile_x_idx = ((memory[io_regs::SCX as usize] / 8) + tile_x) & 0x1F;
+
+            let tile_id = tile_map[tile_y_idx as usize * 32 + tile_x_idx as usize];
+            let tile_line = ly % 8;
+
+            let tile_data = if lcd_control::bg_and_window_tiles(memory) {
+                tiles::unsigned_nth_tile(memory, tile_id as usize)
+            } else {
+                tiles::signed_nth_tile(memory, tile_id.cast_signed() as isize)
+            };
+
+            let tile_data_low = tile_data[tile_line as usize * 2];
+            let tile_data_high = tile_data[tile_line as usize * 2 + 1];
+
+            // Push
+            for nth_bit in 0..8 {
+                let pixel = Pixel {
+                    low: (tile_data_low >> nth_bit) & 1 == 1,
+                    high: (tile_data_high >> nth_bit) & 1 == 1,
+                    palette: Palette::Bgp,
+                    priority: false,
+                };
+
+                let mut funny_greyscale = 0;
+                if pixel.low {
+                    funny_greyscale |= 0b0000_0001;
+                }
+                if pixel.high {
+                    funny_greyscale |= 0b0000_0010;
+                }
+
+                let color = palette::map_to_bgp(memory, funny_greyscale);
+
+                // Get the colors in their correct greyscale values.
+                scanline[tile_x as usize * 8 + (7 - nth_bit)] = 255 - color.into_bits() * 64;
+            }
+
+            tile_x += 1;
+        }
+    }
+
     // Advance the PPU by 1 dot.
     #[allow(clippy::too_many_lines)]
     // Only panics if internal assertions fail, and they never should.
@@ -290,9 +349,11 @@ impl Ppu {
 
                     self.stat_mode_for_interrupt = 3;
                     self.update_stat_interrupt(memory);
+
+                    self.coarse_scanline(memory);
                 }
 
-                if let Some(obj) = self.pop_next_obj() {
+                /*if let Some(obj) = self.pop_next_obj() {
                     //println!("DOT: {}, Push obj", self.dots_in_mode);
                     self.obj_fetcher.push_obj(obj);
                 }
@@ -371,6 +432,9 @@ impl Ppu {
                     // https://github.com/Ashiepaws/GBEDG/blob/master/ppu/index.md#scx-at-a-sub-tile-layer
                     self.pixels_to_drop = 0;
                 }
+                */
+
+                self.x += 1;
 
                 self.dot_counter += 1;
                 self.dots_in_mode += 1;
