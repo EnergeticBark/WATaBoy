@@ -12,14 +12,15 @@ use hw_constants::MEM_MAP_SIZE;
 // Before an object is pushed to the queue, transparent pixels are pushed to the back to maintain a length of 8 pixels.
 // Any transparent pixels can be overwritten by opaque object pixels in the push() function.
 
-const TRANSPARENT: Pixel = Pixel {
+pub const TRANSPARENT: Pixel = Pixel {
     low: false,
     high: false,
     palette: Palette::Obp0,
     priority: false,
 };
 
-enum ObjectFetcherState {
+#[derive(Debug)]
+pub enum ObjectFetcherState {
     Idle,
     GetTile {
         ticks_remaining: u8,
@@ -42,8 +43,8 @@ enum ObjectFetcherState {
 
 pub struct ObjectFetcher {
     obj_buffer: VecDeque<Obj>,
-    state: ObjectFetcherState,
-    fifo: VecDeque<Pixel>,
+    pub state: ObjectFetcherState,
+    pub fifo: VecDeque<Pixel>,
     tile_data_low: u8,
     tile_data_high: u8,
 }
@@ -69,13 +70,10 @@ impl ObjectFetcher {
 
     // Push a row of 8 pixels from a tile to the Obj FIFO.
     fn push(&mut self, obj: Obj) {
-        // Discard offscreen pixels.
-        let to_discard = 8_u8.saturating_sub(obj.x_pos);
-
         if obj.x_flip() {
-            self.push_bit_range(to_discard..8, obj);
+            self.push_bit_range(0..8, obj);
         } else {
-            self.push_bit_range((0..8 - to_discard).rev(), obj);
+            self.push_bit_range((0..8).rev(), obj);
         }
     }
 
@@ -195,7 +193,14 @@ impl ObjectFetcher {
             }
             ObjectFetcherState::Push { obj } => {
                 self.push(obj);
-                self.state = ObjectFetcherState::Idle;
+                self.state = if let Some(obj) = self.obj_buffer.pop_front() {
+                    ObjectFetcherState::GetTile {
+                        ticks_remaining: 0,
+                        obj,
+                    }
+                } else {
+                    ObjectFetcherState::Idle
+                };
             }
 
             // Countdown

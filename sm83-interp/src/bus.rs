@@ -104,6 +104,7 @@ impl AddressBus {
             }
             io_regs::LYC => {
                 self.buffer[index as usize] = value;
+
                 if !self.ppu.disabled {
                     self.ppu.update_stat_interrupt(&mut self.buffer);
                 }
