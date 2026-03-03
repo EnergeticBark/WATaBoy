@@ -1,6 +1,6 @@
-use crate::lcd_control::{bg_tile_map, window_tile_map};
-use crate::palette::Palette;
-use crate::{lcd_control, tiles};
+use super::lcd_control::{bg_tile_map, window_tile_map};
+use super::palette::Palette;
+use super::{lcd_control, tiles};
 
 use hw_constants::{MEM_MAP_SIZE, io_regs};
 

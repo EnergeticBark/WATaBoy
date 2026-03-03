@@ -1,10 +1,10 @@
 use crate::joypad::{ButtonsHeld, Joyp};
 use crate::mbc::Mbc;
+use crate::ppu::{Ppu, PpuMemAccess};
 use crate::timers::Timers;
 
 use hw_constants::{PostBoot, io_regs};
 use log::info;
-use ppu::ppu::{Ppu, PpuMemAccess};
 use rkyv::{Archive, Deserialize, Serialize, with::Skip};
 
 #[derive(Archive, Deserialize, Serialize)]

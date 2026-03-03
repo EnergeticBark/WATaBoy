@@ -1,8 +1,8 @@
-use crate::bg_fetcher::Pixel;
-use crate::lcd_control::obj_size;
-use crate::oam::Obj;
-use crate::palette::Palette;
-use crate::tiles;
+use super::bg_fetcher::Pixel;
+use super::lcd_control::obj_size;
+use super::oam::Obj;
+use super::palette::Palette;
+use super::tiles;
 
 use std::collections::VecDeque;
 

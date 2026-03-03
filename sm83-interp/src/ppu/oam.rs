@@ -1,4 +1,4 @@
-use crate::lcd_control::obj_size;
+use super::lcd_control::obj_size;
 
 use std::collections::VecDeque;
 

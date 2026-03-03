@@ -1,12 +1,19 @@
-use crate::bg_fetcher::{BackgroundFetcher, FetcherState, Pixel};
-use crate::oam::Obj;
-use crate::obj_fetcher::{ObjectFetcher, TRANSPARENT};
-use crate::palette::Palette;
-use crate::{lcd_control, lcd_status, oam, palette};
+mod bg_fetcher;
+pub mod lcd_control;
+mod lcd_status;
+pub mod oam;
+mod obj_fetcher;
+mod palette;
+pub mod tiles;
 
 use hw_constants::{MEM_MAP_SIZE, PostBoot, SCREEN_SIZE, SCREEN_WIDTH, io_regs};
 use log::{info, trace};
 use std::collections::VecDeque;
+
+use bg_fetcher::{BackgroundFetcher, FetcherState, Pixel};
+use oam::Obj;
+use obj_fetcher::{ObjectFetcher, TRANSPARENT};
+use palette::Palette;
 
 const SCANLINES_PER_FRAME: usize = 154;
 const DOTS_PER_SCANLINE: usize = 456;
