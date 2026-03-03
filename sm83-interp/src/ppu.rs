@@ -9,11 +9,12 @@ pub mod tiles;
 use log::{info, trace};
 use std::collections::VecDeque;
 
-use hw_constants::io_regs::{self, LCDC};
+use hw_constants::io_regs::{self, LCDC, STAT};
 use hw_constants::{MEM_MAP_SIZE, PostBoot, SCREEN_SIZE, SCREEN_WIDTH};
 
 use bg_fetcher::{BackgroundFetcher, FetcherState, Pixel};
 use lcd_control::LcdControl;
+use lcd_status::{LcdStatus, StatMode};
 use oam::Obj;
 use obj_fetcher::{ObjectFetcher, TRANSPARENT};
 use palette::Palette;
@@ -139,27 +140,25 @@ impl Ppu {
         memory[io_regs::LY as usize] = self.ly();
     }
 
-    fn update_stat_mode(memory: &mut [u8; MEM_MAP_SIZE], mode: PpuMode) {
-        match mode {
-            PpuMode::HBlank => lcd_status::set_ppu_mode(memory, 0),
-            PpuMode::VBlank => lcd_status::set_ppu_mode(memory, 1),
-            PpuMode::OamScan => lcd_status::set_ppu_mode(memory, 2),
-            PpuMode::Drawing => lcd_status::set_ppu_mode(memory, 3),
-        }
+    fn update_stat_mode(memory: &mut [u8; MEM_MAP_SIZE], mode: StatMode) {
+        let stat = LcdStatus::from_bits(memory[STAT as usize]);
+        memory[STAT as usize] = stat.with_mode(mode).into();
     }
 
     pub fn update_stat_interrupt(&mut self, memory: &mut [u8; MEM_MAP_SIZE]) {
+        let stat = LcdStatus::from_bits(memory[STAT as usize]);
+
         let coincidence = self
             .ly_to_compare_lyc
             .is_some_and(|x| x == memory[io_regs::LYC as usize]);
-        lcd_status::set_coincidence(memory, coincidence);
+        memory[STAT as usize] = stat.with_coincidence(coincidence).into();
 
         // STAT interrupt triggering.
-        let lyc_int = coincidence && lcd_status::lyc_int_select(memory);
+        let lyc_int = coincidence && stat.lyc_int_select();
         let mode_int = match self.stat_mode_for_interrupt {
-            0 => lcd_status::mode0_int_select(memory),
-            1 => lcd_status::mode1_int_select(memory),
-            2 => lcd_status::mode2_int_select(memory),
+            0 => stat.mode0_int_select(),
+            1 => stat.mode1_int_select(),
+            2 => stat.mode2_int_select(),
             _ => false,
         };
 
@@ -190,7 +189,8 @@ impl Ppu {
                     ..Default::default()
                 };
 
-                lcd_status::set_ppu_mode(memory, 0);
+                let stat = LcdStatus::from_bits(memory[STAT as usize]);
+                memory[STAT as usize] = stat.with_mode(StatMode::HBlank).into();
                 self.update_ly_register(memory);
             }
             return;
@@ -214,7 +214,7 @@ impl Ppu {
                 self.oam_access = PpuMemAccess::Blocked;
                 self.vram_access = PpuMemAccess::Blocked;
 
-                Self::update_stat_mode(memory, PpuMode::Drawing);
+                Self::update_stat_mode(memory, StatMode::Drawing);
                 self.stat_mode_for_interrupt = 3;
                 self.update_stat_interrupt(memory);
             }
@@ -230,7 +230,7 @@ impl Ppu {
                 self.oam_access = PpuMemAccess::ReadWrite;
                 self.vram_access = PpuMemAccess::ReadWrite;
 
-                Self::update_stat_mode(memory, PpuMode::HBlank);
+                Self::update_stat_mode(memory, StatMode::HBlank);
                 // Skip 2 extra cycles.
                 self.dot_counter += 2;
             }
@@ -262,7 +262,7 @@ impl Ppu {
                         self.ly_to_compare_lyc = None;
                     }
 
-                    Self::update_stat_mode(memory, PpuMode::HBlank);
+                    Self::update_stat_mode(memory, StatMode::HBlank);
                     self.update_stat_interrupt(memory);
                 }
 
@@ -270,7 +270,7 @@ impl Ppu {
                 if self.dots_this_line() == 3 {
                     self.oam_access = PpuMemAccess::Blocked;
 
-                    Self::update_stat_mode(memory, PpuMode::OamScan);
+                    Self::update_stat_mode(memory, StatMode::OamScan);
 
                     self.ly_to_compare_lyc = Some(self.ly());
 
@@ -299,7 +299,7 @@ impl Ppu {
                     self.oam_access = PpuMemAccess::Blocked;
                     self.vram_access = PpuMemAccess::Blocked;
 
-                    Self::update_stat_mode(memory, PpuMode::Drawing);
+                    Self::update_stat_mode(memory, StatMode::Drawing);
 
                     self.stat_mode_for_interrupt = 3;
                     self.update_stat_interrupt(memory);
@@ -400,7 +400,7 @@ impl Ppu {
                     self.oam_access = PpuMemAccess::ReadWrite;
                     self.vram_access = PpuMemAccess::ReadWrite;
 
-                    Self::update_stat_mode(memory, PpuMode::HBlank);
+                    Self::update_stat_mode(memory, StatMode::HBlank);
                     self.stat_mode_for_interrupt = 0;
                     self.update_stat_interrupt(memory);
                 }
@@ -442,7 +442,7 @@ impl Ppu {
                     if self.dots_this_line() == 3 {
                         self.ly_to_compare_lyc = Some(self.ly());
                         if self.ly() == 144 {
-                            Self::update_stat_mode(memory, PpuMode::VBlank);
+                            Self::update_stat_mode(memory, StatMode::VBlank);
                             // Request the VBlank interrupt.
                             memory[io_regs::IF as usize] |= 0b0000_0001;
 
@@ -476,7 +476,7 @@ impl Ppu {
                     "Clocks: {:3}, LY: {:3}, STAT Mode: {}, LY to compare LYC: {:?}, INT: {}",
                     self.dots_this_line(),
                     memory[io_regs::LY as usize],
-                    lcd_status::ppu_mode(memory),
+                    LcdStatus::from_bits(memory[STAT as usize]).mode().into_bits(),
                     self.ly_to_compare_lyc,
                     self.stat_interrupt_line,
                 );
