@@ -9,7 +9,7 @@ pub mod tiles;
 use log::{info, trace};
 use std::collections::VecDeque;
 
-use hw_constants::io_regs::{self, LCDC, STAT};
+use hw_constants::io_regs::{IF, LCDC, LY, LYC, SCX, STAT, WX, WY};
 use hw_constants::{MEM_MAP_SIZE, PostBoot, SCREEN_SIZE, SCREEN_WIDTH};
 
 use bg_fetcher::{BackgroundFetcher, FetcherState, Pixel};
@@ -68,9 +68,7 @@ pub struct Ppu {
 fn drawing_window(memory: &[u8; MEM_MAP_SIZE], x: u8, y: u8) -> bool {
     let lcdc = LcdControl::from_bits(memory[LCDC as usize]);
 
-    lcdc.window_enabled()
-        && x + 7 == memory[io_regs::WX as usize]
-        && y >= memory[io_regs::WY as usize]
+    lcdc.window_enabled() && x + 7 == memory[WX as usize] && y >= memory[WY as usize]
 }
 
 fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
@@ -133,11 +131,11 @@ impl Ppu {
         oam::oam_scan(&mut self.obj_buffer, memory, ly);
 
         // Prepare for Drawing.
-        self.pixels_to_drop = (memory[io_regs::SCX as usize] & 7) + 8;
+        self.pixels_to_drop = (memory[SCX as usize] & 7) + 8;
     }
 
     fn update_ly_register(&self, memory: &mut [u8; MEM_MAP_SIZE]) {
-        memory[io_regs::LY as usize] = self.ly();
+        memory[LY as usize] = self.ly();
     }
 
     fn update_stat_mode(memory: &mut [u8; MEM_MAP_SIZE], mode: StatMode) {
@@ -150,7 +148,7 @@ impl Ppu {
 
         let coincidence = self
             .ly_to_compare_lyc
-            .is_some_and(|x| x == memory[io_regs::LYC as usize]);
+            .is_some_and(|x| x == memory[LYC as usize]);
         memory[STAT as usize] = stat.with_coincidence(coincidence).into();
 
         // STAT interrupt triggering.
@@ -169,7 +167,7 @@ impl Ppu {
         if !prev_stat_line && self.stat_interrupt_line {
             info!(target: "lcd_int", "LCD interrupt flag set on dot: {}", self.dots_this_line());
             // Request the LCD interrupt.
-            memory[io_regs::IF as usize] |= 0b0000_0010;
+            memory[IF as usize] |= 0b0000_0010;
         }
     }
 
@@ -427,7 +425,7 @@ impl Ppu {
                     // Observable 6.
                     if self.dots_this_line() == 5 {
                         // Force LY I/O register to 0 early.
-                        memory[io_regs::LY as usize] = 0;
+                        memory[LY as usize] = 0;
                         self.ly_to_compare_lyc = Some(153);
                         self.update_stat_interrupt(memory);
                     }
@@ -444,7 +442,7 @@ impl Ppu {
                         if self.ly() == 144 {
                             Self::update_stat_mode(memory, StatMode::VBlank);
                             // Request the VBlank interrupt.
-                            memory[io_regs::IF as usize] |= 0b0000_0001;
+                            memory[IF as usize] |= 0b0000_0001;
 
                             // A VBlank also triggers as an OAM Scan... for some reason?
                             // See: https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
@@ -475,7 +473,7 @@ impl Ppu {
                     target: "ppu_enabled",
                     "Clocks: {:3}, LY: {:3}, STAT Mode: {}, LY to compare LYC: {:?}, INT: {}",
                     self.dots_this_line(),
-                    memory[io_regs::LY as usize],
+                    memory[LY as usize],
                     LcdStatus::from_bits(memory[STAT as usize]).mode().into_bits(),
                     self.ly_to_compare_lyc,
                     self.stat_interrupt_line,
@@ -569,7 +567,7 @@ mod tests {
     fn test_scrolled_bg_mode_3_dots() {
         let mut ppu = Ppu::post_boot_dmg();
         let mut memory = hw_constants::post_boot_hwio();
-        memory[io_regs::SCX as usize] = 7;
+        memory[SCX as usize] = 7;
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
             ppu.tick(&mut memory);
@@ -591,9 +589,9 @@ mod tests {
         let mut memory = hw_constants::post_boot_hwio();
 
         // Enable the window.
-        memory[io_regs::LCDC as usize] |= 0b0010_0000;
+        memory[LCDC as usize] |= 0b0010_0000;
         // Scroll it to x=50px
-        memory[io_regs::WX as usize] = 50 + 7;
+        memory[WX as usize] = 50 + 7;
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
             ppu.tick(&mut memory);
@@ -613,12 +611,12 @@ mod tests {
     fn test_scrolled_bg_window_mode_3_dots() {
         let mut ppu = Ppu::post_boot_dmg();
         let mut memory = hw_constants::post_boot_hwio();
-        memory[io_regs::SCX as usize] = 7;
+        memory[SCX as usize] = 7;
 
         // Enable the window.
-        memory[io_regs::LCDC as usize] |= 0b0010_0000;
+        memory[LCDC as usize] |= 0b0010_0000;
         // Scroll it to x=50px
-        memory[io_regs::WX as usize] = 50 + 7;
+        memory[WX as usize] = 50 + 7;
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
             ppu.tick(&mut memory);
