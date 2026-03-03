@@ -1,4 +1,3 @@
-mod cycles;
 pub mod opcodes;
 mod registers;
 
@@ -9,7 +8,7 @@ use log::info;
 use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::bus::AddressBus;
-use cycles::m_cycles;
+use opcodes::cycles::m_cycles;
 use opcodes::parameters::{Condition, R8, R16, R16Mem};
 use opcodes::{Opcode, PrefixOpcode};
 use registers::Registers;

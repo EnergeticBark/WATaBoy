@@ -1,10 +1,10 @@
+pub mod cycles;
 pub mod parameters;
-
-use std::fmt;
 
 use arbitrary_int::u3;
 use bitmatch::bitmatch;
 use std::error::Error;
+use std::fmt;
 
 use parameters::{Condition, R8, R16, R16Mem, R16Stack};
 
