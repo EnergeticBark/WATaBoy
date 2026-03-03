@@ -1,8 +1,9 @@
-use super::lcd_control::obj_size;
-
 use std::collections::VecDeque;
 
 use hw_constants::MEM_MAP_SIZE;
+use hw_constants::io_regs::LCDC;
+
+use super::lcd_control::LcdControl;
 
 const OBJ_SIZE: usize = 4;
 
@@ -73,7 +74,8 @@ pub fn nth_obj(memory: &[u8; MEM_MAP_SIZE], index: usize) -> Obj {
 
 // Place objects into a sorted queue so we can pop them in-order as we draw the scanline.
 pub fn oam_scan(obj_buffer: &mut VecDeque<Obj>, memory: &[u8; MEM_MAP_SIZE], ly: u8) {
-    let obj_size = obj_size(memory);
+    let lcdc = LcdControl::from_bits(memory[LCDC as usize]);
+    let obj_size = lcdc.obj_size();
 
     obj_buffer.clear();
     for index in 0..40 {

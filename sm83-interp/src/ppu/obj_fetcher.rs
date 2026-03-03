@@ -1,12 +1,13 @@
-use super::bg_fetcher::Pixel;
-use super::lcd_control::obj_size;
-use super::oam::Obj;
-use super::palette::Palette;
-use super::tiles;
-
 use std::collections::VecDeque;
 
 use hw_constants::MEM_MAP_SIZE;
+use hw_constants::io_regs::LCDC;
+
+use super::bg_fetcher::Pixel;
+use super::lcd_control::LcdControl;
+use super::oam::Obj;
+use super::palette::Palette;
+use super::tiles;
 
 // From ObjectFetcher's perspective, its pixel FIFO always contains 8 pixels.
 // Before an object is pushed to the queue, transparent pixels are pushed to the back to maintain a length of 8 pixels.
@@ -121,8 +122,10 @@ impl ObjectFetcher {
     }
 
     fn current_tile(memory: &[u8; MEM_MAP_SIZE], obj: Obj, obj_line: u8) -> &[u8; 16] {
+        let lcdc = LcdControl::from_bits(memory[LCDC as usize]);
+
         let mut tile_index = obj.tile_index;
-        if obj_size(memory) {
+        if lcdc.obj_size() {
             // Override the first bit as described in PanDocs.
             // See: https://gbdev.io/pandocs/OAM.html#byte-2--tile-index
             if obj_line < 8 {
@@ -164,7 +167,8 @@ impl ObjectFetcher {
                 ticks_remaining: 0,
                 obj,
             } => {
-                let obj_line = Self::get_tile(current_scanline, obj, obj_size(memory));
+                let lcdc = LcdControl::from_bits(memory[LCDC as usize]);
+                let obj_line = Self::get_tile(current_scanline, obj, lcdc.obj_size());
                 self.state = ObjectFetcherState::GetTileDataLow {
                     ticks_remaining: 1,
                     obj,

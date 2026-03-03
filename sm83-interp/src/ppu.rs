@@ -6,11 +6,14 @@ mod obj_fetcher;
 mod palette;
 pub mod tiles;
 
-use hw_constants::{MEM_MAP_SIZE, PostBoot, SCREEN_SIZE, SCREEN_WIDTH, io_regs};
 use log::{info, trace};
 use std::collections::VecDeque;
 
+use hw_constants::io_regs::{self, LCDC};
+use hw_constants::{MEM_MAP_SIZE, PostBoot, SCREEN_SIZE, SCREEN_WIDTH};
+
 use bg_fetcher::{BackgroundFetcher, FetcherState, Pixel};
+use lcd_control::LcdControl;
 use oam::Obj;
 use obj_fetcher::{ObjectFetcher, TRANSPARENT};
 use palette::Palette;
@@ -62,7 +65,9 @@ pub struct Ppu {
 }
 
 fn drawing_window(memory: &[u8; MEM_MAP_SIZE], x: u8, y: u8) -> bool {
-    lcd_control::window_enabled(memory)
+    let lcdc = LcdControl::from_bits(memory[LCDC as usize]);
+
+    lcdc.window_enabled()
         && x + 7 == memory[io_regs::WX as usize]
         && y >= memory[io_regs::WY as usize]
 }
@@ -174,7 +179,8 @@ impl Ppu {
     // Only panics if internal assertions fail, and they never should.
     #[allow(clippy::missing_panics_doc)]
     pub fn tick(&mut self, memory: &mut [u8; MEM_MAP_SIZE]) {
-        if !lcd_control::lcd_and_ppu_enabled(memory) {
+        let lcdc = LcdControl::from_bits(memory[LCDC as usize]);
+        if !lcdc.lcd_and_ppu_enabled() {
             if !self.disabled {
                 info!(target: "ppu_disabled", "Disabled on dot: {}", self.dot_counter);
 
@@ -326,10 +332,11 @@ impl Ppu {
                         if self.pixels_to_drop > 0 {
                             self.pixels_to_drop -= 1;
                         } else {
+                            let lcdc = LcdControl::from_bits(memory[LCDC as usize]);
+
                             // If the background/window is disabled, use a pixel with a value of 0.
                             // See: https://gbdev.io/pandocs/pixel_fifo.html#pixel-rendering
-                            let mut pixel_to_render = if lcd_control::bg_and_window_enabled(memory)
-                            {
+                            let mut pixel_to_render = if lcdc.bg_and_window_enabled() {
                                 bg_pixel
                             } else {
                                 Pixel {
@@ -340,7 +347,7 @@ impl Ppu {
                                 }
                             };
 
-                            if lcd_control::obj_enabled(memory) {
+                            if lcdc.obj_enabled() {
                                 pixel_to_render = mix_pixels(pixel_to_render, obj_pixel);
                             }
 

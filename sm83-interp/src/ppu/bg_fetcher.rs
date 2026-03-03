@@ -1,8 +1,9 @@
-use super::lcd_control::{bg_tile_map, window_tile_map};
-use super::palette::Palette;
-use super::{lcd_control, tiles};
+use hw_constants::MEM_MAP_SIZE;
+use hw_constants::io_regs::{LCDC, SCX, SCY};
 
-use hw_constants::{MEM_MAP_SIZE, io_regs};
+use super::lcd_control::LcdControl;
+use super::palette::Palette;
+use super::tiles;
 
 #[derive(Copy, Clone)]
 pub struct Pixel {
@@ -67,20 +68,22 @@ impl BackgroundFetcher {
     }
 
     fn get_tile(&mut self, memory: &[u8; MEM_MAP_SIZE], current_scanline: u8, window_y: u8) {
-        let bg_second_tile_map = bg_tile_map(memory) && !self.drawing_window;
-        let window_second_tile_map = window_tile_map(memory) && self.drawing_window;
+        let lcdc = LcdControl::from_bits(memory[LCDC as usize]);
+
+        let bg_second_tile_map = lcdc.bg_tile_map() && !self.drawing_window;
+        let window_second_tile_map = lcdc.window_tile_map() && self.drawing_window;
         let second_tile_map = bg_second_tile_map || window_second_tile_map;
 
         let tile_x = if self.drawing_window {
             self.tile_x
         } else {
-            ((memory[io_regs::SCX as usize] / 8) + self.tile_x) & 0x1F
+            ((memory[SCX as usize] / 8) + self.tile_x) & 0x1F
         };
 
         let ly = if self.drawing_window {
             window_y
         } else {
-            current_scanline.wrapping_add(memory[io_regs::SCY as usize])
+            current_scanline.wrapping_add(memory[SCY as usize])
         };
         let tile_y = ly / 8;
 
@@ -97,7 +100,9 @@ impl BackgroundFetcher {
     }
 
     fn current_tile<'a>(&self, memory: &'a [u8; MEM_MAP_SIZE]) -> &'a [u8; 16] {
-        if lcd_control::bg_and_window_tiles(memory) {
+        let lcdc = LcdControl::from_bits(memory[LCDC as usize]);
+
+        if lcdc.bg_and_window_tiles() {
             tiles::unsigned_nth_tile(memory, self.tile_id as usize)
         } else {
             tiles::signed_nth_tile(memory, self.tile_id.cast_signed() as isize)
