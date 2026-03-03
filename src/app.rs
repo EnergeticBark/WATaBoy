@@ -11,9 +11,9 @@ use hw_constants::{PostBoot, SCREEN_HEIGHT, SCREEN_WIDTH, TILE_MAP_SIZE, TILE_SI
 use log::error;
 use rkyv::deserialize;
 use rkyv::rancor::Error;
+use sm83_interp::cpu::opcodes::Opcode;
 use sm83_interp::cpu::{ArchivedCpu, Cpu};
 use sm83_interp::joypad::ButtonsHeld;
-use sm83_interp::opcodes::decode;
 use std::fs::File;
 use std::io::{Read, Write};
 
@@ -201,7 +201,9 @@ impl eframe::App for PPUViewApp {
             if ui.button("Step once").clicked() {
                 println!(
                     "{:?}",
-                    decode(self.dmg_state.memory[self.dmg_state.registers.pc])
+                    Opcode::decode(
+                        self.dmg_state.memory.buffer[self.dmg_state.registers.pc as usize]
+                    )
                 );
                 if let Err(message) = self.dmg_state.execute() {
                     error!("{message}");

@@ -25,7 +25,8 @@ fn draw_memory_body(ui: &mut Ui, dmg_state: &Cpu) {
                 ui.label(row_label);
 
                 for i in 0..16 {
-                    let formatted_row = format!("{:02X}", dmg_state.memory[row_index + i]);
+                    let formatted_row =
+                        format!("{:02X}", dmg_state.memory.buffer[(row_index + i) as usize]);
 
                     if row_index + i == dmg_state.registers.pc {
                         ui.strong(RichText::from(formatted_row).color(Color32::RED));

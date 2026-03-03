@@ -2,8 +2,8 @@ use eframe::epaint::textures::TextureOptions;
 use eframe::epaint::{ColorImage, TextureHandle};
 use egui::Ui;
 use egui_extras::{Column, TableBody, TableBuilder};
-use ppu::tiles;
 use sm83_interp::cpu::Cpu;
+use sm83_interp::ppu::tiles;
 
 const TILE_SCALE: f32 = 4.0;
 

@@ -1887,16 +1887,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ppu"
-version = "0.1.0"
-dependencies = [
- "arbitrary-int",
- "bitfield-struct",
- "hw-constants",
- "log",
-]
-
-[[package]]
 name = "ppu-view"
 version = "0.1.0"
 dependencies = [
@@ -1907,7 +1897,6 @@ dependencies = [
  "env_logger",
  "hw-constants",
  "log",
- "ppu",
  "rkyv",
  "sm83-interp",
  "wasm-bindgen-futures",
@@ -2242,7 +2231,6 @@ dependencies = [
  "bitmatch",
  "hw-constants",
  "log",
- "ppu",
  "rkyv",
 ]
 

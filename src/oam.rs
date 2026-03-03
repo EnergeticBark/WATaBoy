@@ -1,8 +1,8 @@
 use eframe::epaint::TextureHandle;
 use egui::Ui;
 use egui_extras::{Column, TableBody, TableBuilder};
-use ppu::oam;
 use sm83_interp::cpu::Cpu;
+use sm83_interp::ppu::oam;
 
 pub fn draw_oam_table(ui: &mut Ui, tiles: &mut [TextureHandle], dmg_state: &Cpu) {
     TableBuilder::new(ui)
