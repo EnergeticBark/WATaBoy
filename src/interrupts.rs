@@ -6,6 +6,8 @@ use sm83_interp::cpu::Cpu;
 use sm83_interp::cpu::InterruptBits;
 use sm83_interp::ppu::{LcdStatus, StatMode};
 
+const ROW_HEIGHT: f32 = 18.0;
+
 pub fn show(ui: &mut egui::Ui, dmg_state: &Cpu) {
     let name = "IE and IF";
     ui.heading(name);
@@ -15,7 +17,7 @@ pub fn show(ui: &mut egui::Ui, dmg_state: &Cpu) {
         .column(Column::auto())
         .column(Column::auto())
         .column(Column::remainder())
-        .header(18.0, |mut header| {
+        .header(ROW_HEIGHT, |mut header| {
             header.col(|ui| {
                 ui.label("Interrupt");
             });
@@ -39,7 +41,7 @@ pub fn show(ui: &mut egui::Ui, dmg_state: &Cpu) {
         .striped(true)
         .column(Column::auto())
         .column(Column::remainder())
-        .header(18.0, |mut header| {
+        .header(ROW_HEIGHT, |mut header| {
             header.col(|ui| {
                 ui.label("Status");
             });
@@ -64,7 +66,7 @@ fn draw_ie_and_if_body(body: TableBody<'_>, dmg_state: &Cpu) {
         ("Joypad", intr_enable.joypad(), intr_flag.joypad()),
     ];
 
-    body.rows(18.0, values.len(), |mut row| {
+    body.rows(ROW_HEIGHT, values.len(), |mut row| {
         let row_index = row.index();
         let (interrupt, enabled, flagged) = values[row_index];
 
@@ -84,11 +86,23 @@ fn draw_ie_and_if_body(body: TableBody<'_>, dmg_state: &Cpu) {
     });
 }
 
+fn draw_checkbox_row(body: &mut TableBody<'_>, status: &str, checked: bool) {
+    body.row(ROW_HEIGHT, |mut row| {
+        row.col(|ui| {
+            // Prevent this label from wrapping so the column it's in gets extended.
+            ui.add(Label::new(status).wrap_mode(TextWrapMode::Extend));
+        });
+        row.col(|ui| {
+            let mut checked = checked;
+            ui.add_enabled(false, Checkbox::new(&mut checked, ""));
+        });
+    });
+}
+
 fn draw_stat_body(body: &mut TableBody<'_>, dmg_state: &Cpu) {
-    let height = 18.0;
     let stat = LcdStatus::from_bits(dmg_state.memory.buffer[STAT as usize]);
 
-    body.row(height, |mut row| {
+    body.row(ROW_HEIGHT, |mut row| {
         row.col(|ui| {
             ui.label("PPU Mode");
         });
@@ -103,54 +117,9 @@ fn draw_stat_body(body: &mut TableBody<'_>, dmg_state: &Cpu) {
         });
     });
 
-    body.row(height, |mut row| {
-        row.col(|ui| {
-            ui.label("LYC == LY");
-        });
-        row.col(|ui| {
-            let mut checked: bool = stat.coincidence();
-            ui.add_enabled(false, Checkbox::new(&mut checked, ""));
-        });
-    });
-
-    body.row(height, |mut row| {
-        row.col(|ui| {
-            // Prevent this label from wrapping so the column it's in gets extended.
-            ui.add(Label::new("Mode 0 Int Select").wrap_mode(TextWrapMode::Extend));
-        });
-        row.col(|ui| {
-            let mut checked: bool = stat.mode0_int_select();
-            ui.add_enabled(false, Checkbox::new(&mut checked, ""));
-        });
-    });
-
-    body.row(height, |mut row| {
-        row.col(|ui| {
-            ui.label("Mode 1 Int Select");
-        });
-        row.col(|ui| {
-            let mut checked: bool = stat.mode1_int_select();
-            ui.add_enabled(false, Checkbox::new(&mut checked, ""));
-        });
-    });
-
-    body.row(height, |mut row| {
-        row.col(|ui| {
-            ui.label("Mode 2 Int Select");
-        });
-        row.col(|ui| {
-            let mut checked: bool = stat.mode2_int_select();
-            ui.add_enabled(false, Checkbox::new(&mut checked, ""));
-        });
-    });
-
-    body.row(height, |mut row| {
-        row.col(|ui| {
-            ui.label("LYC Int Select");
-        });
-        row.col(|ui| {
-            let mut checked: bool = stat.lyc_int_select();
-            ui.add_enabled(false, Checkbox::new(&mut checked, ""));
-        });
-    });
+    draw_checkbox_row(body, "LYC == LY", stat.coincidence());
+    draw_checkbox_row(body, "Mode 0 Int Select", stat.mode0_int_select());
+    draw_checkbox_row(body, "Mode 1 Int Select", stat.mode1_int_select());
+    draw_checkbox_row(body, "Mode 2 Int Select", stat.mode2_int_select());
+    draw_checkbox_row(body, "LYC Int Select", stat.lyc_int_select());
 }
