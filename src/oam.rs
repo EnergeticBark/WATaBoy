@@ -8,7 +8,7 @@ pub fn draw_oam_table(ui: &mut Ui, tiles: &mut [TextureHandle], dmg_state: &Cpu)
     TableBuilder::new(ui)
         .id_salt("OAM View")
         .striped(true)
-        .columns(Column::auto(), 6)
+        .columns(Column::auto(), 9)
         .header(18.0, |mut header| {
             header.col(|ui| {
                 ui.label("Object #");
@@ -26,7 +26,16 @@ pub fn draw_oam_table(ui: &mut Ui, tiles: &mut [TextureHandle], dmg_state: &Cpu)
                 ui.label("Tile");
             });
             header.col(|ui| {
-                ui.label("Attributes");
+                ui.label("Priority");
+            });
+            header.col(|ui| {
+                ui.label("Y Flip");
+            });
+            header.col(|ui| {
+                ui.label("X Flip");
+            });
+            header.col(|ui| {
+                ui.label("Palette");
             });
         })
         .body(|body| {
@@ -62,7 +71,16 @@ fn draw_oam_body(body: TableBody<'_>, tiles: &mut [TextureHandle], dmg_state: &C
         });
 
         row.col(|ui| {
-            ui.label(format!("{}", obj.attributes));
+            ui.label(format!("{}", obj.attributes.priority()));
+        });
+        row.col(|ui| {
+            ui.label(format!("{}", obj.attributes.y_flip()));
+        });
+        row.col(|ui| {
+            ui.label(format!("{}", obj.attributes.x_flip()));
+        });
+        row.col(|ui| {
+            ui.label(format!("{}", obj.attributes.palette()));
         });
     });
 }
