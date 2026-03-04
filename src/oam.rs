@@ -1,5 +1,5 @@
 use eframe::epaint::TextureHandle;
-use egui::Ui;
+use egui::{Checkbox, Ui};
 use egui_extras::{Column, TableBody, TableBuilder};
 use sm83_interp::cpu::Cpu;
 use sm83_interp::ppu::oam;
@@ -71,16 +71,20 @@ fn draw_oam_body(body: TableBody<'_>, tiles: &mut [TextureHandle], dmg_state: &C
         });
 
         row.col(|ui| {
-            ui.label(format!("{}", obj.attributes.priority()));
+            let mut checked: bool = obj.attributes.priority();
+            ui.add_enabled(false, Checkbox::new(&mut checked, ""));
         });
         row.col(|ui| {
-            ui.label(format!("{}", obj.attributes.y_flip()));
+            let mut checked: bool = obj.attributes.y_flip();
+            ui.add_enabled(false, Checkbox::new(&mut checked, ""));
         });
         row.col(|ui| {
-            ui.label(format!("{}", obj.attributes.x_flip()));
+            let mut checked: bool = obj.attributes.x_flip();
+            ui.add_enabled(false, Checkbox::new(&mut checked, ""));
         });
         row.col(|ui| {
-            ui.label(format!("{}", obj.attributes.palette()));
+            let mut checked: bool = obj.attributes.palette();
+            ui.add_enabled(false, Checkbox::new(&mut checked, ""));
         });
     });
 }
