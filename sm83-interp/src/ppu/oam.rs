@@ -1,3 +1,4 @@
+use bitfield_struct::bitfield;
 use std::collections::VecDeque;
 
 use hw_constants::MEM_MAP_SIZE;
@@ -7,12 +8,22 @@ use super::lcd_control::LcdControl;
 
 const OBJ_SIZE: usize = 4;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[bitfield(u8, order = Msb)]
+pub struct Attributes {
+    pub priority: bool,
+    pub y_flip: bool,
+    pub x_flip: bool,
+    pub palette: bool,
+    #[bits(4)]
+    __: u8, // Padding
+}
+
+#[derive(Copy, Clone, Debug)]
 pub struct Obj {
     pub y_pos: u8,
     pub x_pos: u8,
     pub tile_index: u8,
-    pub attributes: u8,
+    pub attributes: Attributes,
 }
 
 impl Obj {
@@ -22,25 +33,8 @@ impl Obj {
             y_pos: bytes[0],
             x_pos: bytes[1],
             tile_index: bytes[2],
-            attributes: bytes[3],
+            attributes: Attributes::from_bits(bytes[3]),
         }
-    }
-
-    #[must_use]
-    pub fn priority(&self) -> bool {
-        self.attributes & 0b1000_0000 == 0b1000_0000
-    }
-    #[must_use]
-    pub fn y_flip(&self) -> bool {
-        self.attributes & 0b0100_0000 == 0b0100_0000
-    }
-    #[must_use]
-    pub fn x_flip(&self) -> bool {
-        self.attributes & 0b0010_0000 == 0b0010_0000
-    }
-    #[must_use]
-    pub fn palette(&self) -> bool {
-        self.attributes & 0b0001_0000 == 0b0001_0000
     }
 
     #[must_use]

@@ -71,7 +71,7 @@ impl ObjectFetcher {
 
     // Push a row of 8 pixels from a tile to the Obj FIFO.
     fn push(&mut self, obj: Obj) {
-        if obj.x_flip() {
+        if obj.attributes.x_flip() {
             self.push_bit_range(0..8, obj);
         } else {
             self.push_bit_range((0..8).rev(), obj);
@@ -89,13 +89,13 @@ impl ObjectFetcher {
             low: (self.tile_data_low >> nth_bit) & 1 == 1,
             high: (self.tile_data_high >> nth_bit) & 1 == 1,
             palette: {
-                if obj.palette() {
+                if obj.attributes.palette() {
                     Palette::Obp1
                 } else {
                     Palette::Obp0
                 }
             },
-            priority: obj.priority(),
+            priority: obj.attributes.priority(),
         });
         // Replace any transparent pixels that are currently on the queue with the new pixels.
         for (old, new) in old_pixels.zip(new_pixels) {
@@ -109,7 +109,7 @@ impl ObjectFetcher {
     fn get_tile(current_scanline: u8, obj: Obj, obj_size: bool) -> u8 {
         let obj_line = current_scanline + 16 - obj.y_pos;
         // If the object isn't flipped vertically, just return the line.
-        if !obj.y_flip() {
+        if !obj.attributes.y_flip() {
             return obj_line;
         }
 
