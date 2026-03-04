@@ -1,4 +1,5 @@
 use crate::dnd_rom::handle_dropped_rom;
+use crate::interrupts;
 use crate::memory::draw_memory_table;
 use crate::oam::draw_oam_table;
 use crate::registers::draw_register_table;
@@ -30,6 +31,7 @@ pub struct PPUViewApp {
     play: bool,
     buttons_held: ButtonsHeld,
     logger_open: bool,
+    interrupts_open: bool,
 }
 
 impl PPUViewApp {
@@ -91,6 +93,7 @@ impl PPUViewApp {
             play: false,
             buttons_held: ButtonsHeld::default(),
             logger_open: false,
+            interrupts_open: false,
         }
     }
 
@@ -121,7 +124,8 @@ impl PPUViewApp {
             });
 
             ui.menu_button("Tools", |ui| {
-                self.logger_open = ui.button("Show Logger").clicked();
+                self.logger_open |= ui.button("Show Logger").clicked();
+                self.interrupts_open |= ui.button("Show Interrupts").clicked();
             });
         });
     }
@@ -158,6 +162,11 @@ impl eframe::App for PPUViewApp {
             .show(ctx, |ui| {
                 // Draws the logger UI.
                 egui_logger::logger_ui().show(ui);
+            });
+        egui::Window::new("Interrupts")
+            .open(&mut self.interrupts_open)
+            .show(ctx, |ui| {
+                interrupts::show(ui, &self.dmg_state);
             });
 
         egui::Window::new("PPU Output").show(ctx, |ui| {

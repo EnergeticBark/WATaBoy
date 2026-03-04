@@ -3,6 +3,7 @@ use egui_extras::{Column, TableBody, TableBuilder};
 use sm83_interp::cpu::Cpu;
 
 pub fn draw_register_table(ui: &mut Ui, dmg_state: &Cpu) {
+    ui.heading("CPU Registers");
     TableBuilder::new(ui)
         .striped(true)
         .column(Column::auto())
