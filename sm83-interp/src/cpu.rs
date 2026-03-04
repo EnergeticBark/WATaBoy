@@ -1,5 +1,8 @@
+mod interrupt_bits;
 pub mod opcodes;
 mod registers;
+
+pub use interrupt_bits::InterruptBits;
 
 use std::error::Error;
 
