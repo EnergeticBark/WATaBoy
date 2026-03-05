@@ -1,11 +1,12 @@
-mod bg_fetcher;
 pub mod oam;
+pub mod tiles;
+
+mod bg_fetcher;
 mod obj_fetcher;
 mod palette;
 mod registers;
-pub mod tiles;
 
-pub use registers::{LcdStatus, StatMode};
+pub use registers::{LcdControl, LcdStatus, StatMode};
 
 use log::{info, trace};
 use std::collections::VecDeque;
@@ -189,10 +190,14 @@ impl Ppu {
             if !self.disabled {
                 info!(target: "ppu_disabled", "Disabled on dot: {}", self.dot_counter);
 
-                // Reset the PPU state, preserving only VRAM, OAM, and the stat interrupt line.
+                // Reset the PPU state, preserving only some of its state.
                 *self = Ppu {
                     vram: self.vram,
                     oam: self.oam,
+                    registers: IoRegisters {
+                        lcdc: self.registers.lcdc,
+                        ..Default::default()
+                    },
                     stat_interrupt_line: self.stat_interrupt_line,
                     ..Default::default()
                 };
