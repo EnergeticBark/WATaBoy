@@ -10,7 +10,8 @@ pub struct BlarggTest {
 }
 
 fn read_ascii_from_tile_map(cpu: &Cpu) -> Vec<String> {
-    let (lines, _) = cpu.memory.buffer[0x9800..0x9C00].as_chunks::<32>();
+    let lines_buffer: Vec<u8> = (0x9800..0x9C00).map(|i| cpu.memory.read_byte(i)).collect();
+    let (lines, _) = lines_buffer.as_chunks::<32>();
     lines
         .iter()
         .map(|line| str::from_utf8(line))

@@ -4,11 +4,15 @@ mod post_boot;
 pub use post_boot::PostBoot;
 pub use post_boot::post_boot_hwio;
 
+pub const MEM_MAP_SIZE: usize = 0x10000;
+
+pub const VRAM_START: u16 = 0x8000;
+pub const VRAM_END: u16 = 0xA000;
+pub const VRAM_SIZE: u16 = VRAM_END - VRAM_START;
+
 pub const OAM: u16 = 0xFE00;
 
 pub const IE: u16 = 0xFFFF;
-
-pub const MEM_MAP_SIZE: usize = 0x10000;
 
 // Screen
 pub const SCREEN_WIDTH: u8 = 160;

@@ -12,8 +12,10 @@ pub use lcd_status::{LcdStatus, StatMode};
 use log::{info, trace};
 use std::collections::VecDeque;
 
-use hw_constants::io_regs::{IF, LCDC, LY, LYC, SCX, STAT, WX, WY};
-use hw_constants::{MEM_MAP_SIZE, PostBoot, SCREEN_SIZE, SCREEN_WIDTH};
+use hw_constants::io_regs::{IF, LCDC, LY, LYC, SCX, SCY, STAT, WX, WY};
+use hw_constants::{
+    MEM_MAP_SIZE, PostBoot, SCREEN_SIZE, SCREEN_WIDTH, VRAM_END, VRAM_SIZE, VRAM_START,
+};
 
 use bg_fetcher::{BackgroundFetcher, FetcherState, Pixel};
 use lcd_control::LcdControl;
@@ -59,12 +61,14 @@ pub struct Ppu {
     // whatever the PPU puts into its queue.
     obj_buffer: VecDeque<Obj>,
     obj_fetcher: ObjectFetcher,
+    // Only public for debugging reasons.
+    pub vram: [u8; VRAM_SIZE as usize],
     registers: IoRegisters,
     stat_interrupt_line: bool,
     stat_mode_for_interrupt: u8,
     ly_to_compare_lyc: Option<u8>,
     pub oam_access: PpuMemAccess,
-    pub vram_access: PpuMemAccess,
+    vram_access: PpuMemAccess,
     // Buffer of greyscale pixel values, i.e. what the PPU would output to the LCD.
     pub lcd_buffer: Vec<u8>,
     pub disabled: bool,
@@ -187,8 +191,9 @@ impl Ppu {
             if !self.disabled {
                 info!(target: "ppu_disabled", "Disabled on dot: {}", self.dot_counter);
 
-                // Reset the PPU state, preserving only the stat interrupt line.
+                // Reset the PPU state, preserving only VRAM and the stat interrupt line .
                 *self = Ppu {
+                    vram: self.vram,
                     stat_interrupt_line: self.stat_interrupt_line,
                     ..Default::default()
                 };
@@ -323,9 +328,12 @@ impl Ppu {
                             | FetcherState::Push
                     )
                 {
-                    self.bg_fetcher.tick(memory, self.ly(), self.window_y);
+                    let scx = memory[SCX as usize];
+                    let scy = memory[SCY as usize];
+                    self.bg_fetcher
+                        .tick(&self.vram, lcdc, scx, scy, self.ly(), self.window_y);
                 } else {
-                    self.obj_fetcher.tick(memory, self.ly());
+                    self.obj_fetcher.tick(&self.vram, lcdc, self.ly());
                 }
 
                 if self.obj_fetcher.idle_and_empty() {
@@ -493,11 +501,25 @@ impl Ppu {
 impl Addressable for Ppu {
     fn read_byte(&self, index: u16) -> u8 {
         match index {
+            VRAM_START..VRAM_END => match self.vram_access {
+                PpuMemAccess::ReadWrite => self.vram[(index - VRAM_START) as usize],
+                _ => 0xFF,
+            },
             LY => self.registers.ly,
             _ => unreachable!(),
         }
     }
-    fn write_byte(&mut self, index: u16, value: u8) {}
+
+    fn write_byte(&mut self, index: u16, value: u8) {
+        match index {
+            // Ignore writes to VRAM when access is blocked.
+            VRAM_START..VRAM_END => match self.vram_access {
+                PpuMemAccess::Blocked => (),
+                _ => self.vram[(index - VRAM_START) as usize] = value,
+            },
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl Default for Ppu {
@@ -512,6 +534,7 @@ impl Default for Ppu {
             bg_fetcher: BackgroundFetcher::default(),
             obj_buffer: VecDeque::with_capacity(10),
             obj_fetcher: ObjectFetcher::default(),
+            vram: [0; VRAM_SIZE as usize],
             registers: IoRegisters::default(),
             stat_interrupt_line: false,
             stat_mode_for_interrupt: 0xFF,
@@ -537,6 +560,7 @@ impl PostBoot for Ppu {
             bg_fetcher: BackgroundFetcher::default(),
             obj_buffer: VecDeque::with_capacity(10),
             obj_fetcher: ObjectFetcher::default(),
+            vram: [0; VRAM_SIZE as usize],
             registers: IoRegisters::default(),
             stat_interrupt_line: false,
             stat_mode_for_interrupt: 1,

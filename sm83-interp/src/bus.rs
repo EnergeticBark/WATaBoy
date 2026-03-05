@@ -1,11 +1,11 @@
 use crate::addressable::Addressable;
 use crate::joypad::{ButtonsHeld, Joyp};
 use crate::mbc::Mbc;
-use crate::ppu::{self, Ppu, PpuMemAccess};
+use crate::ppu::{Ppu, PpuMemAccess};
 use crate::timers::Timers;
 
 use hw_constants::io_regs::LY;
-use hw_constants::{PostBoot, io_regs};
+use hw_constants::{PostBoot, VRAM_END, VRAM_START, io_regs};
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize, with::Skip};
 
@@ -34,11 +34,7 @@ impl AddressBus {
                 PpuMemAccess::Blocked | PpuMemAccess::WriteOnly => 0xFF,
                 PpuMemAccess::ReadWrite => self.buffer[index as usize],
             },
-            0x8000..0xA000 => match self.ppu.vram_access {
-                PpuMemAccess::Blocked | PpuMemAccess::WriteOnly => 0xFF,
-                PpuMemAccess::ReadWrite => self.buffer[index as usize],
-            },
-            LY => self.ppu.read_byte(index),
+            VRAM_START..VRAM_END | LY => self.ppu.read_byte(index),
             _ => self.buffer[index as usize],
         }
     }
@@ -51,13 +47,8 @@ impl AddressBus {
                     .write_byte(self.buffer.as_mut_array().unwrap(), index, value);
             }
 
-            // Ignore writes to VRAM when access is blocked by the PPU.
-            0x8000..0xA000 => match self.ppu.vram_access {
-                PpuMemAccess::Blocked => (),
-                PpuMemAccess::WriteOnly | PpuMemAccess::ReadWrite => {
-                    self.buffer[index as usize] = value;
-                }
-            },
+            // Delegate writes to VRAM to the PPU.
+            VRAM_START..VRAM_END => self.ppu.write_byte(index, value),
 
             // Ignore writes to OAM when access is blocked by the PPU.
             0xFE00..0xFF00 => match self.ppu.oam_access {

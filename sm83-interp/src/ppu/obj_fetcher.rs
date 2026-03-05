@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 
-use hw_constants::MEM_MAP_SIZE;
-use hw_constants::io_regs::LCDC;
+use hw_constants::VRAM_SIZE;
 
 use super::bg_fetcher::Pixel;
 use super::lcd_control::LcdControl;
@@ -121,9 +120,12 @@ impl ObjectFetcher {
         }
     }
 
-    fn current_tile(memory: &[u8; MEM_MAP_SIZE], obj: Obj, obj_line: u8) -> &[u8; 16] {
-        let lcdc = LcdControl::from_bits(memory[LCDC as usize]);
-
+    fn current_tile(
+        vram: &[u8; VRAM_SIZE as usize],
+        lcdc: LcdControl,
+        obj: Obj,
+        obj_line: u8,
+    ) -> &[u8; 16] {
         let mut tile_index = obj.tile_index;
         if lcdc.obj_size() {
             // Override the first bit as described in PanDocs.
@@ -135,22 +137,39 @@ impl ObjectFetcher {
             }
         }
 
-        tiles::unsigned_nth_tile(memory, tile_index as usize)
+        tiles::unsigned_nth_tile(vram, tile_index as usize)
     }
 
-    fn get_tile_data_low(&mut self, memory: &[u8; MEM_MAP_SIZE], obj: Obj, obj_line: u8) {
-        let tile = Self::current_tile(memory, obj, obj_line);
+    fn get_tile_data_low(
+        &mut self,
+        vram: &[u8; VRAM_SIZE as usize],
+        lcdc: LcdControl,
+        obj: Obj,
+        obj_line: u8,
+    ) {
+        let tile = Self::current_tile(vram, lcdc, obj, obj_line);
         let tile_line = obj_line % 8;
         self.tile_data_low = tile[tile_line as usize * 2];
     }
 
-    fn get_tile_data_high(&mut self, memory: &[u8; MEM_MAP_SIZE], obj: Obj, obj_line: u8) {
-        let tile = Self::current_tile(memory, obj, obj_line);
+    fn get_tile_data_high(
+        &mut self,
+        vram: &[u8; VRAM_SIZE as usize],
+        lcdc: LcdControl,
+        obj: Obj,
+        obj_line: u8,
+    ) {
+        let tile = Self::current_tile(vram, lcdc, obj, obj_line);
         let tile_line = obj_line % 8;
         self.tile_data_high = tile[tile_line as usize * 2 + 1];
     }
 
-    pub fn tick(&mut self, memory: &[u8; MEM_MAP_SIZE], current_scanline: u8) {
+    pub fn tick(
+        &mut self,
+        vram: &[u8; VRAM_SIZE as usize],
+        lcdc: LcdControl,
+        current_scanline: u8,
+    ) {
         match self.state {
             ObjectFetcherState::Idle => {
                 if let Some(obj) = self.obj_buffer.pop_front() {
@@ -167,7 +186,6 @@ impl ObjectFetcher {
                 ticks_remaining: 0,
                 obj,
             } => {
-                let lcdc = LcdControl::from_bits(memory[LCDC as usize]);
                 let obj_line = Self::get_tile(current_scanline, obj, lcdc.obj_size());
                 self.state = ObjectFetcherState::GetTileDataLow {
                     ticks_remaining: 1,
@@ -180,7 +198,7 @@ impl ObjectFetcher {
                 obj,
                 obj_line,
             } => {
-                self.get_tile_data_low(memory, obj, obj_line);
+                self.get_tile_data_low(vram, lcdc, obj, obj_line);
                 self.state = ObjectFetcherState::GetTileDataHigh {
                     ticks_remaining: 1,
                     obj,
@@ -192,7 +210,7 @@ impl ObjectFetcher {
                 obj,
                 obj_line,
             } => {
-                self.get_tile_data_high(memory, obj, obj_line);
+                self.get_tile_data_high(vram, lcdc, obj, obj_line);
                 self.state = ObjectFetcherState::Push { obj };
             }
             ObjectFetcherState::Push { obj } => {
