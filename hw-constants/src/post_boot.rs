@@ -9,7 +9,8 @@ pub trait PostBoot: Sized {
 #[allow(clippy::missing_panics_doc)]
 #[must_use]
 pub fn post_boot_hwio() -> Box<[u8; MEM_MAP_SIZE]> {
-    let mut buffer: Box<[u8; MEM_MAP_SIZE]> = vec![0; MEM_MAP_SIZE].into_boxed_slice().try_into().unwrap();
+    let mut buffer: Box<[u8; MEM_MAP_SIZE]> =
+        vec![0; MEM_MAP_SIZE].into_boxed_slice().try_into().unwrap();
     buffer[0xA000..0xC000].fill(0xFF);
     buffer[io_regs::JOYP as usize] = 0xCF;
     buffer[io_regs::SC as usize] = 0x7E;
@@ -43,7 +44,6 @@ pub fn post_boot_hwio() -> Box<[u8; MEM_MAP_SIZE]> {
     buffer[io_regs::NR52 as usize] = 0xF1;
     buffer[0xFF27..0xFF40].fill(0xFF);
 
-    buffer[io_regs::LCDC as usize] = 0x91;
     buffer[io_regs::STAT as usize] = 0x85;
     buffer[io_regs::BGP as usize] = 0xFC;
     buffer[io_regs::KEY0 as usize] = 0xFF;

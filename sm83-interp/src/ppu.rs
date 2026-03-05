@@ -20,7 +20,6 @@ use bg_fetcher::{BackgroundFetcher, FetcherState, Pixel};
 use oam::Obj;
 use obj_fetcher::{ObjectFetcher, TRANSPARENT};
 use palette::Palette;
-use registers::LcdControl;
 
 use crate::addressable::Addressable;
 use crate::ppu::registers::IoRegisters;
@@ -75,12 +74,6 @@ pub struct Ppu {
     just_enabled: bool,
 }
 
-fn drawing_window(memory: &[u8; MEM_MAP_SIZE], x: u8, y: u8) -> bool {
-    let lcdc = LcdControl::from_bits(memory[LCDC as usize]);
-
-    lcdc.window_enabled() && x + 7 == memory[WX as usize] && y >= memory[WY as usize]
-}
-
 fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
     let mut render_bg = false;
     render_bg |= !(obj_pixel.low || obj_pixel.high);
@@ -90,6 +83,12 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
 }
 
 impl Ppu {
+    fn drawing_window(&self, memory: &[u8; MEM_MAP_SIZE]) -> bool {
+        self.registers.lcdc.window_enabled()
+            && self.x + 7 == memory[WX as usize]
+            && self.ly() >= memory[WY as usize]
+    }
+
     #[allow(clippy::cast_possible_truncation)]
     #[must_use]
     pub fn ly(&self) -> u8 {
@@ -137,9 +136,8 @@ impl Ppu {
         self.dots_in_mode = 0;
 
         // This is the last cycle of the OAM scan, so lets actually do the OAM scan.
-        let lcdc = LcdControl::from_bits(memory[LCDC as usize]);
         let ly = self.ly();
-        oam::oam_scan(&mut self.obj_buffer, &self.oam, lcdc, ly);
+        oam::oam_scan(&mut self.obj_buffer, &self.oam, self.registers.lcdc, ly);
 
         // Prepare for Drawing.
         self.pixels_to_drop = (memory[SCX as usize] & 7) + 8;
@@ -187,8 +185,7 @@ impl Ppu {
     // Only panics if internal assertions fail, and they never should.
     #[allow(clippy::missing_panics_doc)]
     pub fn tick(&mut self, memory: &mut [u8; MEM_MAP_SIZE]) {
-        let lcdc = LcdControl::from_bits(memory[LCDC as usize]);
-        if !lcdc.lcd_and_ppu_enabled() {
+        if !self.registers.lcdc.lcd_and_ppu_enabled() {
             if !self.disabled {
                 info!(target: "ppu_disabled", "Disabled on dot: {}", self.dot_counter);
 
@@ -332,10 +329,17 @@ impl Ppu {
                 {
                     let scx = memory[SCX as usize];
                     let scy = memory[SCY as usize];
-                    self.bg_fetcher
-                        .tick(&self.vram, lcdc, scx, scy, self.ly(), self.window_y);
+                    self.bg_fetcher.tick(
+                        &self.vram,
+                        self.registers.lcdc,
+                        scx,
+                        scy,
+                        self.ly(),
+                        self.window_y,
+                    );
                 } else {
-                    self.obj_fetcher.tick(&self.vram, lcdc, self.ly());
+                    self.obj_fetcher
+                        .tick(&self.vram, self.registers.lcdc, self.ly());
                 }
 
                 if self.obj_fetcher.idle_and_empty() {
@@ -346,11 +350,10 @@ impl Ppu {
                         if self.pixels_to_drop > 0 {
                             self.pixels_to_drop -= 1;
                         } else {
-                            let lcdc = LcdControl::from_bits(memory[LCDC as usize]);
-
                             // If the background/window is disabled, use a pixel with a value of 0.
                             // See: https://gbdev.io/pandocs/pixel_fifo.html#pixel-rendering
-                            let mut pixel_to_render = if lcdc.bg_and_window_enabled() {
+                            let mut pixel_to_render = if self.registers.lcdc.bg_and_window_enabled()
+                            {
                                 bg_pixel
                             } else {
                                 Pixel {
@@ -361,7 +364,7 @@ impl Ppu {
                                 }
                             };
 
-                            if lcdc.obj_enabled() {
+                            if self.registers.lcdc.obj_enabled() {
                                 pixel_to_render = mix_pixels(pixel_to_render, obj_pixel);
                             }
 
@@ -389,7 +392,7 @@ impl Ppu {
                     }
                 }
 
-                if drawing_window(memory, self.x, self.ly()) && !self.bg_fetcher.drawing_window {
+                if self.drawing_window(memory) && !self.bg_fetcher.drawing_window {
                     trace!(target: "ppu_window", "Started drawing window at X {}", self.x);
                     self.window_y = self.window_y.wrapping_add(1);
                     self.bg_fetcher = BackgroundFetcher::default();
@@ -511,6 +514,7 @@ impl Addressable for Ppu {
                 PpuMemAccess::ReadWrite => self.oam[(index - OAM_START) as usize],
                 _ => 0xFF,
             },
+            LCDC => self.registers.lcdc.into(),
             LY => self.registers.ly,
             _ => unreachable!(),
         }
@@ -528,6 +532,7 @@ impl Addressable for Ppu {
                 PpuMemAccess::Blocked => (),
                 _ => self.oam[(index - OAM_START) as usize] = value,
             },
+            LCDC => self.registers.lcdc = value.into(),
             _ => unreachable!(),
         }
     }
@@ -574,7 +579,7 @@ impl PostBoot for Ppu {
             obj_fetcher: ObjectFetcher::default(),
             vram: [0; VRAM_SIZE as usize],
             oam: [0; OAM_SIZE as usize],
-            registers: IoRegisters::default(),
+            registers: IoRegisters::post_boot_dmg(),
             stat_interrupt_line: false,
             stat_mode_for_interrupt: 1,
             ly_to_compare_lyc: Some(0),
@@ -589,8 +594,6 @@ impl PostBoot for Ppu {
 
 #[cfg(test)]
 mod tests {
-    use hw_constants::io_regs::LCDC;
-
     use super::*;
 
     // Assert that the minimum Mode 3 length (172) with:
@@ -644,7 +647,7 @@ mod tests {
         let mut memory = hw_constants::post_boot_hwio();
 
         // Enable the window.
-        memory[LCDC as usize] |= 0b0010_0000;
+        ppu.registers.lcdc.set_window_enabled(true);
         // Scroll it to x=50px
         memory[WX as usize] = 50 + 7;
 
@@ -669,7 +672,7 @@ mod tests {
         memory[SCX as usize] = 7;
 
         // Enable the window.
-        memory[LCDC as usize] |= 0b0010_0000;
+        ppu.registers.lcdc.set_window_enabled(true);
         // Scroll it to x=50px
         memory[WX as usize] = 50 + 7;
 
@@ -693,7 +696,7 @@ mod tests {
         let mut memory = hw_constants::post_boot_hwio();
         ppu.oam[0x00] = 16; // OBJ Y
         ppu.oam[0x01] = 0; // OBJ X
-        memory[LCDC as usize] = 0x93; // Enable OBJs.
+        ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
             ppu.tick(&mut memory);
@@ -717,7 +720,7 @@ mod tests {
         ppu.oam[0x01] = 0; // OBJ X
         ppu.oam[0x04] = 16; // OBJ Y
         ppu.oam[0x05] = 0; // OBJ X
-        memory[LCDC as usize] = 0x93; // Enable OBJs.
+        ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
             ppu.tick(&mut memory);
@@ -742,7 +745,7 @@ mod tests {
             ppu.oam[obj_idx] = 16; // OBJ Y
             ppu.oam[obj_idx + 1] = 1; // OBJ X
         }
-        memory[LCDC as usize] = 0x93; // Enable OBJs.
+        ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
             ppu.tick(&mut memory);
@@ -764,7 +767,7 @@ mod tests {
         let mut memory = hw_constants::post_boot_hwio();
         ppu.oam[0x00] = 16; // OBJ Y
         ppu.oam[0x01] = 2; // OBJ X
-        memory[LCDC as usize] = 0x93; // Enable OBJs.
+        ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
             ppu.tick(&mut memory);
@@ -786,7 +789,7 @@ mod tests {
         let mut memory = hw_constants::post_boot_hwio();
         ppu.oam[0x00] = 16; // OBJ Y
         ppu.oam[0x01] = 8; // OBJ X
-        memory[LCDC as usize] = 0x93; // Enable OBJs.
+        ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
             ppu.tick(&mut memory);
@@ -808,7 +811,7 @@ mod tests {
         let mut memory = hw_constants::post_boot_hwio();
         ppu.oam[0x00] = 16; // OBJ Y
         ppu.oam[0x01] = 9; // OBJ X
-        memory[LCDC as usize] = 0x93; // Enable OBJs.
+        ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
             ppu.tick(&mut memory);
