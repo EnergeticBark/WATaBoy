@@ -1,8 +1,7 @@
 use bitfield_struct::bitfield;
 use std::collections::VecDeque;
 
-use hw_constants::MEM_MAP_SIZE;
-use hw_constants::io_regs::LCDC;
+use hw_constants::{OAM_SIZE, OAM_START};
 
 use super::lcd_control::LcdControl;
 
@@ -58,22 +57,26 @@ impl Obj {
 ///
 /// Will panic if the provided index causes an out of bounds memory read.
 #[must_use]
-pub fn nth_obj(memory: &[u8; MEM_MAP_SIZE], index: usize) -> Obj {
+pub fn nth_obj(oam: &[u8; OAM_SIZE as usize], index: usize) -> Obj {
     let offset = index * OBJ_SIZE;
-    let obj_start = hw_constants::OAM as usize + offset;
+    let obj_start = (OAM_START as usize + offset) - OAM_START as usize;
     let obj_end = obj_start + OBJ_SIZE;
-    let obj_bytes = memory[obj_start..obj_end].try_into().unwrap();
+    let obj_bytes = oam[obj_start..obj_end].try_into().unwrap();
     Obj::from_bytes(obj_bytes)
 }
 
 // Place objects into a sorted queue so we can pop them in-order as we draw the scanline.
-pub fn oam_scan(obj_buffer: &mut VecDeque<Obj>, memory: &[u8; MEM_MAP_SIZE], ly: u8) {
-    let lcdc = LcdControl::from_bits(memory[LCDC as usize]);
+pub fn oam_scan(
+    obj_buffer: &mut VecDeque<Obj>,
+    oam: &[u8; OAM_SIZE as usize],
+    lcdc: LcdControl,
+    ly: u8,
+) {
     let obj_size = lcdc.obj_size();
 
     obj_buffer.clear();
     for index in 0..40 {
-        let obj = nth_obj(memory, index);
+        let obj = nth_obj(oam, index);
         // Only consider objects on screen (y value between 1 and 160).
         if (1..160).contains(&obj.y_pos) && obj.intersects_y(ly, obj_size) {
             obj_buffer.push_back(obj);

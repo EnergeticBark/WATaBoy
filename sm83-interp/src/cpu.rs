@@ -1,6 +1,6 @@
 mod interrupt_bits;
 pub mod opcodes;
-mod registers;
+pub mod registers;
 
 pub use interrupt_bits::InterruptBits;
 

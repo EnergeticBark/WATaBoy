@@ -1,11 +1,11 @@
 use crate::addressable::Addressable;
 use crate::joypad::{ButtonsHeld, Joyp};
 use crate::mbc::Mbc;
-use crate::ppu::{Ppu, PpuMemAccess};
+use crate::ppu::Ppu;
 use crate::timers::Timers;
 
 use hw_constants::io_regs::LY;
-use hw_constants::{PostBoot, VRAM_END, VRAM_START, io_regs};
+use hw_constants::{OAM_END, OAM_START, PostBoot, VRAM_END, VRAM_START, io_regs};
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize, with::Skip};
 
@@ -30,11 +30,7 @@ impl AddressBus {
     // TODO: delegate MBC bank switches.
     pub fn read_byte(&self, index: u16) -> u8 {
         match index {
-            0xFE00..0xFF00 => match self.ppu.oam_access {
-                PpuMemAccess::Blocked | PpuMemAccess::WriteOnly => 0xFF,
-                PpuMemAccess::ReadWrite => self.buffer[index as usize],
-            },
-            VRAM_START..VRAM_END | LY => self.ppu.read_byte(index),
+            VRAM_START..VRAM_END | OAM_START..OAM_END | LY => self.ppu.read_byte(index),
             _ => self.buffer[index as usize],
         }
     }
@@ -47,16 +43,8 @@ impl AddressBus {
                     .write_byte(self.buffer.as_mut_array().unwrap(), index, value);
             }
 
-            // Delegate writes to VRAM to the PPU.
-            VRAM_START..VRAM_END => self.ppu.write_byte(index, value),
-
-            // Ignore writes to OAM when access is blocked by the PPU.
-            0xFE00..0xFF00 => match self.ppu.oam_access {
-                PpuMemAccess::Blocked => (),
-                PpuMemAccess::WriteOnly | PpuMemAccess::ReadWrite => {
-                    self.buffer[index as usize] = value;
-                }
-            },
+            // Delegate writes to VRAM and OAM to the PPU.
+            VRAM_START..VRAM_END | OAM_START..OAM_END => self.ppu.write_byte(index, value),
 
             // Initiate OAM transfer.
             0xFF46 => {
@@ -68,9 +56,10 @@ impl AddressBus {
                 let oam_size = 0xA0;
                 let src_start = u16::from_le_bytes([0x00, value]) as usize;
                 let src_end = src_start + oam_size;
-                let dest = hw_constants::OAM as usize;
 
-                self.buffer.copy_within(src_start..src_end, dest);
+                self.ppu
+                    .oam
+                    .copy_from_slice(&self.buffer[src_start..src_end]);
             }
 
             // Certain I/O addresses only use certain bits. Bits which go unused are pulled high.

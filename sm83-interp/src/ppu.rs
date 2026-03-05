@@ -14,7 +14,8 @@ use std::collections::VecDeque;
 
 use hw_constants::io_regs::{IF, LCDC, LY, LYC, SCX, SCY, STAT, WX, WY};
 use hw_constants::{
-    MEM_MAP_SIZE, PostBoot, SCREEN_SIZE, SCREEN_WIDTH, VRAM_END, VRAM_SIZE, VRAM_START,
+    MEM_MAP_SIZE, OAM_END, OAM_SIZE, OAM_START, PostBoot, SCREEN_SIZE, SCREEN_WIDTH, VRAM_END,
+    VRAM_SIZE, VRAM_START,
 };
 
 use bg_fetcher::{BackgroundFetcher, FetcherState, Pixel};
@@ -63,11 +64,12 @@ pub struct Ppu {
     obj_fetcher: ObjectFetcher,
     // Only public for debugging reasons.
     pub vram: [u8; VRAM_SIZE as usize],
+    pub oam: [u8; OAM_SIZE as usize],
     registers: IoRegisters,
     stat_interrupt_line: bool,
     stat_mode_for_interrupt: u8,
     ly_to_compare_lyc: Option<u8>,
-    pub oam_access: PpuMemAccess,
+    oam_access: PpuMemAccess,
     vram_access: PpuMemAccess,
     // Buffer of greyscale pixel values, i.e. what the PPU would output to the LCD.
     pub lcd_buffer: Vec<u8>,
@@ -137,8 +139,9 @@ impl Ppu {
         self.dots_in_mode = 0;
 
         // This is the last cycle of the OAM scan, so lets actually do the OAM scan.
+        let lcdc = LcdControl::from_bits(memory[LCDC as usize]);
         let ly = self.ly();
-        oam::oam_scan(&mut self.obj_buffer, memory, ly);
+        oam::oam_scan(&mut self.obj_buffer, &self.oam, lcdc, ly);
 
         // Prepare for Drawing.
         self.pixels_to_drop = (memory[SCX as usize] & 7) + 8;
@@ -191,9 +194,10 @@ impl Ppu {
             if !self.disabled {
                 info!(target: "ppu_disabled", "Disabled on dot: {}", self.dot_counter);
 
-                // Reset the PPU state, preserving only VRAM and the stat interrupt line .
+                // Reset the PPU state, preserving only VRAM, OAM, and the stat interrupt line.
                 *self = Ppu {
                     vram: self.vram,
+                    oam: self.oam,
                     stat_interrupt_line: self.stat_interrupt_line,
                     ..Default::default()
                 };
@@ -505,6 +509,10 @@ impl Addressable for Ppu {
                 PpuMemAccess::ReadWrite => self.vram[(index - VRAM_START) as usize],
                 _ => 0xFF,
             },
+            OAM_START..OAM_END => match self.oam_access {
+                PpuMemAccess::ReadWrite => self.oam[(index - OAM_START) as usize],
+                _ => 0xFF,
+            },
             LY => self.registers.ly,
             _ => unreachable!(),
         }
@@ -516,6 +524,11 @@ impl Addressable for Ppu {
             VRAM_START..VRAM_END => match self.vram_access {
                 PpuMemAccess::Blocked => (),
                 _ => self.vram[(index - VRAM_START) as usize] = value,
+            },
+            // Ignore writes to OAM when access is blocked.
+            OAM_START..OAM_END => match self.oam_access {
+                PpuMemAccess::Blocked => (),
+                _ => self.oam[(index - OAM_START) as usize] = value,
             },
             _ => unreachable!(),
         }
@@ -535,6 +548,7 @@ impl Default for Ppu {
             obj_buffer: VecDeque::with_capacity(10),
             obj_fetcher: ObjectFetcher::default(),
             vram: [0; VRAM_SIZE as usize],
+            oam: [0; OAM_SIZE as usize],
             registers: IoRegisters::default(),
             stat_interrupt_line: false,
             stat_mode_for_interrupt: 0xFF,
@@ -561,6 +575,7 @@ impl PostBoot for Ppu {
             obj_buffer: VecDeque::with_capacity(10),
             obj_fetcher: ObjectFetcher::default(),
             vram: [0; VRAM_SIZE as usize],
+            oam: [0; OAM_SIZE as usize],
             registers: IoRegisters::default(),
             stat_interrupt_line: false,
             stat_mode_for_interrupt: 1,
@@ -678,8 +693,8 @@ mod tests {
     fn test_bg_obj_x_0_mode_3_dots() {
         let mut ppu = Ppu::post_boot_dmg();
         let mut memory = hw_constants::post_boot_hwio();
-        memory[0xFE00] = 16; // OBJ Y
-        memory[0xFE01] = 0; // OBJ X
+        ppu.oam[0x00] = 16; // OBJ Y
+        ppu.oam[0x01] = 0; // OBJ X
         memory[LCDC as usize] = 0x93; // Enable OBJs.
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
@@ -700,10 +715,10 @@ mod tests {
     fn test_bg_2_obj_x_0_mode_3_dots() {
         let mut ppu = Ppu::post_boot_dmg();
         let mut memory = hw_constants::post_boot_hwio();
-        memory[0xFE00] = 16; // OBJ Y
-        memory[0xFE01] = 0; // OBJ X
-        memory[0xFE04] = 16; // OBJ Y
-        memory[0xFE05] = 0; // OBJ X
+        ppu.oam[0x00] = 16; // OBJ Y
+        ppu.oam[0x01] = 0; // OBJ X
+        ppu.oam[0x04] = 16; // OBJ Y
+        ppu.oam[0x05] = 0; // OBJ X
         memory[LCDC as usize] = 0x93; // Enable OBJs.
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
@@ -725,9 +740,9 @@ mod tests {
         let mut ppu = Ppu::post_boot_dmg();
         let mut memory = hw_constants::post_boot_hwio();
         for i in 0..10 {
-            let obj_idx = 0xFE00 + (i * 4);
-            memory[obj_idx] = 16; // OBJ Y
-            memory[obj_idx + 1] = 1; // OBJ X
+            let obj_idx = i * 4;
+            ppu.oam[obj_idx] = 16; // OBJ Y
+            ppu.oam[obj_idx + 1] = 1; // OBJ X
         }
         memory[LCDC as usize] = 0x93; // Enable OBJs.
 
@@ -749,8 +764,8 @@ mod tests {
     fn test_bg_obj_x_2_mode_3_dots() {
         let mut ppu = Ppu::post_boot_dmg();
         let mut memory = hw_constants::post_boot_hwio();
-        memory[0xFE00] = 16; // OBJ Y
-        memory[0xFE01] = 2; // OBJ X
+        ppu.oam[0x00] = 16; // OBJ Y
+        ppu.oam[0x01] = 2; // OBJ X
         memory[LCDC as usize] = 0x93; // Enable OBJs.
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
@@ -771,8 +786,8 @@ mod tests {
     fn test_bg_obj_x_8_mode_3_dots() {
         let mut ppu = Ppu::post_boot_dmg();
         let mut memory = hw_constants::post_boot_hwio();
-        memory[0xFE00] = 16; // OBJ Y
-        memory[0xFE01] = 8; // OBJ X
+        ppu.oam[0x00] = 16; // OBJ Y
+        ppu.oam[0x01] = 8; // OBJ X
         memory[LCDC as usize] = 0x93; // Enable OBJs.
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
@@ -793,8 +808,8 @@ mod tests {
     fn test_bg_obj_x_9_mode_3_dots() {
         let mut ppu = Ppu::post_boot_dmg();
         let mut memory = hw_constants::post_boot_hwio();
-        memory[0xFE00] = 16; // OBJ Y
-        memory[0xFE01] = 9; // OBJ X
+        ppu.oam[0x00] = 16; // OBJ Y
+        ppu.oam[0x01] = 9; // OBJ X
         memory[LCDC as usize] = 0x93; // Enable OBJs.
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
