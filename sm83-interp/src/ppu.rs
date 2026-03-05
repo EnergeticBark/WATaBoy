@@ -4,7 +4,10 @@ mod lcd_status;
 pub mod oam;
 mod obj_fetcher;
 mod palette;
+mod registers;
 pub mod tiles;
+
+pub use lcd_status::{LcdStatus, StatMode};
 
 use log::{info, trace};
 use std::collections::VecDeque;
@@ -14,10 +17,12 @@ use hw_constants::{MEM_MAP_SIZE, PostBoot, SCREEN_SIZE, SCREEN_WIDTH};
 
 use bg_fetcher::{BackgroundFetcher, FetcherState, Pixel};
 use lcd_control::LcdControl;
-use lcd_status::{LcdStatus, StatMode};
 use oam::Obj;
 use obj_fetcher::{ObjectFetcher, TRANSPARENT};
 use palette::Palette;
+
+use crate::addressable::Addressable;
+use crate::ppu::registers::IoRegisters;
 
 const SCANLINES_PER_FRAME: usize = 154;
 const DOTS_PER_SCANLINE: usize = 456;
@@ -54,6 +59,7 @@ pub struct Ppu {
     // whatever the PPU puts into its queue.
     obj_buffer: VecDeque<Obj>,
     obj_fetcher: ObjectFetcher,
+    registers: IoRegisters,
     stat_interrupt_line: bool,
     stat_mode_for_interrupt: u8,
     ly_to_compare_lyc: Option<u8>,
@@ -109,11 +115,11 @@ impl Ppu {
         self.obj_fetcher = ObjectFetcher::default();
     }
 
-    fn transition_vblank(&mut self, memory: &mut [u8; MEM_MAP_SIZE]) {
+    fn transition_vblank(&mut self) {
         self.mode = PpuMode::VBlank;
         self.dots_in_mode = 0;
         // Update LCD Y coordinate.
-        self.update_ly_register(memory);
+        self.update_ly_register();
     }
 
     fn transition_oam_scan(&mut self) {
@@ -134,8 +140,8 @@ impl Ppu {
         self.pixels_to_drop = (memory[SCX as usize] & 7) + 8;
     }
 
-    fn update_ly_register(&self, memory: &mut [u8; MEM_MAP_SIZE]) {
-        memory[LY as usize] = self.ly();
+    fn update_ly_register(&mut self) {
+        self.registers.ly = self.ly();
     }
 
     fn update_stat_mode(memory: &mut [u8; MEM_MAP_SIZE], mode: StatMode) {
@@ -189,7 +195,7 @@ impl Ppu {
 
                 let stat = LcdStatus::from_bits(memory[STAT as usize]);
                 memory[STAT as usize] = stat.with_mode(StatMode::HBlank).into();
-                self.update_ly_register(memory);
+                self.update_ly_register();
             }
             return;
         }
@@ -235,7 +241,7 @@ impl Ppu {
 
             self.dot_counter += 1;
             if self.dot_counter == DOTS_PER_SCANLINE {
-                self.update_ly_register(memory);
+                self.update_ly_register();
                 self.transition_oam_scan();
                 self.just_enabled = false;
             }
@@ -407,12 +413,12 @@ impl Ppu {
                 self.dots_in_mode += 1;
                 if self.dot_counter.is_multiple_of(DOTS_PER_SCANLINE) {
                     if self.ly() == 144 {
-                        self.transition_vblank(memory);
-                        self.update_ly_register(memory);
+                        self.transition_vblank();
+                        self.update_ly_register();
                         self.ly_to_compare_lyc = None;
                     } else {
                         // Update LCD Y coordinate.
-                        self.update_ly_register(memory);
+                        self.update_ly_register();
                         self.transition_oam_scan();
                     }
                 }
@@ -425,7 +431,7 @@ impl Ppu {
                     // Observable 6.
                     if self.dots_this_line() == 5 {
                         // Force LY I/O register to 0 early.
-                        memory[LY as usize] = 0;
+                        self.registers.ly = 0;
                         self.ly_to_compare_lyc = Some(153);
                         self.update_stat_interrupt(memory);
                     }
@@ -462,7 +468,7 @@ impl Ppu {
                 }
                 if self.dots_this_line() == 0 {
                     // Update LCD Y coordinate.
-                    self.update_ly_register(memory);
+                    self.update_ly_register();
                 }
             }
         }
@@ -473,7 +479,7 @@ impl Ppu {
                     target: "ppu_enabled",
                     "Clocks: {:3}, LY: {:3}, STAT Mode: {}, LY to compare LYC: {:?}, INT: {}",
                     self.dots_this_line(),
-                    memory[LY as usize],
+                    self.registers.ly,
                     LcdStatus::from_bits(memory[STAT as usize]).mode().into_bits(),
                     self.ly_to_compare_lyc,
                     self.stat_interrupt_line,
@@ -482,6 +488,16 @@ impl Ppu {
             _ => (),
         }
     }
+}
+
+impl Addressable for Ppu {
+    fn read_byte(&self, index: u16) -> u8 {
+        match index {
+            LY => self.registers.ly,
+            _ => unreachable!(),
+        }
+    }
+    fn write_byte(&mut self, index: u16, value: u8) {}
 }
 
 impl Default for Ppu {
@@ -496,6 +512,7 @@ impl Default for Ppu {
             bg_fetcher: BackgroundFetcher::default(),
             obj_buffer: VecDeque::with_capacity(10),
             obj_fetcher: ObjectFetcher::default(),
+            registers: IoRegisters::default(),
             stat_interrupt_line: false,
             stat_mode_for_interrupt: 0xFF,
             ly_to_compare_lyc: Some(0),
@@ -520,6 +537,7 @@ impl PostBoot for Ppu {
             bg_fetcher: BackgroundFetcher::default(),
             obj_buffer: VecDeque::with_capacity(10),
             obj_fetcher: ObjectFetcher::default(),
+            registers: IoRegisters::default(),
             stat_interrupt_line: false,
             stat_mode_for_interrupt: 1,
             ly_to_compare_lyc: Some(0),

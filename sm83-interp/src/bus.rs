@@ -1,8 +1,10 @@
+use crate::addressable::Addressable;
 use crate::joypad::{ButtonsHeld, Joyp};
 use crate::mbc::Mbc;
-use crate::ppu::{Ppu, PpuMemAccess};
+use crate::ppu::{self, Ppu, PpuMemAccess};
 use crate::timers::Timers;
 
+use hw_constants::io_regs::LY;
 use hw_constants::{PostBoot, io_regs};
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize, with::Skip};
@@ -36,6 +38,7 @@ impl AddressBus {
                 PpuMemAccess::Blocked | PpuMemAccess::WriteOnly => 0xFF,
                 PpuMemAccess::ReadWrite => self.buffer[index as usize],
             },
+            LY => self.ppu.read_byte(index),
             _ => self.buffer[index as usize],
         }
     }
@@ -102,6 +105,7 @@ impl AddressBus {
                     self.ppu.update_stat_interrupt(&mut self.buffer);
                 }
             }
+            LY => (),
             io_regs::LYC => {
                 self.buffer[index as usize] = value;
 
