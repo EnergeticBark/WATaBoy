@@ -4,7 +4,7 @@ use crate::mbc::Mbc;
 use crate::ppu::Ppu;
 use crate::timers::Timers;
 
-use hw_constants::io_regs::{LCDC, LY};
+use hw_constants::io_regs::{LCDC, LY, STAT};
 use hw_constants::{OAM_END, OAM_START, PostBoot, VRAM_END, VRAM_START, io_regs};
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize, with::Skip};
@@ -30,7 +30,9 @@ impl AddressBus {
     // TODO: delegate MBC bank switches.
     pub fn read_byte(&self, index: u16) -> u8 {
         match index {
-            VRAM_START..VRAM_END | OAM_START..OAM_END | LCDC | LY => self.ppu.read_byte(index),
+            VRAM_START..VRAM_END | OAM_START..OAM_END | LCDC | STAT | LY => {
+                self.ppu.read_byte(index)
+            }
             _ => self.buffer[index as usize],
         }
     }
@@ -76,17 +78,16 @@ impl AddressBus {
             io_regs::NR44 => self.buffer[index as usize] = value | 0b0011_1111,
             io_regs::NR52 => self.buffer[index as usize] = value | 0b0111_0000,
 
+            // Delegate PPU registers to the PPU.
+            LCDC => self.ppu.write_byte(index, value),
+            // Still needed until I can update interrupts without passing in all memory :(.
             io_regs::STAT => {
-                self.buffer[index as usize] &= 0b1000_0111;
-                let masked_value = value & 0b0111_1000;
-                self.buffer[index as usize] |= masked_value;
+                self.ppu.write_byte(index, value);
 
                 if !self.ppu.disabled {
                     self.ppu.update_stat_interrupt(&mut self.buffer);
                 }
             }
-            // Delegate LCDC to the PPU.
-            LCDC => self.ppu.write_byte(index, value),
             LY => (),
             io_regs::LYC => {
                 self.buffer[index as usize] = value;

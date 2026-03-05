@@ -148,25 +148,22 @@ impl Ppu {
         self.registers.ly = self.ly();
     }
 
-    fn update_stat_mode(memory: &mut [u8; MEM_MAP_SIZE], mode: StatMode) {
-        let stat = LcdStatus::from_bits(memory[STAT as usize]);
-        memory[STAT as usize] = stat.with_mode(mode).into();
+    fn update_stat_mode(&mut self, mode: StatMode) {
+        self.registers.stat.set_mode(mode);
     }
 
     pub fn update_stat_interrupt(&mut self, memory: &mut [u8; MEM_MAP_SIZE]) {
-        let stat = LcdStatus::from_bits(memory[STAT as usize]);
-
         let coincidence = self
             .ly_to_compare_lyc
             .is_some_and(|x| x == memory[LYC as usize]);
-        memory[STAT as usize] = stat.with_coincidence(coincidence).into();
+        self.registers.stat.set_coincidence(coincidence);
 
         // STAT interrupt triggering.
-        let lyc_int = coincidence && stat.lyc_int_select();
+        let lyc_int = coincidence && self.registers.stat.lyc_int_select();
         let mode_int = match self.stat_mode_for_interrupt {
-            0 => stat.mode0_int_select(),
-            1 => stat.mode1_int_select(),
-            2 => stat.mode2_int_select(),
+            0 => self.registers.stat.mode0_int_select(),
+            1 => self.registers.stat.mode1_int_select(),
+            2 => self.registers.stat.mode2_int_select(),
             _ => false,
         };
 
@@ -196,14 +193,14 @@ impl Ppu {
                     oam: self.oam,
                     registers: IoRegisters {
                         lcdc: self.registers.lcdc,
+                        stat: self.registers.stat,
                         ..Default::default()
                     },
                     stat_interrupt_line: self.stat_interrupt_line,
                     ..Default::default()
                 };
 
-                let stat = LcdStatus::from_bits(memory[STAT as usize]);
-                memory[STAT as usize] = stat.with_mode(StatMode::HBlank).into();
+                self.registers.stat.set_mode(StatMode::HBlank);
                 self.update_ly_register();
             }
             return;
@@ -227,7 +224,7 @@ impl Ppu {
                 self.oam_access = PpuMemAccess::Blocked;
                 self.vram_access = PpuMemAccess::Blocked;
 
-                Self::update_stat_mode(memory, StatMode::Drawing);
+                self.update_stat_mode(StatMode::Drawing);
                 self.stat_mode_for_interrupt = 3;
                 self.update_stat_interrupt(memory);
             }
@@ -243,7 +240,7 @@ impl Ppu {
                 self.oam_access = PpuMemAccess::ReadWrite;
                 self.vram_access = PpuMemAccess::ReadWrite;
 
-                Self::update_stat_mode(memory, StatMode::HBlank);
+                self.update_stat_mode(StatMode::HBlank);
                 // Skip 2 extra cycles.
                 self.dot_counter += 2;
             }
@@ -275,7 +272,7 @@ impl Ppu {
                         self.ly_to_compare_lyc = None;
                     }
 
-                    Self::update_stat_mode(memory, StatMode::HBlank);
+                    self.update_stat_mode(StatMode::HBlank);
                     self.update_stat_interrupt(memory);
                 }
 
@@ -283,7 +280,7 @@ impl Ppu {
                 if self.dots_this_line() == 3 {
                     self.oam_access = PpuMemAccess::Blocked;
 
-                    Self::update_stat_mode(memory, StatMode::OamScan);
+                    self.update_stat_mode(StatMode::OamScan);
 
                     self.ly_to_compare_lyc = Some(self.ly());
 
@@ -312,7 +309,7 @@ impl Ppu {
                     self.oam_access = PpuMemAccess::Blocked;
                     self.vram_access = PpuMemAccess::Blocked;
 
-                    Self::update_stat_mode(memory, StatMode::Drawing);
+                    self.update_stat_mode(StatMode::Drawing);
 
                     self.stat_mode_for_interrupt = 3;
                     self.update_stat_interrupt(memory);
@@ -422,7 +419,7 @@ impl Ppu {
                     self.oam_access = PpuMemAccess::ReadWrite;
                     self.vram_access = PpuMemAccess::ReadWrite;
 
-                    Self::update_stat_mode(memory, StatMode::HBlank);
+                    self.update_stat_mode(StatMode::HBlank);
                     self.stat_mode_for_interrupt = 0;
                     self.update_stat_interrupt(memory);
                 }
@@ -464,7 +461,7 @@ impl Ppu {
                     if self.dots_this_line() == 3 {
                         self.ly_to_compare_lyc = Some(self.ly());
                         if self.ly() == 144 {
-                            Self::update_stat_mode(memory, StatMode::VBlank);
+                            self.update_stat_mode(StatMode::VBlank);
                             // Request the VBlank interrupt.
                             memory[IF as usize] |= 0b0000_0001;
 
@@ -498,7 +495,7 @@ impl Ppu {
                     "Clocks: {:3}, LY: {:3}, STAT Mode: {}, LY to compare LYC: {:?}, INT: {}",
                     self.dots_this_line(),
                     self.registers.ly,
-                    LcdStatus::from_bits(memory[STAT as usize]).mode().into_bits(),
+                    self.registers.stat.mode().into_bits(),
                     self.ly_to_compare_lyc,
                     self.stat_interrupt_line,
                 );
@@ -520,6 +517,7 @@ impl Addressable for Ppu {
                 _ => 0xFF,
             },
             LCDC => self.registers.lcdc.into(),
+            STAT => self.registers.stat.into(),
             LY => self.registers.ly,
             _ => unreachable!(),
         }
@@ -538,6 +536,11 @@ impl Addressable for Ppu {
                 _ => self.oam[(index - OAM_START) as usize] = value,
             },
             LCDC => self.registers.lcdc = value.into(),
+            STAT => {
+                let stat = self.registers.stat.into_bits() & 0b1000_0111;
+                let masked_value = value & 0b0111_1000;
+                self.registers.stat = (stat | masked_value).into();
+            }
             _ => unreachable!(),
         }
     }
