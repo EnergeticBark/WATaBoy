@@ -1,7 +1,7 @@
 use hw_constants::VRAM_SIZE;
 
-use super::lcd_control::LcdControl;
 use super::palette::Palette;
+use super::registers::LcdControl;
 use super::tiles;
 
 #[derive(Copy, Clone)]

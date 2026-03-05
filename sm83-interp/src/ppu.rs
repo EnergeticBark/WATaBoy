@@ -1,13 +1,11 @@
 mod bg_fetcher;
-pub mod lcd_control;
-mod lcd_status;
 pub mod oam;
 mod obj_fetcher;
 mod palette;
 mod registers;
 pub mod tiles;
 
-pub use lcd_status::{LcdStatus, StatMode};
+pub use registers::{LcdStatus, StatMode};
 
 use log::{info, trace};
 use std::collections::VecDeque;
@@ -19,10 +17,10 @@ use hw_constants::{
 };
 
 use bg_fetcher::{BackgroundFetcher, FetcherState, Pixel};
-use lcd_control::LcdControl;
 use oam::Obj;
 use obj_fetcher::{ObjectFetcher, TRANSPARENT};
 use palette::Palette;
+use registers::LcdControl;
 
 use crate::addressable::Addressable;
 use crate::ppu::registers::IoRegisters;

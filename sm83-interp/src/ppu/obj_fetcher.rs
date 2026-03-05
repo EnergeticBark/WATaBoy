@@ -3,9 +3,9 @@ use std::collections::VecDeque;
 use hw_constants::VRAM_SIZE;
 
 use super::bg_fetcher::Pixel;
-use super::lcd_control::LcdControl;
 use super::oam::Obj;
 use super::palette::Palette;
+use super::registers::LcdControl;
 use super::tiles;
 
 // From ObjectFetcher's perspective, its pixel FIFO always contains 8 pixels.

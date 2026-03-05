@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 
 use hw_constants::{OAM_SIZE, OAM_START};
 
-use super::lcd_control::LcdControl;
+use super::registers::LcdControl;
 
 const OBJ_SIZE: usize = 4;
 
