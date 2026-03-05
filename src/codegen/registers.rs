@@ -1,4 +1,4 @@
-use sm83_interp::parameters::R8;
+use sm83_interp::cpu::opcodes::parameters::R8;
 
 pub const A: u32 = 0;
 pub const F: u32 = 1;

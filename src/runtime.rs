@@ -5,12 +5,12 @@ use crate::{call_indirect, codegen, console_log};
 
 use hw_constants::PostBoot;
 use sm83_interp::cpu::Cpu;
+use sm83_interp::cpu::registers::Flags;
 use sm83_interp::joypad::ButtonsHeld;
-use sm83_interp::registers::Flags;
 
-const TEST_ROM: &[u8; 32768] = include_bytes!("../09-op r,r.gb");
-/*const TEST_ROM: &[u8; 1048576] =
-include_bytes!("../Pokemon - Blue Version (USA, Europe) (SGB Enhanced).sgb");*/
+//const TEST_ROM: &[u8; 32768] = include_bytes!("../09-op r,r.gb");
+const TEST_ROM: &[u8; 1048576] =
+    include_bytes!("../Pokemon - Blue Version (USA, Europe) (SGB Enhanced).sgb");
 
 unsafe extern "C" {
     // Compiles and instantiates a Wasm module using the bytecode in `buffer`, then adds its function to table 1 of *this* module.

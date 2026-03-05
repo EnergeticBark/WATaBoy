@@ -36,7 +36,7 @@ const instantiate_and_link_module = (bufferPtr, bufferLen) => {
 	return prevIdx;
 }
 
-const __indirect_function_table = new WebAssembly.Table({ initial: 10000, element: "anyfunc" });
+const __indirect_function_table = new WebAssembly.Table({ initial: 100000, element: "anyfunc" });
 
 const importObj = {env: {console_log_glue, instantiate_and_link_module, __indirect_function_table}};
 
@@ -59,6 +59,10 @@ const update_lcd = () => {
 }
 
 setInterval(() => {
+	instance.exports.step_vblank(jitRuntime);
+	instance.exports.step_vblank(jitRuntime);
+	instance.exports.step_vblank(jitRuntime);
+	instance.exports.step_vblank(jitRuntime);
 	instance.exports.step_vblank(jitRuntime);
 	update_lcd();
 	instance.exports.update_joypad(

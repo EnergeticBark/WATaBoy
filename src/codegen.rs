@@ -1,7 +1,6 @@
 use sm83_interp::cpu::Cpu;
-use sm83_interp::opcodes;
-use sm83_interp::opcodes::Opcode;
-use sm83_interp::parameters::R8;
+use sm83_interp::cpu::opcodes::Opcode;
+use sm83_interp::cpu::opcodes::parameters::R8;
 
 mod instructions;
 mod macros;
@@ -48,8 +47,8 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
 
     let mut pc_delta = 0;
     loop {
-        let bytecode = dmg_state.memory[pc + pc_delta];
-        let opcode = opcodes::decode(bytecode).unwrap();
+        let bytecode = dmg_state.memory.buffer[pc as usize + pc_delta as usize];
+        let opcode = Opcode::decode(bytecode).unwrap();
 
         match opcode {
             // Block 0
@@ -132,7 +131,7 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
             Opcode::AddN => {
                 pc_delta += 1;
                 let current_pc = dmg_state.registers.pc + pc_delta;
-                let imm = dmg_state.memory[current_pc];
+                let imm = dmg_state.memory.read_byte(current_pc);
                 instruction_sink.add_n(imm as i32);
                 pc_delta += 1;
             }

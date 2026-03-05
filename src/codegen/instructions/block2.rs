@@ -1,4 +1,4 @@
-use sm83_interp::parameters::R8;
+use sm83_interp::cpu::opcodes::parameters::R8;
 
 use crate::codegen::macros::{FlagBit, Sm83Macros};
 use crate::codegen::registers::{A, r8_to_reg_param};
