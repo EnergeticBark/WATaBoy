@@ -132,7 +132,7 @@ impl Ppu {
         trace!(target: "ppu_oamscan", "Set to Mode 2 on dot: {}", self.dots_this_line());
     }
 
-    fn transition_drawing(&mut self, memory: &mut [u8; MEM_MAP_SIZE]) {
+    fn transition_drawing(&mut self) {
         self.mode = PpuMode::Drawing;
         self.dots_in_mode = 0;
 
@@ -141,7 +141,7 @@ impl Ppu {
         oam::oam_scan(&mut self.obj_buffer, &self.oam, self.registers.lcdc, ly);
 
         // Prepare for Drawing.
-        self.pixels_to_drop = (memory[SCX as usize] & 7) + 8;
+        self.pixels_to_drop = (self.registers.scx & 7) + 8;
     }
 
     fn update_ly_register(&mut self) {
@@ -296,7 +296,7 @@ impl Ppu {
                 self.dot_counter += 1;
                 self.dots_in_mode += 1;
                 if self.dots_this_line() == OAM_SCAN_DOTS {
-                    self.transition_drawing(memory);
+                    self.transition_drawing();
                 }
             }
             PpuMode::Drawing => {
@@ -325,13 +325,11 @@ impl Ppu {
                             | FetcherState::Push
                     )
                 {
-                    let scx = memory[SCX as usize];
-                    let scy = memory[SCY as usize];
                     self.bg_fetcher.tick(
                         &self.vram,
                         self.registers.lcdc,
-                        scx,
-                        scy,
+                        self.registers.scx,
+                        self.registers.scy,
                         self.ly(),
                         self.window_y,
                     );
@@ -514,6 +512,8 @@ impl Addressable for Ppu {
             },
             LCDC => self.registers.lcdc.into(),
             STAT => self.registers.stat.into(),
+            SCY => self.registers.scy,
+            SCX => self.registers.scx,
             LY => self.registers.ly,
             WY => self.registers.wy,
             WX => self.registers.wx,
@@ -539,6 +539,8 @@ impl Addressable for Ppu {
                 let masked_value = value & 0b0111_1000;
                 self.registers.stat = (stat | masked_value).into();
             }
+            SCY => self.registers.scy = value,
+            SCX => self.registers.scx = value,
             WY => self.registers.wy = value,
             WX => self.registers.wx = value,
             _ => unreachable!(),
@@ -632,9 +634,9 @@ mod tests {
     #[test]
     fn test_scrolled_bg_mode_3_dots() {
         let mut ppu = Ppu::post_boot_dmg();
-        let mut memory = hw_constants::post_boot_hwio();
-        memory[SCX as usize] = 7;
+        ppu.registers.scx = 7;
 
+        let mut memory = hw_constants::post_boot_hwio();
         while !matches!(ppu.mode, PpuMode::HBlank) {
             ppu.tick(&mut memory);
         }
@@ -675,14 +677,14 @@ mod tests {
     #[test]
     fn test_scrolled_bg_window_mode_3_dots() {
         let mut ppu = Ppu::post_boot_dmg();
-        let mut memory = hw_constants::post_boot_hwio();
-        memory[SCX as usize] = 7;
+        ppu.registers.scx = 7;
 
         // Enable the window.
         ppu.registers.lcdc.set_window_enabled(true);
         // Scroll it to x=50px
         ppu.registers.wx = 50 + 7;
 
+        let mut memory = hw_constants::post_boot_hwio();
         while !matches!(ppu.mode, PpuMode::HBlank) {
             ppu.tick(&mut memory);
         }

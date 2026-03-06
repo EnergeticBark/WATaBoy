@@ -4,7 +4,7 @@ use crate::mbc::Mbc;
 use crate::ppu::Ppu;
 use crate::timers::Timers;
 
-use hw_constants::io_regs::{LCDC, LY, STAT, WX, WY};
+use hw_constants::io_regs::{LCDC, LY, SCX, SCY, STAT, WX, WY};
 use hw_constants::{OAM_END, OAM_START, PostBoot, VRAM_END, VRAM_START, io_regs};
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize, with::Skip};
@@ -30,7 +30,7 @@ impl AddressBus {
     // TODO: delegate MBC bank switches.
     pub fn read_byte(&self, index: u16) -> u8 {
         match index {
-            VRAM_START..VRAM_END | OAM_START..OAM_END | LCDC | STAT | LY => {
+            VRAM_START..VRAM_END | OAM_START..OAM_END | LCDC | STAT | SCY | SCX | LY | WY | WX => {
                 self.ppu.read_byte(index)
             }
             _ => self.buffer[index as usize],
@@ -88,6 +88,7 @@ impl AddressBus {
                     self.ppu.update_stat_interrupt(&mut self.buffer);
                 }
             }
+            SCY | SCX => self.ppu.write_byte(index, value),
             LY => (),
             io_regs::LYC => {
                 self.buffer[index as usize] = value;

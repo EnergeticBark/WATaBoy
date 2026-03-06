@@ -10,6 +10,8 @@ use hw_constants::PostBoot;
 pub(super) struct IoRegisters {
     pub(super) lcdc: LcdControl,
     pub(super) stat: LcdStatus,
+    pub(super) scy: u8,
+    pub(super) scx: u8,
     // Read-only from the CPU's perspective.
     pub(super) ly: u8,
     // R/w
@@ -22,9 +24,8 @@ impl PostBoot for IoRegisters {
         IoRegisters {
             lcdc: 0x91.into(),
             stat: 0x85.into(),
-            ly: 0x00,
-            wy: 0x00,
-            wx: 0x00,
+            // Zero out the other regs.
+            ..Default::default()
         }
     }
 }
