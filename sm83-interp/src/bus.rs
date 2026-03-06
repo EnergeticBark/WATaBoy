@@ -4,7 +4,7 @@ use crate::mbc::Mbc;
 use crate::ppu::Ppu;
 use crate::timers::Timers;
 
-use hw_constants::io_regs::{LCDC, LY, STAT};
+use hw_constants::io_regs::{LCDC, LY, STAT, WX, WY};
 use hw_constants::{OAM_END, OAM_START, PostBoot, VRAM_END, VRAM_START, io_regs};
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize, with::Skip};
@@ -96,6 +96,7 @@ impl AddressBus {
                     self.ppu.update_stat_interrupt(&mut self.buffer);
                 }
             }
+            WY | WX => self.ppu.write_byte(index, value),
 
             // There is *nothing* at these addresses, so they don't have names.
             // Their bits are always pulled high.

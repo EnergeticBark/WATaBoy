@@ -84,10 +84,10 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
 }
 
 impl Ppu {
-    fn drawing_window(&self, memory: &[u8; MEM_MAP_SIZE]) -> bool {
+    fn drawing_window(&self) -> bool {
         self.registers.lcdc.window_enabled()
-            && self.x + 7 == memory[WX as usize]
-            && self.ly() >= memory[WY as usize]
+            && self.x + 7 == self.registers.wx
+            && self.ly() >= self.registers.wy
     }
 
     #[allow(clippy::cast_possible_truncation)]
@@ -191,11 +191,7 @@ impl Ppu {
                 *self = Ppu {
                     vram: self.vram,
                     oam: self.oam,
-                    registers: IoRegisters {
-                        lcdc: self.registers.lcdc,
-                        stat: self.registers.stat,
-                        ..Default::default()
-                    },
+                    registers: self.registers,
                     stat_interrupt_line: self.stat_interrupt_line,
                     ..Default::default()
                 };
@@ -394,7 +390,7 @@ impl Ppu {
                     }
                 }
 
-                if self.drawing_window(memory) && !self.bg_fetcher.drawing_window {
+                if self.drawing_window() && !self.bg_fetcher.drawing_window {
                     trace!(target: "ppu_window", "Started drawing window at X {}", self.x);
                     self.window_y = self.window_y.wrapping_add(1);
                     self.bg_fetcher = BackgroundFetcher::default();
@@ -519,6 +515,8 @@ impl Addressable for Ppu {
             LCDC => self.registers.lcdc.into(),
             STAT => self.registers.stat.into(),
             LY => self.registers.ly,
+            WY => self.registers.wy,
+            WX => self.registers.wx,
             _ => unreachable!(),
         }
     }
@@ -541,6 +539,8 @@ impl Addressable for Ppu {
                 let masked_value = value & 0b0111_1000;
                 self.registers.stat = (stat | masked_value).into();
             }
+            WY => self.registers.wy = value,
+            WX => self.registers.wx = value,
             _ => unreachable!(),
         }
     }
@@ -652,13 +652,12 @@ mod tests {
     #[test]
     fn test_minimum_bg_window_mode_3_dots() {
         let mut ppu = Ppu::post_boot_dmg();
-        let mut memory = hw_constants::post_boot_hwio();
-
         // Enable the window.
         ppu.registers.lcdc.set_window_enabled(true);
         // Scroll it to x=50px
-        memory[WX as usize] = 50 + 7;
+        ppu.registers.wx = 50 + 7;
 
+        let mut memory = hw_constants::post_boot_hwio();
         while !matches!(ppu.mode, PpuMode::HBlank) {
             ppu.tick(&mut memory);
         }
@@ -682,7 +681,7 @@ mod tests {
         // Enable the window.
         ppu.registers.lcdc.set_window_enabled(true);
         // Scroll it to x=50px
-        memory[WX as usize] = 50 + 7;
+        ppu.registers.wx = 50 + 7;
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
             ppu.tick(&mut memory);
