@@ -76,7 +76,17 @@ impl AddressBus {
 
             // Certain I/O addresses only use certain bits. Bits which go unused are pulled high.
             // See Appendix B: https://gekkio.fi/files/gb-docs/gbctr.pdf
-            io_regs::JOYP | io_regs::NR41 => self.buffer[index as usize] = value | 0b1100_0000,
+            io_regs::JOYP => {
+                // Lower nibble is read-only, only set select bits.
+                // See: https://gbdev.io/pandocs/Joypad_Input.html#ff00--p1joyp-joypad
+                let written = Joyp::from_bits(value);
+                self.buffer[index as usize] = Joyp::from_bits(self.buffer[index as usize])
+                    .with_select_buttons(written.select_buttons())
+                    .with_select_dpad(written.select_dpad())
+                    .into_bits();
+
+                self.update_joypad();
+            }
             io_regs::SC => self.buffer[index as usize] = value | 0b0111_1110,
             io_regs::TAC => self.buffer[index as usize] = value | 0b1111_1000,
             io_regs::DIV => self.timers.system_clock = 0,
@@ -85,6 +95,7 @@ impl AddressBus {
             io_regs::NR10 => self.buffer[index as usize] = value | 0b1000_0000,
             io_regs::NR30 => self.buffer[index as usize] = value | 0b0111_1111,
             io_regs::NR32 => self.buffer[index as usize] = value | 0b1001_1111,
+            io_regs::NR41 => self.buffer[index as usize] = value | 0b1100_0000,
             io_regs::NR44 => self.buffer[index as usize] = value | 0b0011_1111,
             io_regs::NR52 => self.buffer[index as usize] = value | 0b0111_0000,
 
