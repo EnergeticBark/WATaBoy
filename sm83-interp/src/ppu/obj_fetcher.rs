@@ -4,7 +4,7 @@ use hw_constants::VRAM_SIZE;
 
 use super::bg_fetcher::Pixel;
 use super::oam::Obj;
-use super::palette::Palette;
+use super::palette::PaletteSelect;
 use super::registers::LcdControl;
 use super::tiles;
 
@@ -15,7 +15,7 @@ use super::tiles;
 pub const TRANSPARENT: Pixel = Pixel {
     low: false,
     high: false,
-    palette: Palette::Obp0,
+    palette: PaletteSelect::Obp0,
     priority: false,
 };
 
@@ -89,9 +89,9 @@ impl ObjectFetcher {
             high: (self.tile_data_high >> nth_bit) & 1 == 1,
             palette: {
                 if obj.attributes.palette() {
-                    Palette::Obp1
+                    PaletteSelect::Obp1
                 } else {
-                    Palette::Obp0
+                    PaletteSelect::Obp0
                 }
             },
             priority: obj.attributes.priority(),

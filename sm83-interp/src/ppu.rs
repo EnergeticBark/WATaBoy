@@ -20,7 +20,7 @@ use hw_constants::{
 use bg_fetcher::{BackgroundFetcher, FetcherState, Pixel};
 use oam::Obj;
 use obj_fetcher::{ObjectFetcher, TRANSPARENT};
-use palette::Palette;
+use palette::PaletteSelect;
 
 use crate::addressable::Addressable;
 use crate::ppu::registers::IoRegisters;
@@ -355,7 +355,7 @@ impl Ppu {
                                 Pixel {
                                     low: false,
                                     high: false,
-                                    palette: Palette::Bgp,
+                                    palette: PaletteSelect::Bgp,
                                     priority: false,
                                 }
                             };
@@ -375,9 +375,9 @@ impl Ppu {
                             let lcd_row = self.ly() as usize * SCREEN_WIDTH as usize;
                             let lcd_pixel_index = lcd_row + self.x as usize;
                             let palette = match pixel_to_render.palette {
-                                Palette::Bgp => self.registers.bgp,
-                                Palette::Obp0 => self.registers.obp0,
-                                Palette::Obp1 => self.registers.obp1,
+                                PaletteSelect::Bgp => self.registers.bgp,
+                                PaletteSelect::Obp0 => self.registers.obp0,
+                                PaletteSelect::Obp1 => self.registers.obp1,
                             };
                             let color = palette::map_to_palette(palette, funny_greyscale);
 
@@ -517,9 +517,9 @@ impl Addressable for Ppu {
             SCX => self.registers.scx,
             LY => self.registers.ly,
             LYC => self.registers.lyc,
-            BGP => self.registers.bgp,
-            OBP0 => self.registers.obp0,
-            OBP1 => self.registers.obp1,
+            BGP => self.registers.bgp.into(),
+            OBP0 => self.registers.obp0.into(),
+            OBP1 => self.registers.obp1.into(),
             WY => self.registers.wy,
             WX => self.registers.wx,
             _ => unreachable!(),
@@ -547,9 +547,9 @@ impl Addressable for Ppu {
             SCY => self.registers.scy = value,
             SCX => self.registers.scx = value,
             LYC => self.registers.lyc = value,
-            BGP => self.registers.bgp = value,
-            OBP0 => self.registers.obp0 = value,
-            OBP1 => self.registers.obp1 = value,
+            BGP => self.registers.bgp = value.into(),
+            OBP0 => self.registers.obp0 = value.into(),
+            OBP1 => self.registers.obp1 = value.into(),
             WY => self.registers.wy = value,
             WX => self.registers.wx = value,
             _ => unreachable!(),

@@ -1,16 +1,10 @@
-use std::hint::unreachable_unchecked;
-
 use bitfield_struct::bitenum;
+use bitfield_struct::bitfield;
 
-#[derive(Copy, Clone)]
-pub enum Palette {
-    Bgp,
-    Obp0,
-    Obp1,
-}
+// See: https://gbdev.io/pandocs/Palettes.html#lcd-monochrome-palettes
 
 #[bitenum]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum Color {
     #[fallback]
@@ -20,14 +14,31 @@ pub enum Color {
     Black = 3,
 }
 
-/// # Safety
-/// The argument passed to `value` *MUST* be a 2-bit unsigned integer.
-pub fn map_to_palette(palette: u8, value: u8) -> Color {
+#[bitfield(u8, order = Msb)]
+pub struct Palette {
+    #[bits(2)]
+    pub id_3: Color,
+    #[bits(2)]
+    pub id_2: Color,
+    #[bits(2)]
+    pub id_1: Color,
+    #[bits(2)]
+    pub id_0: Color,
+}
+
+#[derive(Copy, Clone)]
+pub enum PaletteSelect {
+    Bgp,
+    Obp0,
+    Obp1,
+}
+
+pub fn map_to_palette(palette: Palette, value: u8) -> Color {
     match value {
-        0 => Color::from_bits(palette & 0b0000_0011),
-        1 => Color::from_bits((palette >> 2) & 0b0000_0011),
-        2 => Color::from_bits((palette >> 4) & 0b0000_0011),
-        3 => Color::from_bits((palette >> 6) & 0b0000_0011),
-        _ => unsafe { unreachable_unchecked() },
+        0 => palette.id_0(),
+        1 => palette.id_1(),
+        2 => palette.id_2(),
+        3 => palette.id_3(),
+        _ => unreachable!(),
     }
 }

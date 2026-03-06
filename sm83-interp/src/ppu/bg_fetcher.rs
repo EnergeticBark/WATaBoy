@@ -1,6 +1,6 @@
 use hw_constants::VRAM_SIZE;
 
-use super::palette::Palette;
+use super::palette::PaletteSelect;
 use super::registers::LcdControl;
 use super::tiles;
 
@@ -8,7 +8,7 @@ use super::tiles;
 pub struct Pixel {
     pub low: bool,
     pub high: bool,
-    pub palette: Palette,
+    pub palette: PaletteSelect,
     pub priority: bool,
 }
 
@@ -56,7 +56,7 @@ impl BackgroundFetcher {
             let pixel = Pixel {
                 low: (self.tile_data_low >> nth_bit) & 1 == 1,
                 high: (self.tile_data_high >> nth_bit) & 1 == 1,
-                palette: Palette::Bgp,
+                palette: PaletteSelect::Bgp,
                 priority: false,
             };
 
@@ -157,7 +157,7 @@ impl BackgroundFetcher {
                         let pixel = Pixel {
                             low: false,
                             high: false,
-                            palette: Palette::Bgp,
+                            palette: PaletteSelect::Bgp,
                             priority: false,
                         };
 
