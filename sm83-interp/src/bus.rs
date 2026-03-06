@@ -111,7 +111,8 @@ impl AddressBus {
                 self.ppu.write_byte(index, value);
 
                 if !self.ppu.disabled {
-                    self.ppu.update_stat_interrupt(&mut self.buffer);
+                    self.ppu
+                        .update_stat_interrupt(&mut self.buffer[IF as usize]);
                 }
             }
             SCY | SCX => self.ppu.write_byte(index, value),
@@ -120,7 +121,8 @@ impl AddressBus {
                 self.ppu.write_byte(index, value);
 
                 if !self.ppu.disabled {
-                    self.ppu.update_stat_interrupt(&mut self.buffer);
+                    self.ppu
+                        .update_stat_interrupt(&mut self.buffer[IF as usize]);
                 }
             }
             BGP | OBP0 | OBP1 | WY | WX => self.ppu.write_byte(index, value),
@@ -136,7 +138,7 @@ impl AddressBus {
 
     pub fn half_increment_timers(&mut self) {
         for _ in 0..2 {
-            self.ppu.tick(self.buffer.as_mut_array().unwrap());
+            self.ppu.tick(&mut self.buffer[IF as usize]);
         }
 
         if !self.half_ticked {
@@ -161,7 +163,7 @@ impl AddressBus {
 
     pub fn increment_timers(&mut self, m_cycles: u16) {
         for _ in 0..m_cycles * 4 {
-            self.ppu.tick(self.buffer.as_mut_array().unwrap());
+            self.ppu.tick(&mut self.buffer[IF as usize]);
         }
 
         self.timers.update_timer_counter(self.buffer[TIMA as usize]);

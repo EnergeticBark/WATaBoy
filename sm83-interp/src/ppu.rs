@@ -11,10 +11,10 @@ pub use registers::{LcdControl, LcdStatus, StatMode};
 use log::{info, trace};
 use std::collections::VecDeque;
 
-use hw_constants::io_regs::{BGP, IF, LCDC, LY, LYC, OBP0, OBP1, SCX, SCY, STAT, WX, WY};
+use hw_constants::io_regs::{BGP, LCDC, LY, LYC, OBP0, OBP1, SCX, SCY, STAT, WX, WY};
 use hw_constants::{
-    MEM_MAP_SIZE, OAM_END, OAM_SIZE, OAM_START, PostBoot, SCREEN_SIZE, SCREEN_WIDTH, VRAM_END,
-    VRAM_SIZE, VRAM_START,
+    OAM_END, OAM_SIZE, OAM_START, PostBoot, SCREEN_SIZE, SCREEN_WIDTH, VRAM_END, VRAM_SIZE,
+    VRAM_START,
 };
 
 use bg_fetcher::{BackgroundFetcher, FetcherState, Pixel};
@@ -152,7 +152,7 @@ impl Ppu {
         self.registers.stat.set_mode(mode);
     }
 
-    pub fn update_stat_interrupt(&mut self, memory: &mut [u8; MEM_MAP_SIZE]) {
+    pub fn update_stat_interrupt(&mut self, interrupt_flags: &mut u8) {
         let coincidence = self
             .ly_to_compare_lyc
             .is_some_and(|x| x == self.registers.lyc);
@@ -174,7 +174,7 @@ impl Ppu {
         if !prev_stat_line && self.stat_interrupt_line {
             info!(target: "lcd_int", "LCD interrupt flag set on dot: {}", self.dots_this_line());
             // Request the LCD interrupt.
-            memory[IF as usize] |= 0b0000_0010;
+            *interrupt_flags |= 0b0000_0010;
         }
     }
 
@@ -182,7 +182,7 @@ impl Ppu {
     #[allow(clippy::too_many_lines)]
     // Only panics if internal assertions fail, and they never should.
     #[allow(clippy::missing_panics_doc)]
-    pub fn tick(&mut self, memory: &mut [u8; MEM_MAP_SIZE]) {
+    pub fn tick(&mut self, interrupt_flags: &mut u8) {
         if !self.registers.lcdc.lcd_and_ppu_enabled() {
             if !self.disabled {
                 info!(target: "ppu_disabled", "Disabled on dot: {}", self.dot_counter);
@@ -212,7 +212,7 @@ impl Ppu {
             // Observable 1.
             if self.dot_counter == 0 {
                 self.stat_mode_for_interrupt = 0xFF;
-                self.update_stat_interrupt(memory);
+                self.update_stat_interrupt(interrupt_flags);
             }
 
             // Observable 79.
@@ -222,7 +222,7 @@ impl Ppu {
 
                 self.update_stat_mode(StatMode::Drawing);
                 self.stat_mode_for_interrupt = 3;
-                self.update_stat_interrupt(memory);
+                self.update_stat_interrupt(interrupt_flags);
             }
 
             // Observable 84.
@@ -269,7 +269,7 @@ impl Ppu {
                     }
 
                     self.update_stat_mode(StatMode::HBlank);
-                    self.update_stat_interrupt(memory);
+                    self.update_stat_interrupt(interrupt_flags);
                 }
 
                 // Observable 4.
@@ -281,10 +281,10 @@ impl Ppu {
                     self.ly_to_compare_lyc = Some(self.ly());
 
                     self.stat_mode_for_interrupt = 2;
-                    self.update_stat_interrupt(memory);
+                    self.update_stat_interrupt(interrupt_flags);
 
                     self.stat_mode_for_interrupt = 0xFF;
-                    self.update_stat_interrupt(memory);
+                    self.update_stat_interrupt(interrupt_flags);
                 }
 
                 // Observable 80.
@@ -308,7 +308,7 @@ impl Ppu {
                     self.update_stat_mode(StatMode::Drawing);
 
                     self.stat_mode_for_interrupt = 3;
-                    self.update_stat_interrupt(memory);
+                    self.update_stat_interrupt(interrupt_flags);
                 }
 
                 if let Some(obj) = self.pop_next_obj() {
@@ -416,7 +416,7 @@ impl Ppu {
 
                     self.update_stat_mode(StatMode::HBlank);
                     self.stat_mode_for_interrupt = 0;
-                    self.update_stat_interrupt(memory);
+                    self.update_stat_interrupt(interrupt_flags);
                 }
 
                 self.dot_counter += 1;
@@ -443,13 +443,13 @@ impl Ppu {
                         // Force LY I/O register to 0 early.
                         self.registers.ly = 0;
                         self.ly_to_compare_lyc = Some(153);
-                        self.update_stat_interrupt(memory);
+                        self.update_stat_interrupt(interrupt_flags);
                     }
 
                     // Observable 12.
                     if self.dots_this_line() == 11 {
                         self.ly_to_compare_lyc = Some(0);
-                        self.update_stat_interrupt(memory);
+                        self.update_stat_interrupt(interrupt_flags);
                     }
                 } else {
                     // Observable 4.
@@ -458,15 +458,15 @@ impl Ppu {
                         if self.ly() == 144 {
                             self.update_stat_mode(StatMode::VBlank);
                             // Request the VBlank interrupt.
-                            memory[IF as usize] |= 0b0000_0001;
+                            *interrupt_flags |= 0b0000_0001;
 
                             // A VBlank also triggers as an OAM Scan... for some reason?
                             // See: https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
                             self.stat_mode_for_interrupt = 2;
-                            self.update_stat_interrupt(memory);
+                            self.update_stat_interrupt(interrupt_flags);
                             self.stat_mode_for_interrupt = 1;
                         }
-                        self.update_stat_interrupt(memory);
+                        self.update_stat_interrupt(interrupt_flags);
                     }
                 }
 
@@ -624,10 +624,10 @@ mod tests {
     #[test]
     fn test_minimum_bg_mode_3_dots() {
         let mut ppu = Ppu::post_boot_dmg();
-        let mut memory = hw_constants::post_boot_hwio();
+        let mut interrupt_flags = 0;
 
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&mut memory);
+            ppu.tick(&mut interrupt_flags);
         }
 
         let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
@@ -645,9 +645,9 @@ mod tests {
         let mut ppu = Ppu::post_boot_dmg();
         ppu.registers.scx = 7;
 
-        let mut memory = hw_constants::post_boot_hwio();
+        let mut interrupt_flags = 0;
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&mut memory);
+            ppu.tick(&mut interrupt_flags);
         }
 
         let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
@@ -668,9 +668,9 @@ mod tests {
         // Scroll it to x=50px
         ppu.registers.wx = 50 + 7;
 
-        let mut memory = hw_constants::post_boot_hwio();
+        let mut interrupt_flags = 0;
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&mut memory);
+            ppu.tick(&mut interrupt_flags);
         }
 
         let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
@@ -693,9 +693,9 @@ mod tests {
         // Scroll it to x=50px
         ppu.registers.wx = 50 + 7;
 
-        let mut memory = hw_constants::post_boot_hwio();
+        let mut interrupt_flags = 0;
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&mut memory);
+            ppu.tick(&mut interrupt_flags);
         }
 
         let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
@@ -711,13 +711,13 @@ mod tests {
     #[test]
     fn test_bg_obj_x_0_mode_3_dots() {
         let mut ppu = Ppu::post_boot_dmg();
-        let mut memory = hw_constants::post_boot_hwio();
         ppu.oam[0x00] = 16; // OBJ Y
         ppu.oam[0x01] = 0; // OBJ X
         ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
 
+        let mut interrupt_flags = 0;
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&mut memory);
+            ppu.tick(&mut interrupt_flags);
         }
 
         let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
@@ -733,15 +733,15 @@ mod tests {
     #[test]
     fn test_bg_2_obj_x_0_mode_3_dots() {
         let mut ppu = Ppu::post_boot_dmg();
-        let mut memory = hw_constants::post_boot_hwio();
         ppu.oam[0x00] = 16; // OBJ Y
         ppu.oam[0x01] = 0; // OBJ X
         ppu.oam[0x04] = 16; // OBJ Y
         ppu.oam[0x05] = 0; // OBJ X
         ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
 
+        let mut interrupt_flags = 0;
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&mut memory);
+            ppu.tick(&mut interrupt_flags);
         }
 
         let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
@@ -757,7 +757,6 @@ mod tests {
     #[test]
     fn test_bg_10_obj_x_1_mode_3_dots() {
         let mut ppu = Ppu::post_boot_dmg();
-        let mut memory = hw_constants::post_boot_hwio();
         for i in 0..10 {
             let obj_idx = i * 4;
             ppu.oam[obj_idx] = 16; // OBJ Y
@@ -765,8 +764,9 @@ mod tests {
         }
         ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
 
+        let mut interrupt_flags = 0;
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&mut memory);
+            ppu.tick(&mut interrupt_flags);
         }
 
         let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
@@ -782,13 +782,13 @@ mod tests {
     #[test]
     fn test_bg_obj_x_2_mode_3_dots() {
         let mut ppu = Ppu::post_boot_dmg();
-        let mut memory = hw_constants::post_boot_hwio();
         ppu.oam[0x00] = 16; // OBJ Y
         ppu.oam[0x01] = 2; // OBJ X
         ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
 
+        let mut interrupt_flags = 0;
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&mut memory);
+            ppu.tick(&mut interrupt_flags);
         }
 
         let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
@@ -804,13 +804,13 @@ mod tests {
     #[test]
     fn test_bg_obj_x_8_mode_3_dots() {
         let mut ppu = Ppu::post_boot_dmg();
-        let mut memory = hw_constants::post_boot_hwio();
         ppu.oam[0x00] = 16; // OBJ Y
         ppu.oam[0x01] = 8; // OBJ X
         ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
 
+        let mut interrupt_flags = 0;
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&mut memory);
+            ppu.tick(&mut interrupt_flags);
         }
 
         let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
@@ -826,13 +826,13 @@ mod tests {
     #[test]
     fn test_bg_obj_x_9_mode_3_dots() {
         let mut ppu = Ppu::post_boot_dmg();
-        let mut memory = hw_constants::post_boot_hwio();
         ppu.oam[0x00] = 16; // OBJ Y
         ppu.oam[0x01] = 9; // OBJ X
         ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
 
+        let mut interrupt_flags = 0;
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&mut memory);
+            ppu.tick(&mut interrupt_flags);
         }
 
         let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
