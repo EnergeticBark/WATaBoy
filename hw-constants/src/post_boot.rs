@@ -44,7 +44,6 @@ pub fn post_boot_hwio() -> Box<[u8; MEM_MAP_SIZE]> {
     buffer[io_regs::NR52 as usize] = 0xF1;
     buffer[0xFF27..0xFF40].fill(0xFF);
 
-    buffer[io_regs::BGP as usize] = 0xFC;
     buffer[io_regs::KEY0 as usize] = 0xFF;
     buffer[io_regs::KEY1 as usize] = 0xFF;
     buffer[0xFF4E] = 0xFF;

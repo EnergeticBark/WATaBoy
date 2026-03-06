@@ -4,7 +4,7 @@ use crate::mbc::Mbc;
 use crate::ppu::Ppu;
 use crate::timers::Timers;
 
-use hw_constants::io_regs::{LCDC, LY, LYC, SCX, SCY, STAT, WX, WY};
+use hw_constants::io_regs::{BGP, LCDC, LY, LYC, OBP0, OBP1, SCX, SCY, STAT, WX, WY};
 use hw_constants::{OAM_END, OAM_START, PostBoot, VRAM_END, VRAM_START, io_regs};
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize, with::Skip};
@@ -30,9 +30,19 @@ impl AddressBus {
     // TODO: delegate MBC bank switches.
     pub fn read_byte(&self, index: u16) -> u8 {
         match index {
-            VRAM_START..VRAM_END | OAM_START..OAM_END | LCDC | STAT | SCY | SCX | LY | WY | WX => {
-                self.ppu.read_byte(index)
-            }
+            VRAM_START..VRAM_END
+            | OAM_START..OAM_END
+            | LCDC
+            | STAT
+            | SCY
+            | SCX
+            | LY
+            | LYC
+            | BGP
+            | OBP0
+            | OBP1
+            | WY
+            | WX => self.ppu.read_byte(index),
             _ => self.buffer[index as usize],
         }
     }
@@ -97,7 +107,7 @@ impl AddressBus {
                     self.ppu.update_stat_interrupt(&mut self.buffer);
                 }
             }
-            WY | WX => self.ppu.write_byte(index, value),
+            BGP | OBP0 | OBP1 | WY | WX => self.ppu.write_byte(index, value),
 
             // There is *nothing* at these addresses, so they don't have names.
             // Their bits are always pulled high.

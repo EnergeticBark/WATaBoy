@@ -16,6 +16,9 @@ pub(super) struct IoRegisters {
     pub(super) ly: u8,
     // R/w
     pub(super) lyc: u8,
+    pub(super) bgp: u8,
+    pub(super) obp0: u8,
+    pub(super) obp1: u8,
     pub(super) wy: u8,
     pub(super) wx: u8,
 }
@@ -25,6 +28,7 @@ impl PostBoot for IoRegisters {
         IoRegisters {
             lcdc: 0x91.into(),
             stat: 0x85.into(),
+            bgp: 0xFC,
             // Zero out the other regs.
             ..Default::default()
         }

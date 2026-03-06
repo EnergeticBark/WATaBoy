@@ -11,7 +11,7 @@ pub use registers::{LcdControl, LcdStatus, StatMode};
 use log::{info, trace};
 use std::collections::VecDeque;
 
-use hw_constants::io_regs::{IF, LCDC, LY, LYC, SCX, SCY, STAT, WX, WY};
+use hw_constants::io_regs::{BGP, IF, LCDC, LY, LYC, OBP0, OBP1, SCX, SCY, STAT, WX, WY};
 use hw_constants::{
     MEM_MAP_SIZE, OAM_END, OAM_SIZE, OAM_START, PostBoot, SCREEN_SIZE, SCREEN_WIDTH, VRAM_END,
     VRAM_SIZE, VRAM_START,
@@ -374,11 +374,12 @@ impl Ppu {
 
                             let lcd_row = self.ly() as usize * SCREEN_WIDTH as usize;
                             let lcd_pixel_index = lcd_row + self.x as usize;
-                            let color = match pixel_to_render.palette {
-                                Palette::Bgp => palette::map_to_bgp(memory, funny_greyscale),
-                                Palette::Obp0 => palette::map_to_obp0(memory, funny_greyscale),
-                                Palette::Obp1 => palette::map_to_obp1(memory, funny_greyscale),
+                            let palette = match pixel_to_render.palette {
+                                Palette::Bgp => self.registers.bgp,
+                                Palette::Obp0 => self.registers.obp0,
+                                Palette::Obp1 => self.registers.obp1,
                             };
+                            let color = palette::map_to_palette(palette, funny_greyscale);
 
                             // Get the colors in their correct greyscale values.
                             self.lcd_buffer[lcd_pixel_index] = 255 - color.into_bits() * 64;
@@ -516,6 +517,9 @@ impl Addressable for Ppu {
             SCX => self.registers.scx,
             LY => self.registers.ly,
             LYC => self.registers.lyc,
+            BGP => self.registers.bgp,
+            OBP0 => self.registers.obp0,
+            OBP1 => self.registers.obp1,
             WY => self.registers.wy,
             WX => self.registers.wx,
             _ => unreachable!(),
@@ -543,6 +547,9 @@ impl Addressable for Ppu {
             SCY => self.registers.scy = value,
             SCX => self.registers.scx = value,
             LYC => self.registers.lyc = value,
+            BGP => self.registers.bgp = value,
+            OBP0 => self.registers.obp0 = value,
+            OBP1 => self.registers.obp1 = value,
             WY => self.registers.wy = value,
             WX => self.registers.wx = value,
             _ => unreachable!(),

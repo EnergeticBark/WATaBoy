@@ -1,7 +1,6 @@
 use std::hint::unreachable_unchecked;
 
 use bitfield_struct::bitenum;
-use hw_constants::{MEM_MAP_SIZE, io_regs};
 
 #[derive(Copy, Clone)]
 pub enum Palette {
@@ -23,7 +22,7 @@ pub enum Color {
 
 /// # Safety
 /// The argument passed to `value` *MUST* be a 2-bit unsigned integer.
-fn map_to_palette(palette: u8, value: u8) -> Color {
+pub fn map_to_palette(palette: u8, value: u8) -> Color {
     match value {
         0 => Color::from_bits(palette & 0b0000_0011),
         1 => Color::from_bits((palette >> 2) & 0b0000_0011),
@@ -31,19 +30,4 @@ fn map_to_palette(palette: u8, value: u8) -> Color {
         3 => Color::from_bits((palette >> 6) & 0b0000_0011),
         _ => unsafe { unreachable_unchecked() },
     }
-}
-
-pub fn map_to_bgp(memory: &[u8; MEM_MAP_SIZE], value: u8) -> Color {
-    let bgp = memory[io_regs::BGP as usize];
-    map_to_palette(bgp, value)
-}
-
-pub fn map_to_obp0(memory: &[u8; MEM_MAP_SIZE], value: u8) -> Color {
-    let obp0 = memory[io_regs::OBP0 as usize];
-    map_to_palette(obp0, value)
-}
-
-pub fn map_to_obp1(memory: &[u8; MEM_MAP_SIZE], value: u8) -> Color {
-    let obp1 = memory[io_regs::OBP1 as usize];
-    map_to_palette(obp1, value)
 }
