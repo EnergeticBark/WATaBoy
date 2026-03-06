@@ -4,7 +4,7 @@ use crate::mbc::Mbc;
 use crate::ppu::Ppu;
 use crate::timers::Timers;
 
-use hw_constants::io_regs::{LCDC, LY, SCX, SCY, STAT, WX, WY};
+use hw_constants::io_regs::{LCDC, LY, LYC, SCX, SCY, STAT, WX, WY};
 use hw_constants::{OAM_END, OAM_START, PostBoot, VRAM_END, VRAM_START, io_regs};
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize, with::Skip};
@@ -90,8 +90,8 @@ impl AddressBus {
             }
             SCY | SCX => self.ppu.write_byte(index, value),
             LY => (),
-            io_regs::LYC => {
-                self.buffer[index as usize] = value;
+            LYC => {
+                self.ppu.write_byte(index, value);
 
                 if !self.ppu.disabled {
                     self.ppu.update_stat_interrupt(&mut self.buffer);

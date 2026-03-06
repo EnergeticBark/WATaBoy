@@ -155,7 +155,7 @@ impl Ppu {
     pub fn update_stat_interrupt(&mut self, memory: &mut [u8; MEM_MAP_SIZE]) {
         let coincidence = self
             .ly_to_compare_lyc
-            .is_some_and(|x| x == memory[LYC as usize]);
+            .is_some_and(|x| x == self.registers.lyc);
         self.registers.stat.set_coincidence(coincidence);
 
         // STAT interrupt triggering.
@@ -515,6 +515,7 @@ impl Addressable for Ppu {
             SCY => self.registers.scy,
             SCX => self.registers.scx,
             LY => self.registers.ly,
+            LYC => self.registers.lyc,
             WY => self.registers.wy,
             WX => self.registers.wx,
             _ => unreachable!(),
@@ -541,6 +542,7 @@ impl Addressable for Ppu {
             }
             SCY => self.registers.scy = value,
             SCX => self.registers.scx = value,
+            LYC => self.registers.lyc = value,
             WY => self.registers.wy = value,
             WX => self.registers.wx = value,
             _ => unreachable!(),

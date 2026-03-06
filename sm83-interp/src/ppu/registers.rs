@@ -15,6 +15,7 @@ pub(super) struct IoRegisters {
     // Read-only from the CPU's perspective.
     pub(super) ly: u8,
     // R/w
+    pub(super) lyc: u8,
     pub(super) wy: u8,
     pub(super) wx: u8,
 }
