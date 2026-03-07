@@ -200,6 +200,7 @@ impl Ppu {
                     oam: self.oam,
                     registers: self.registers,
                     stat_interrupt_line: self.stat_interrupt_line,
+                    clock: self.clock,
                     ..Default::default()
                 };
 
