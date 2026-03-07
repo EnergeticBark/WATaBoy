@@ -23,6 +23,7 @@ use obj_fetcher::{ObjectFetcher, TRANSPARENT};
 use palette::PaletteSelect;
 
 use crate::addressable::Addressable;
+use crate::cpu::InterruptBits;
 use crate::ppu::registers::IoRegisters;
 
 const SCANLINES_PER_FRAME: usize = 154;
@@ -74,6 +75,8 @@ pub struct Ppu {
     pub disabled: bool,
     just_enabled: bool,
     pub clock: usize,
+    pub next_vblank_interrupt: usize,
+    pub next_lcd_interrupt: usize,
 }
 
 fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
@@ -86,8 +89,11 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
 
 impl Ppu {
     #[must_use]
-    pub fn predict_next_interrupt(&self, cpu_clock: usize) -> usize {
-        cpu_clock
+    pub fn predict_next_interrupt(&mut self, cpu_clock: usize, ie: InterruptBits) -> usize {
+        self.next_vblank_interrupt = if ie.vblank() { cpu_clock } else { usize::MAX };
+        self.next_lcd_interrupt = if ie.lcd() { cpu_clock } else { usize::MAX };
+
+        self.next_vblank_interrupt.min(self.next_lcd_interrupt)
         // TODO: actual prediction...
     }
 
@@ -201,6 +207,8 @@ impl Ppu {
                     registers: self.registers,
                     stat_interrupt_line: self.stat_interrupt_line,
                     clock: self.clock,
+                    next_vblank_interrupt: self.clock,
+                    next_lcd_interrupt: self.next_lcd_interrupt,
                     ..Default::default()
                 };
 
@@ -589,6 +597,8 @@ impl Default for Ppu {
             disabled: true,
             just_enabled: true,
             clock: 0,
+            next_vblank_interrupt: 0,
+            next_lcd_interrupt: 0,
         }
     }
 }
@@ -617,6 +627,8 @@ impl PostBoot for Ppu {
             disabled: false,
             just_enabled: false,
             clock: 0,
+            next_vblank_interrupt: 0,
+            next_lcd_interrupt: 0,
         }
     }
 }

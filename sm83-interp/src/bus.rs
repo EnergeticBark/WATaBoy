@@ -1,4 +1,5 @@
 use crate::addressable::Addressable;
+use crate::cpu::InterruptBits;
 use crate::joypad::{ButtonsHeld, Joyp};
 use crate::mbc::Mbc;
 use crate::ppu::Ppu;
@@ -8,7 +9,7 @@ use hw_constants::io_regs::{
     BGP, DIV, IF, JOYP, LCDC, LY, LYC, NR10, NR30, NR32, NR41, NR44, NR52, OBP0, OBP1, SC, SCX,
     SCY, STAT, TAC, TIMA, TMA, WX, WY,
 };
-use hw_constants::{MEM_MAP_SIZE, OAM_END, OAM_START, PostBoot, VRAM_END, VRAM_START};
+use hw_constants::{IE, MEM_MAP_SIZE, OAM_END, OAM_START, PostBoot, VRAM_END, VRAM_START};
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize, with::Skip};
 
@@ -32,7 +33,7 @@ impl AddressBus {
         self.mbc.load_rom(rom);
     }
 
-    pub fn read_byte(&self, index: u16) -> u8 {
+    pub fn read_byte(&mut self, index: u16) -> u8 {
         match index {
             // Delegate reads to the PPU.
             VRAM_START..VRAM_END
@@ -47,7 +48,10 @@ impl AddressBus {
             | OBP0
             | OBP1
             | WY
-            | WX => self.ppu.read_byte(index),
+            | WX => {
+                self.ppu_catch_up();
+                self.ppu.read_byte(index)
+            }
 
             // TODO: Delegate MBC bank switches.
             _ => self.buffer[index as usize],
@@ -116,13 +120,21 @@ impl AddressBus {
                     self.ppu
                         .update_stat_interrupt(&mut self.buffer[IF as usize]);
                 }
+                self.ppu_catch_up();
             }
-            LCDC | SCY | SCX | BGP | OBP0 | OBP1 | WY | WX => self.ppu.write_byte(index, value),
+            LCDC | SCY | SCX | BGP | OBP0 | OBP1 | WY | WX => {
+                self.ppu.write_byte(index, value);
+                self.ppu_catch_up();
+            }
 
             // There is *nothing* at these addresses, so they don't have names.
             // Their bits are always pulled high.
             0xFF03 | 0xFF08..0xFF0F | 0xFF15 | 0xFF1F | 0xFF27..0xFF30 | 0xFF4C..0xFF80 => {
                 self.buffer[index as usize] = value | 0b1111_1111;
+            }
+            IE => {
+                self.buffer[index as usize] = value;
+                self.ppu_catch_up();
             }
             _ => self.buffer[index as usize] = value,
         }
@@ -134,6 +146,9 @@ impl AddressBus {
             self.ppu.tick(&mut self.buffer[IF as usize]);
             self.ppu.clock += 1;
         }
+        self.next_interrupt = self
+            .ppu
+            .predict_next_interrupt(self.clock, InterruptBits::from(self.buffer[IE as usize]));
     }
 
     pub fn half_increment_timers(&mut self) {
