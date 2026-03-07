@@ -1,4 +1,5 @@
 import { buttonsHeld } from "./keyboard.js";
+import { frametimeCounter } from "./frametime.js"
 
 const utf8decoder = new TextDecoder();
 export const console_log_glue = (stringPtr, stringLen) => {
@@ -58,12 +59,12 @@ const update_lcd = () => {
 	ctx.putImageData(lcdImage, 0, 0)
 }
 
-setInterval(() => {
-	instance.exports.step_vblank(jitRuntime);
-	instance.exports.step_vblank(jitRuntime);
-	instance.exports.step_vblank(jitRuntime);
-	instance.exports.step_vblank(jitRuntime);
-	instance.exports.step_vblank(jitRuntime);
+const renderLoop = () => {
+	frametimeCounter.start();
+	for (let i = 0; i < 100; i += 1) {
+		instance.exports.step_vblank(jitRuntime);
+	}
+	frametimeCounter.end();
 	update_lcd();
 	instance.exports.update_joypad(
 		jitRuntime,
@@ -76,6 +77,9 @@ setInterval(() => {
 		buttonsHeld.left,
 		buttonsHeld.right,
 	);
-}, 1);
+
+	requestAnimationFrame(renderLoop);
+};
+renderLoop();
 
 console.log("done :)");
