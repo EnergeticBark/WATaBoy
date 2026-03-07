@@ -1,3 +1,4 @@
+use sm83_interp::addressable::Addressable;
 use sm83_interp::cpu::Cpu;
 
 pub struct BlarggTest {
@@ -10,7 +11,9 @@ pub struct BlarggTest {
 }
 
 fn read_ascii_from_tile_map(cpu: &Cpu) -> Vec<String> {
-    let lines_buffer: Vec<u8> = (0x9800..0x9C00).map(|i| cpu.memory.read_byte(i)).collect();
+    let lines_buffer: Vec<u8> = (0x9800..0x9C00)
+        .map(|i| cpu.memory.ppu.read_byte(i))
+        .collect();
     let (lines, _) = lines_buffer.as_chunks::<32>();
     lines
         .iter()
