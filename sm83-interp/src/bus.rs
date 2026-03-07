@@ -67,7 +67,11 @@ impl AddressBus {
             }
 
             // Delegate writes to VRAM and OAM to the PPU.
-            VRAM_START..VRAM_END | OAM_START..OAM_END => self.ppu.write_byte(index, value),
+            VRAM_START..VRAM_END | OAM_START..OAM_END => {
+                self.ppu_catch_up();
+                self.ppu.write_byte(index, value);
+                self.ppu_est_next_intr();
+            }
 
             // Initiate OAM transfer.
             0xFF46 => {
@@ -114,17 +118,20 @@ impl AddressBus {
             LY => (),
             // Still needed until I can update interrupts without passing in all memory :(.
             STAT | LYC => {
+                self.ppu_catch_up();
                 self.ppu.write_byte(index, value);
 
                 if !self.ppu.disabled {
                     self.ppu
                         .update_stat_interrupt(&mut self.buffer[IF as usize]);
                 }
-                self.ppu_catch_up();
+
+                self.ppu_est_next_intr();
             }
             LCDC | SCY | SCX | BGP | OBP0 | OBP1 | WY | WX => {
-                self.ppu.write_byte(index, value);
                 self.ppu_catch_up();
+                self.ppu.write_byte(index, value);
+                self.ppu_est_next_intr();
             }
 
             // There is *nothing* at these addresses, so they don't have names.
@@ -133,8 +140,9 @@ impl AddressBus {
                 self.buffer[index as usize] = value | 0b1111_1111;
             }
             IE => {
-                self.buffer[index as usize] = value;
                 self.ppu_catch_up();
+                self.buffer[index as usize] = value;
+                self.ppu_est_next_intr();
             }
             _ => self.buffer[index as usize] = value,
         }
@@ -146,6 +154,9 @@ impl AddressBus {
             self.ppu.tick(&mut self.buffer[IF as usize]);
             self.ppu.clock += 1;
         }
+    }
+
+    fn ppu_est_next_intr(&mut self) {
         self.next_interrupt = self
             .ppu
             .predict_next_interrupt(self.clock, InterruptBits::from(self.buffer[IE as usize]));
@@ -155,6 +166,7 @@ impl AddressBus {
         self.clock += 2;
         if self.next_interrupt <= self.clock {
             self.ppu_catch_up();
+            self.ppu_est_next_intr();
         }
 
         if !self.half_ticked {
@@ -181,6 +193,7 @@ impl AddressBus {
         self.clock += m_cycles as usize * 4;
         if self.next_interrupt <= self.clock {
             self.ppu_catch_up();
+            self.ppu_est_next_intr();
         }
 
         self.timers.update_timer_counter(self.buffer[TIMA as usize]);
