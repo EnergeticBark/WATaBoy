@@ -73,6 +73,7 @@ pub struct Ppu {
     pub lcd_buffer: Vec<u8>,
     pub disabled: bool,
     just_enabled: bool,
+    pub clock: usize,
 }
 
 fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
@@ -84,6 +85,12 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
 }
 
 impl Ppu {
+    #[must_use]
+    pub fn predict_next_interrupt(&self, cpu_clock: usize) -> usize {
+        cpu_clock
+        // TODO: actual prediction...
+    }
+
     fn drawing_window(&self) -> bool {
         self.registers.lcdc.window_enabled()
             && self.x + 7 == self.registers.wx
@@ -580,6 +587,7 @@ impl Default for Ppu {
             lcd_buffer: vec![0; SCREEN_SIZE],
             disabled: true,
             just_enabled: true,
+            clock: 0,
         }
     }
 }
@@ -607,6 +615,7 @@ impl PostBoot for Ppu {
             lcd_buffer: vec![0; SCREEN_SIZE],
             disabled: false,
             just_enabled: false,
+            clock: 0,
         }
     }
 }

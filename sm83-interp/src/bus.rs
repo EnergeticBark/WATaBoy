@@ -22,6 +22,8 @@ pub struct AddressBus {
     half_ticked: bool,
     #[rkyv(with = Skip)]
     pub buttons_held: ButtonsHeld,
+    pub clock: usize,
+    pub next_interrupt: usize,
 }
 
 impl AddressBus {
@@ -105,19 +107,9 @@ impl AddressBus {
             NR52 => self.buffer[index as usize] = value | 0b0111_0000,
 
             // Delegate PPU registers to the PPU.
-            LCDC => self.ppu.write_byte(index, value),
-            // Still needed until I can update interrupts without passing in all memory :(.
-            STAT => {
-                self.ppu.write_byte(index, value);
-
-                if !self.ppu.disabled {
-                    self.ppu
-                        .update_stat_interrupt(&mut self.buffer[IF as usize]);
-                }
-            }
-            SCY | SCX => self.ppu.write_byte(index, value),
             LY => (),
-            LYC => {
+            // Still needed until I can update interrupts without passing in all memory :(.
+            STAT | LYC => {
                 self.ppu.write_byte(index, value);
 
                 if !self.ppu.disabled {
@@ -125,7 +117,7 @@ impl AddressBus {
                         .update_stat_interrupt(&mut self.buffer[IF as usize]);
                 }
             }
-            BGP | OBP0 | OBP1 | WY | WX => self.ppu.write_byte(index, value),
+            LCDC | SCY | SCX | BGP | OBP0 | OBP1 | WY | WX => self.ppu.write_byte(index, value),
 
             // There is *nothing* at these addresses, so they don't have names.
             // Their bits are always pulled high.
@@ -136,9 +128,18 @@ impl AddressBus {
         }
     }
 
-    pub fn half_increment_timers(&mut self) {
-        for _ in 0..2 {
+    fn ppu_catch_up(&mut self) {
+        // Make the PPU catch up to the CPU!
+        for _ in self.ppu.clock..self.clock {
             self.ppu.tick(&mut self.buffer[IF as usize]);
+            self.ppu.clock += 1;
+        }
+    }
+
+    pub fn half_increment_timers(&mut self) {
+        self.clock += 2;
+        if self.next_interrupt <= self.clock {
+            self.ppu_catch_up();
         }
 
         if !self.half_ticked {
@@ -162,8 +163,9 @@ impl AddressBus {
     }
 
     pub fn increment_timers(&mut self, m_cycles: u16) {
-        for _ in 0..m_cycles * 4 {
-            self.ppu.tick(&mut self.buffer[IF as usize]);
+        self.clock += m_cycles as usize * 4;
+        if self.next_interrupt <= self.clock {
+            self.ppu_catch_up();
         }
 
         self.timers.update_timer_counter(self.buffer[TIMA as usize]);
@@ -208,6 +210,8 @@ impl Default for AddressBus {
             mbc: Mbc::default(),
             half_ticked: false,
             buttons_held: ButtonsHeld::default(),
+            clock: 0,
+            next_interrupt: 0,
         }
     }
 }
@@ -218,6 +222,7 @@ impl PostBoot for AddressBus {
             buffer: hw_constants::post_boot_hwio(),
             timers: Timers::post_boot_dmg(),
             ppu: Ppu::post_boot_dmg(),
+            // TODO: Might be worth running the boot rom to calculate clock and next_interrupt...
             ..Default::default()
         }
     }
