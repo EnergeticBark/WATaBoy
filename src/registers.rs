@@ -1,24 +1,53 @@
-use egui::{Color32, RichText, Ui};
+use egui::{Checkbox, Color32, RichText, Ui};
 use egui_extras::{Column, TableBody, TableBuilder};
 use sm83_interp::cpu::Cpu;
 
 pub fn draw_register_table(ui: &mut Ui, dmg_state: &Cpu) {
-    ui.heading("CPU Registers");
-    TableBuilder::new(ui)
-        .striped(true)
-        .column(Column::auto())
-        .column(Column::remainder())
-        .header(18.0, |mut header| {
-            header.col(|ui| {
-                ui.label("Register");
-            });
-            header.col(|ui| {
-                ui.label("Value");
-            });
-        })
-        .body(|body| {
-            draw_registers_body(body, dmg_state);
+    ui.horizontal(|ui| {
+        ui.vertical(|ui| {
+            let name = "CPU Registers";
+            ui.heading(name);
+            TableBuilder::new(ui)
+                .id_salt(name)
+                .striped(true)
+                .column(Column::auto())
+                .column(Column::auto())
+                .header(18.0, |mut header| {
+                    header.col(|ui| {
+                        ui.label("Register");
+                    });
+                    header.col(|ui| {
+                        ui.label("Value");
+                    });
+                })
+                .body(|body| {
+                    draw_registers_body(body, dmg_state);
+                });
         });
+
+        ui.separator();
+
+        ui.vertical(|ui| {
+            let name = "CPU State";
+            ui.heading(name);
+            TableBuilder::new(ui)
+                .id_salt(name)
+                .striped(true)
+                .column(Column::auto())
+                .column(Column::remainder())
+                .header(18.0, |mut header| {
+                    header.col(|ui| {
+                        ui.label("State");
+                    });
+                    header.col(|ui| {
+                        ui.label("Value");
+                    });
+                })
+                .body(|body| {
+                    draw_flags_body(body, dmg_state);
+                });
+        });
+    });
 }
 
 fn draw_registers_body(body: TableBody<'_>, dmg_state: &Cpu) {
@@ -55,7 +84,24 @@ fn draw_registers_body(body: TableBody<'_>, dmg_state: &Cpu) {
             }
         });
         row.col(|ui| {
-            ui.label(value);
+            ui.strong(RichText::from(value).monospace());
+        });
+    });
+}
+
+fn draw_flags_body(body: TableBody<'_>, dmg_state: &Cpu) {
+    let reg_names_and_values = [("HALTED", dmg_state.halted), ("IME", dmg_state.ime)];
+
+    body.rows(18.0, reg_names_and_values.len(), |mut row| {
+        let row_index = row.index();
+        let (name, value) = reg_names_and_values[row_index];
+
+        row.col(|ui| {
+            ui.label(name);
+        });
+        row.col(|ui| {
+            let mut checked: bool = value;
+            ui.add_enabled(false, Checkbox::new(&mut checked, ""));
         });
     });
 }

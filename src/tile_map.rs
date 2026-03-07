@@ -3,10 +3,10 @@ use eframe::epaint::textures::TextureOptions;
 use eframe::epaint::{ColorImage, TextureHandle};
 use egui::emath::RectTransform;
 use egui::{Color32, Frame, Stroke, StrokeKind, Ui, Vec2, pos2};
-use hw_constants::io_regs::LCDC;
-use hw_constants::{TILE_MAP_SIZE, io_regs};
+use hw_constants::TILE_MAP_SIZE;
+use hw_constants::io_regs::{LCDC, SCX, SCY, WX, WY};
 use sm83_interp::cpu::Cpu;
-use sm83_interp::ppu::lcd_control::LcdControl;
+use sm83_interp::ppu::LcdControl;
 use sm83_interp::ppu::tiles;
 
 const TILE_MAP_SCALE: f32 = 1.0;
@@ -24,12 +24,13 @@ fn draw_tile_map(
         for column in 0..32 {
             let tile_id = tile_map[row * 32 + column];
 
-            let memory = dmg_state.memory.buffer.as_array().unwrap();
-            let lcdc = LcdControl::from_bits(memory[LCDC as usize]);
+            let lcdc = LcdControl::from_bits(dmg_state.memory.read_byte(LCDC));
+
+            let vram = dmg_state.memory.ppu.vram.as_array().unwrap();
             let tile_data = if lcdc.bg_and_window_tiles() {
-                tiles::unsigned_nth_tile(memory, tile_id as usize)
+                tiles::unsigned_nth_tile(vram, tile_id as usize)
             } else {
-                tiles::signed_nth_tile(memory, tile_id.cast_signed() as isize)
+                tiles::signed_nth_tile(vram, tile_id.cast_signed() as isize)
             };
 
             let greyscale_tile = crate::tiles::greyscale_from_tile(tile_data);
@@ -49,8 +50,8 @@ fn draw_tile_map(
 
 fn highlight_background(ui: &mut Ui, to_screen: RectTransform, dmg_state: &Cpu) {
     // Draw a red rectangle around the visible portion of the background tile map.
-    let sc_y = dmg_state.memory.buffer[io_regs::SCY as usize];
-    let sc_x = dmg_state.memory.buffer[io_regs::SCX as usize];
+    let sc_y = dmg_state.memory.read_byte(SCY);
+    let sc_x = dmg_state.memory.read_byte(SCX);
     let bottom = f32::from(sc_y.wrapping_add(143));
     let right = f32::from(sc_x.wrapping_add(159));
     let visible = Rect::from_min_max(
@@ -68,8 +69,8 @@ fn highlight_background(ui: &mut Ui, to_screen: RectTransform, dmg_state: &Cpu) 
 
 fn highlight_window(ui: &mut Ui, to_screen: RectTransform, dmg_state: &Cpu) {
     // Draw a blue rectangle around the visible portion of the window tile map.
-    let wy = dmg_state.memory.buffer[io_regs::WY as usize];
-    let wx = dmg_state.memory.buffer[io_regs::WX as usize].wrapping_sub(7);
+    let wy = dmg_state.memory.read_byte(WY);
+    let wx = dmg_state.memory.read_byte(WX).wrapping_sub(7);
     let bottom = f32::from(143u8.wrapping_sub(wy));
     let right = f32::from(159u8.wrapping_sub(wx));
     let visible = Rect::from_min_max(
@@ -89,8 +90,8 @@ pub fn draw_tile_map_0(ui: &mut Ui, tile_map_0_texture: &mut TextureHandle, dmg_
     ui.vertical(|ui| {
         ui.heading("Tile Map 0: 0x9800-0x9C00");
 
-        let memory = dmg_state.memory.buffer.as_array().unwrap();
-        let tile_map = tiles::tile_map_0(memory);
+        let vram = dmg_state.memory.ppu.vram.as_array().unwrap();
+        let tile_map = tiles::tile_map_0(vram);
 
         Frame::canvas(ui.style()).show(ui, |ui| {
             let (_, rect) = ui.allocate_space(Vec2::new(
@@ -107,7 +108,7 @@ pub fn draw_tile_map_0(ui: &mut Ui, tile_map_0_texture: &mut TextureHandle, dmg_
 
             draw_tile_map(ui, rect, tile_map_0_texture, tile_map, dmg_state);
 
-            let lcdc = LcdControl::from_bits(memory[LCDC as usize]);
+            let lcdc = LcdControl::from_bits(dmg_state.memory.read_byte(LCDC));
             if lcdc.bg_and_window_enabled() {
                 if !lcdc.bg_tile_map() {
                     highlight_background(ui, to_screen, dmg_state);
@@ -124,8 +125,8 @@ pub fn draw_tile_map_1(ui: &mut Ui, tile_map_1_texture: &mut TextureHandle, dmg_
     ui.vertical(|ui| {
         ui.heading("Tile Map 1: 0x9C00-0xA000");
 
-        let memory = dmg_state.memory.buffer.as_array().unwrap();
-        let tile_map = tiles::tile_map_1(memory);
+        let vram = dmg_state.memory.ppu.vram.as_array().unwrap();
+        let tile_map = tiles::tile_map_1(vram);
 
         Frame::canvas(ui.style()).show(ui, |ui| {
             let (_, rect) = ui.allocate_space(Vec2::new(
@@ -142,7 +143,7 @@ pub fn draw_tile_map_1(ui: &mut Ui, tile_map_1_texture: &mut TextureHandle, dmg_
 
             draw_tile_map(ui, rect, tile_map_1_texture, tile_map, dmg_state);
 
-            let lcdc = LcdControl::from_bits(memory[LCDC as usize]);
+            let lcdc = LcdControl::from_bits(dmg_state.memory.read_byte(LCDC));
             if lcdc.bg_and_window_enabled() {
                 if lcdc.bg_tile_map() {
                     highlight_background(ui, to_screen, dmg_state);

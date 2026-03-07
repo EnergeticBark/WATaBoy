@@ -37,7 +37,7 @@ fn draw_tiles_body(body: TableBody<'_>, tiles: &mut [TextureHandle], dmg_state: 
                 let tile = &mut tiles[row_index + i];
 
                 let tile_data = tiles::unsigned_nth_tile(
-                    dmg_state.memory.buffer.as_array().unwrap(),
+                    dmg_state.memory.ppu.vram.as_array().unwrap(),
                     row_index + i,
                 );
                 tile.set(

@@ -51,7 +51,7 @@ fn draw_oam_body(body: TableBody<'_>, tiles: &mut [TextureHandle], dmg_state: &C
             ui.label(format!("{nth_row}"));
         });
 
-        let obj = oam::nth_obj(dmg_state.memory.buffer.as_array().unwrap(), nth_row);
+        let obj = oam::nth_obj(dmg_state.memory.ppu.oam.as_array().unwrap(), nth_row);
 
         row.col(|ui| {
             ui.label(format!("{}", obj.y_pos));
