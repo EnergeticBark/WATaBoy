@@ -1,4 +1,4 @@
-use crate::parameters::{R16, R16Stack};
+use super::opcodes::parameters::{R16, R16Stack};
 
 use bitfield_struct::bitfield;
 use hw_constants::PostBoot;

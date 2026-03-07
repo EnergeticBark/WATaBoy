@@ -1,12 +1,12 @@
-use crate::bg_fetcher::Pixel;
-use crate::lcd_control::obj_size;
-use crate::oam::Obj;
-use crate::palette::Palette;
-use crate::tiles;
-
 use std::collections::VecDeque;
 
-use hw_constants::MEM_MAP_SIZE;
+use hw_constants::VRAM_SIZE;
+
+use super::bg_fetcher::Pixel;
+use super::oam::Obj;
+use super::palette::PaletteSelect;
+use super::registers::LcdControl;
+use super::tiles;
 
 // From ObjectFetcher's perspective, its pixel FIFO always contains 8 pixels.
 // Before an object is pushed to the queue, transparent pixels are pushed to the back to maintain a length of 8 pixels.
@@ -15,7 +15,7 @@ use hw_constants::MEM_MAP_SIZE;
 pub const TRANSPARENT: Pixel = Pixel {
     low: false,
     high: false,
-    palette: Palette::Obp0,
+    palette: PaletteSelect::Obp0,
     priority: false,
 };
 
@@ -70,7 +70,7 @@ impl ObjectFetcher {
 
     // Push a row of 8 pixels from a tile to the Obj FIFO.
     fn push(&mut self, obj: Obj) {
-        if obj.x_flip() {
+        if obj.attributes.x_flip() {
             self.push_bit_range(0..8, obj);
         } else {
             self.push_bit_range((0..8).rev(), obj);
@@ -88,13 +88,13 @@ impl ObjectFetcher {
             low: (self.tile_data_low >> nth_bit) & 1 == 1,
             high: (self.tile_data_high >> nth_bit) & 1 == 1,
             palette: {
-                if obj.palette() {
-                    Palette::Obp1
+                if obj.attributes.palette() {
+                    PaletteSelect::Obp1
                 } else {
-                    Palette::Obp0
+                    PaletteSelect::Obp0
                 }
             },
-            priority: obj.priority(),
+            priority: obj.attributes.priority(),
         });
         // Replace any transparent pixels that are currently on the queue with the new pixels.
         for (old, new) in old_pixels.zip(new_pixels) {
@@ -108,7 +108,7 @@ impl ObjectFetcher {
     fn get_tile(current_scanline: u8, obj: Obj, obj_size: bool) -> u8 {
         let obj_line = current_scanline + 16 - obj.y_pos;
         // If the object isn't flipped vertically, just return the line.
-        if !obj.y_flip() {
+        if !obj.attributes.y_flip() {
             return obj_line;
         }
 
@@ -120,9 +120,14 @@ impl ObjectFetcher {
         }
     }
 
-    fn current_tile(memory: &[u8; MEM_MAP_SIZE], obj: Obj, obj_line: u8) -> &[u8; 16] {
+    fn current_tile(
+        vram: &[u8; VRAM_SIZE as usize],
+        lcdc: LcdControl,
+        obj: Obj,
+        obj_line: u8,
+    ) -> &[u8; 16] {
         let mut tile_index = obj.tile_index;
-        if obj_size(memory) {
+        if lcdc.obj_size() {
             // Override the first bit as described in PanDocs.
             // See: https://gbdev.io/pandocs/OAM.html#byte-2--tile-index
             if obj_line < 8 {
@@ -132,22 +137,39 @@ impl ObjectFetcher {
             }
         }
 
-        tiles::unsigned_nth_tile(memory, tile_index as usize)
+        tiles::unsigned_nth_tile(vram, tile_index as usize)
     }
 
-    fn get_tile_data_low(&mut self, memory: &[u8; MEM_MAP_SIZE], obj: Obj, obj_line: u8) {
-        let tile = Self::current_tile(memory, obj, obj_line);
+    fn get_tile_data_low(
+        &mut self,
+        vram: &[u8; VRAM_SIZE as usize],
+        lcdc: LcdControl,
+        obj: Obj,
+        obj_line: u8,
+    ) {
+        let tile = Self::current_tile(vram, lcdc, obj, obj_line);
         let tile_line = obj_line % 8;
         self.tile_data_low = tile[tile_line as usize * 2];
     }
 
-    fn get_tile_data_high(&mut self, memory: &[u8; MEM_MAP_SIZE], obj: Obj, obj_line: u8) {
-        let tile = Self::current_tile(memory, obj, obj_line);
+    fn get_tile_data_high(
+        &mut self,
+        vram: &[u8; VRAM_SIZE as usize],
+        lcdc: LcdControl,
+        obj: Obj,
+        obj_line: u8,
+    ) {
+        let tile = Self::current_tile(vram, lcdc, obj, obj_line);
         let tile_line = obj_line % 8;
         self.tile_data_high = tile[tile_line as usize * 2 + 1];
     }
 
-    pub fn tick(&mut self, memory: &[u8; MEM_MAP_SIZE], current_scanline: u8) {
+    pub fn tick(
+        &mut self,
+        vram: &[u8; VRAM_SIZE as usize],
+        lcdc: LcdControl,
+        current_scanline: u8,
+    ) {
         match self.state {
             ObjectFetcherState::Idle => {
                 if let Some(obj) = self.obj_buffer.pop_front() {
@@ -164,7 +186,7 @@ impl ObjectFetcher {
                 ticks_remaining: 0,
                 obj,
             } => {
-                let obj_line = Self::get_tile(current_scanline, obj, obj_size(memory));
+                let obj_line = Self::get_tile(current_scanline, obj, lcdc.obj_size());
                 self.state = ObjectFetcherState::GetTileDataLow {
                     ticks_remaining: 1,
                     obj,
@@ -176,7 +198,7 @@ impl ObjectFetcher {
                 obj,
                 obj_line,
             } => {
-                self.get_tile_data_low(memory, obj, obj_line);
+                self.get_tile_data_low(vram, lcdc, obj, obj_line);
                 self.state = ObjectFetcherState::GetTileDataHigh {
                     ticks_remaining: 1,
                     obj,
@@ -188,7 +210,7 @@ impl ObjectFetcher {
                 obj,
                 obj_line,
             } => {
-                self.get_tile_data_high(memory, obj, obj_line);
+                self.get_tile_data_high(vram, lcdc, obj, obj_line);
                 self.state = ObjectFetcherState::Push { obj };
             }
             ObjectFetcherState::Push { obj } => {

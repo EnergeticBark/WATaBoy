@@ -1,10 +1,10 @@
-use crate::opcodes::Opcode;
+use super::Opcode;
 
 // Loading from IndirectHL takes extra machine cycles.
 // See: https://gekkio.fi/files/gb-docs/gbctr.pdf
 
 #[allow(clippy::match_same_arms)]
-pub fn m_cycles(opcode: Opcode) -> u16 {
+pub(crate) fn m_cycles(opcode: Opcode) -> u16 {
     match opcode {
         // 8-bit load instructions.
         // Ld

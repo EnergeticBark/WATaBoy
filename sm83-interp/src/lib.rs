@@ -1,9 +1,8 @@
-mod bus;
 pub mod cpu;
-mod cycles;
 pub mod joypad;
+pub mod ppu;
+
+mod addressable;
+mod bus;
 mod mbc;
-pub mod opcodes;
-pub mod parameters;
-pub mod registers;
 mod timers;

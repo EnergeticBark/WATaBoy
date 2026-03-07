@@ -1,14 +1,14 @@
-use crate::lcd_control::{bg_tile_map, window_tile_map};
-use crate::palette::Palette;
-use crate::{lcd_control, tiles};
+use hw_constants::VRAM_SIZE;
 
-use hw_constants::{MEM_MAP_SIZE, io_regs};
+use super::palette::PaletteSelect;
+use super::registers::LcdControl;
+use super::tiles;
 
 #[derive(Copy, Clone)]
 pub struct Pixel {
     pub low: bool,
     pub high: bool,
-    pub palette: Palette,
+    pub palette: PaletteSelect,
     pub priority: bool,
 }
 
@@ -56,7 +56,7 @@ impl BackgroundFetcher {
             let pixel = Pixel {
                 low: (self.tile_data_low >> nth_bit) & 1 == 1,
                 high: (self.tile_data_high >> nth_bit) & 1 == 1,
-                palette: Palette::Bgp,
+                palette: PaletteSelect::Bgp,
                 priority: false,
             };
 
@@ -66,28 +66,36 @@ impl BackgroundFetcher {
         true
     }
 
-    fn get_tile(&mut self, memory: &[u8; MEM_MAP_SIZE], current_scanline: u8, window_y: u8) {
-        let bg_second_tile_map = bg_tile_map(memory) && !self.drawing_window;
-        let window_second_tile_map = window_tile_map(memory) && self.drawing_window;
+    fn get_tile(
+        &mut self,
+        vram: &[u8; VRAM_SIZE as usize],
+        lcdc: LcdControl,
+        scx: u8,
+        scy: u8,
+        current_scanline: u8,
+        window_y: u8,
+    ) {
+        let bg_second_tile_map = lcdc.bg_tile_map() && !self.drawing_window;
+        let window_second_tile_map = lcdc.window_tile_map() && self.drawing_window;
         let second_tile_map = bg_second_tile_map || window_second_tile_map;
 
         let tile_x = if self.drawing_window {
             self.tile_x
         } else {
-            ((memory[io_regs::SCX as usize] / 8) + self.tile_x) & 0x1F
+            (scx / 8 + self.tile_x) & 0x1F
         };
 
         let ly = if self.drawing_window {
             window_y
         } else {
-            current_scanline.wrapping_add(memory[io_regs::SCY as usize])
+            current_scanline.wrapping_add(scy)
         };
         let tile_y = ly / 8;
 
         let tile_map = if second_tile_map {
-            tiles::tile_map_1(memory)
+            tiles::tile_map_1(vram)
         } else {
-            tiles::tile_map_0(memory)
+            tiles::tile_map_0(vram)
         };
 
         self.tile_id = tile_map[tile_y as usize * 32 + tile_x as usize];
@@ -96,34 +104,46 @@ impl BackgroundFetcher {
         // TODO: If VRAM is blocked tile index is 0xFF...
     }
 
-    fn current_tile<'a>(&self, memory: &'a [u8; MEM_MAP_SIZE]) -> &'a [u8; 16] {
-        if lcd_control::bg_and_window_tiles(memory) {
-            tiles::unsigned_nth_tile(memory, self.tile_id as usize)
+    fn current_tile<'a>(
+        &self,
+        vram: &'a [u8; VRAM_SIZE as usize],
+        lcdc: LcdControl,
+    ) -> &'a [u8; 16] {
+        if lcdc.bg_and_window_tiles() {
+            tiles::unsigned_nth_tile(vram, self.tile_id as usize)
         } else {
-            tiles::signed_nth_tile(memory, self.tile_id.cast_signed() as isize)
+            tiles::signed_nth_tile(vram, self.tile_id.cast_signed() as isize)
         }
     }
 
-    fn get_tile_data_low(&mut self, memory: &[u8; MEM_MAP_SIZE]) {
-        let tile = self.current_tile(memory);
+    fn get_tile_data_low(&mut self, vram: &[u8; VRAM_SIZE as usize], lcdc: LcdControl) {
+        let tile = self.current_tile(vram, lcdc);
         self.tile_data_low = tile[self.tile_line as usize * 2];
     }
 
-    fn get_tile_data_high(&mut self, memory: &[u8; MEM_MAP_SIZE]) {
-        let tile = self.current_tile(memory);
+    fn get_tile_data_high(&mut self, vram: &[u8; VRAM_SIZE as usize], lcdc: LcdControl) {
+        let tile = self.current_tile(vram, lcdc);
         self.tile_data_high = tile[self.tile_line as usize * 2 + 1];
     }
 
-    pub fn tick(&mut self, memory: &[u8; MEM_MAP_SIZE], current_scanline: u8, window_y: u8) {
+    pub fn tick(
+        &mut self,
+        vram: &[u8; VRAM_SIZE as usize],
+        lcdc: LcdControl,
+        scx: u8,
+        scy: u8,
+        current_scanline: u8,
+        window_y: u8,
+    ) {
         self.state = match self.state {
             FetcherState::BeforeGetTile => FetcherState::GetTile,
             FetcherState::GetTile => {
-                self.get_tile(memory, current_scanline, window_y);
+                self.get_tile(vram, lcdc, scx, scy, current_scanline, window_y);
                 FetcherState::BeforeGetTileDataLow
             }
             FetcherState::BeforeGetTileDataLow => FetcherState::GetTileDataLow,
             FetcherState::GetTileDataLow => {
-                self.get_tile_data_low(memory);
+                self.get_tile_data_low(vram, lcdc);
                 FetcherState::BeforeGetTileDataHigh
             }
             FetcherState::BeforeGetTileDataHigh => {
@@ -137,7 +157,7 @@ impl BackgroundFetcher {
                         let pixel = Pixel {
                             low: false,
                             high: false,
-                            palette: Palette::Bgp,
+                            palette: PaletteSelect::Bgp,
                             priority: false,
                         };
 
@@ -150,7 +170,7 @@ impl BackgroundFetcher {
                 }
             }
             FetcherState::GetTileDataHigh => {
-                self.get_tile_data_high(memory);
+                self.get_tile_data_high(vram, lcdc);
                 FetcherState::Push
             }
             FetcherState::Push => {
