@@ -139,6 +139,7 @@ impl Ppu {
     fn transition_hblank(&mut self) {
         self.mode = PpuMode::HBlank;
         self.dots_in_mode = 0;
+        #[cfg(feature = "ppu-logging")]
         trace!(target: "ppu_hblank", "Set to Mode 0 on dot: {}, (Drew for {} dots)", self.dots_this_line(), self.dots_this_line() - OAM_SCAN_DOTS);
 
         self.x = 0;
@@ -157,6 +158,7 @@ impl Ppu {
     fn transition_oam_scan(&mut self) {
         self.mode = PpuMode::OamScan;
         self.dots_in_mode = 0;
+        #[cfg(feature = "ppu-logging")]
         trace!(target: "ppu_oamscan", "Set to Mode 2 on dot: {}", self.dots_this_line());
     }
 
@@ -200,6 +202,7 @@ impl Ppu {
 
         // Low to high transition on the STAT interrupt line.
         if !prev_stat_line && self.stat_interrupt_line {
+            #[cfg(feature = "ppu-logging")]
             info!(target: "lcd_int", "LCD interrupt flag set on dot: {}", self.dots_this_line());
             // Request the LCD interrupt.
             *interrupt_flags |= 0b0000_0010;
@@ -208,6 +211,7 @@ impl Ppu {
 
     fn disable(&mut self) {
         if !self.is_disabled() {
+            #[cfg(feature = "ppu-logging")]
             info!(target: "ppu_disabled", "Disabled on dot: {}", self.dot_counter);
 
             // Reset the PPU state, preserving only some of its state.
@@ -336,7 +340,6 @@ impl Ppu {
                 }
 
                 if let Some(obj) = self.pop_next_obj() {
-                    //println!("DOT: {}, Push obj", self.dots_in_mode);
                     self.obj_fetcher.push_obj(obj);
                 }
 
@@ -414,6 +417,7 @@ impl Ppu {
                 }
 
                 if self.drawing_window() && !self.bg_fetcher.drawing_window {
+                    #[cfg(feature = "ppu-logging")]
                     trace!(target: "ppu_window", "Started drawing window at X {}", self.x);
                     self.window_y = self.window_y.wrapping_add(1);
                     self.bg_fetcher = BackgroundFetcher::default();
@@ -507,6 +511,7 @@ impl Ppu {
             }
         }
 
+        #[cfg(feature = "ppu-logging")]
         match self.dots_this_line() {
             0 | 4 | 8 | 12 | 76 | 80 | 84 | 448 | 452 => {
                 trace!(

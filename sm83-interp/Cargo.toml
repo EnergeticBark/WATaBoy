@@ -13,3 +13,6 @@ rkyv = "0.8.14"
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
+
+[features]
+ppu-logging = []
