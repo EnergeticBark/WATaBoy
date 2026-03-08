@@ -41,6 +41,7 @@ pub enum PpuMemAccess {
 
 #[derive(Debug, Copy, Clone)]
 enum PpuMode {
+    JustEnabled,
     HBlank,
     VBlank,
     OamScan,
@@ -73,7 +74,6 @@ pub struct Ppu {
     // Buffer of greyscale pixel values, i.e. what the PPU would output to the LCD.
     pub lcd_buffer: Vec<u8>,
     pub disabled: bool,
-    just_enabled: bool,
     pub clock: usize,
     pub next_vblank_interrupt: usize,
     pub next_lcd_interrupt: usize,
@@ -90,7 +90,17 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
 impl Ppu {
     #[must_use]
     pub fn predict_next_interrupt(&mut self, cpu_clock: usize, ie: InterruptBits) -> usize {
-        self.next_vblank_interrupt = if ie.vblank() { cpu_clock } else { usize::MAX };
+        self.next_vblank_interrupt = if ie.vblank() {
+            // VBlank always happens on this dot.
+            let vblank_dot = (DOTS_PER_SCANLINE as isize * 144) + 4;
+            let mut dots_from_vblank = vblank_dot - self.dot_counter as isize;
+            if dots_from_vblank.is_negative() {
+                dots_from_vblank = DOTS_PER_FRAME as isize + dots_from_vblank;
+            }
+            cpu_clock + dots_from_vblank as usize
+        } else {
+            usize::MAX
+        };
         self.next_lcd_interrupt = if ie.lcd() { cpu_clock } else { usize::MAX };
 
         self.next_vblank_interrupt.min(self.next_lcd_interrupt)
@@ -222,51 +232,48 @@ impl Ppu {
             info!(target: "ppu_enabled", "Enabled");
         }
 
-        // Do evil initial line 0 shenanigans.
-        // This timing matches GameRoy's PPU implementation.
-        if self.just_enabled {
-            // Observable 1.
-            if self.dot_counter == 0 {
-                self.stat_mode_for_interrupt = 0xFF;
-                self.update_stat_interrupt(interrupt_flags);
-            }
-
-            // Observable 79.
-            if self.dot_counter == 78 {
-                self.oam_access = PpuMemAccess::Blocked;
-                self.vram_access = PpuMemAccess::Blocked;
-
-                self.update_stat_mode(StatMode::Drawing);
-                self.stat_mode_for_interrupt = 3;
-                self.update_stat_interrupt(interrupt_flags);
-            }
-
-            // Observable 84.
-            if self.dot_counter == 83 {
-                // Skip 5 extra cycles, 84 will be observed as 89.
-                self.dot_counter += 5;
-            }
-
-            // Observable 251.
-            if self.dot_counter == 255 {
-                self.oam_access = PpuMemAccess::ReadWrite;
-                self.vram_access = PpuMemAccess::ReadWrite;
-
-                self.update_stat_mode(StatMode::HBlank);
-                // Skip 2 extra cycles.
-                self.dot_counter += 2;
-            }
-
-            self.dot_counter += 1;
-            if self.dot_counter == DOTS_PER_SCANLINE {
-                self.update_ly_register();
-                self.transition_oam_scan();
-                self.just_enabled = false;
-            }
-            return;
-        }
-
         match self.mode {
+            // Do evil initial line 0 shenanigans.
+            // This timing matches GameRoy's PPU implementation.
+            PpuMode::JustEnabled => {
+                // Observable 1.
+                if self.dot_counter == 0 {
+                    self.stat_mode_for_interrupt = 0xFF;
+                    self.update_stat_interrupt(interrupt_flags);
+                }
+
+                // Observable 79.
+                if self.dot_counter == 78 {
+                    self.oam_access = PpuMemAccess::Blocked;
+                    self.vram_access = PpuMemAccess::Blocked;
+
+                    self.update_stat_mode(StatMode::Drawing);
+                    self.stat_mode_for_interrupt = 3;
+                    self.update_stat_interrupt(interrupt_flags);
+                }
+
+                // Observable 84.
+                if self.dot_counter == 83 {
+                    // Skip 5 extra cycles, 84 will be observed as 89.
+                    self.dot_counter += 5;
+                }
+
+                // Observable 251.
+                if self.dot_counter == 255 {
+                    self.oam_access = PpuMemAccess::ReadWrite;
+                    self.vram_access = PpuMemAccess::ReadWrite;
+
+                    self.update_stat_mode(StatMode::HBlank);
+                    // Skip 2 extra cycles.
+                    self.dot_counter += 2;
+                }
+
+                self.dot_counter += 1;
+                if self.dot_counter == DOTS_PER_SCANLINE {
+                    self.update_ly_register();
+                    self.transition_oam_scan();
+                }
+            }
             PpuMode::OamScan => {
                 // Mode 2 signals a mode interrupt 1-Tcycle *before* its bits change in STAT on line 1 onward.
                 // See: section 8.11.1 of TCAGBD.
@@ -577,7 +584,7 @@ impl Default for Ppu {
     fn default() -> Self {
         Self {
             dot_counter: 0,
-            mode: PpuMode::HBlank,
+            mode: PpuMode::JustEnabled,
             dots_in_mode: 0,
             x: 0,
             pixels_to_drop: 0,
@@ -595,7 +602,6 @@ impl Default for Ppu {
             vram_access: PpuMemAccess::ReadWrite,
             lcd_buffer: vec![0; SCREEN_SIZE],
             disabled: true,
-            just_enabled: true,
             clock: 0,
             next_vblank_interrupt: 0,
             next_lcd_interrupt: 0,
@@ -625,7 +631,6 @@ impl PostBoot for Ppu {
             vram_access: PpuMemAccess::ReadWrite,
             lcd_buffer: vec![0; SCREEN_SIZE],
             disabled: false,
-            just_enabled: false,
             clock: 0,
             next_vblank_interrupt: 0,
             next_lcd_interrupt: 0,
