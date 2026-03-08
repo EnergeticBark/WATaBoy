@@ -121,7 +121,7 @@ impl AddressBus {
                 self.ppu_catch_up();
                 self.ppu.write_byte(index, value);
 
-                if !self.ppu.disabled {
+                if !self.ppu.is_disabled() {
                     self.ppu
                         .update_stat_interrupt(&mut self.buffer[IF as usize]);
                 }
