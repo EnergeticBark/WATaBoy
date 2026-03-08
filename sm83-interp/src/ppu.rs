@@ -41,6 +41,7 @@ pub enum PpuMemAccess {
 
 #[derive(Debug, Copy, Clone)]
 enum PpuMode {
+    Disabled,
     JustEnabled,
     HBlank,
     VBlank,
@@ -73,7 +74,6 @@ pub struct Ppu {
     vram_access: PpuMemAccess,
     // Buffer of greyscale pixel values, i.e. what the PPU would output to the LCD.
     pub lcd_buffer: Vec<u8>,
-    pub disabled: bool,
     pub clock: usize,
     pub next_vblank_interrupt: usize,
     pub next_lcd_interrupt: usize,
@@ -105,6 +105,11 @@ impl Ppu {
 
         self.next_vblank_interrupt.min(self.next_lcd_interrupt)
         // TODO: actual prediction...
+    }
+
+    #[must_use]
+    pub fn is_disabled(&self) -> bool {
+        matches!(self.mode, PpuMode::Disabled)
     }
 
     fn drawing_window(&self) -> bool {
@@ -201,38 +206,34 @@ impl Ppu {
         }
     }
 
+    fn disable(&mut self) {
+        if !self.is_disabled() {
+            info!(target: "ppu_disabled", "Disabled on dot: {}", self.dot_counter);
+
+            // Reset the PPU state, preserving only some of its state.
+            *self = Ppu {
+                vram: self.vram,
+                oam: self.oam,
+                registers: self.registers,
+                stat_interrupt_line: self.stat_interrupt_line,
+                clock: self.clock,
+                next_vblank_interrupt: self.clock,
+                next_lcd_interrupt: self.next_lcd_interrupt,
+                ..Default::default()
+            };
+
+            self.registers.stat.set_mode(StatMode::HBlank);
+            self.update_ly_register();
+        }
+    }
+
     // Advance the PPU by 1 dot.
     #[allow(clippy::too_many_lines)]
     // Only panics if internal assertions fail, and they never should.
     #[allow(clippy::missing_panics_doc)]
     pub fn tick(&mut self, interrupt_flags: &mut u8) {
-        if !self.registers.lcdc.lcd_and_ppu_enabled() {
-            if !self.disabled {
-                info!(target: "ppu_disabled", "Disabled on dot: {}", self.dot_counter);
-
-                // Reset the PPU state, preserving only some of its state.
-                *self = Ppu {
-                    vram: self.vram,
-                    oam: self.oam,
-                    registers: self.registers,
-                    stat_interrupt_line: self.stat_interrupt_line,
-                    clock: self.clock,
-                    next_vblank_interrupt: self.clock,
-                    next_lcd_interrupt: self.next_lcd_interrupt,
-                    ..Default::default()
-                };
-
-                self.registers.stat.set_mode(StatMode::HBlank);
-                self.update_ly_register();
-            }
-            return;
-        }
-        if self.disabled {
-            self.disabled = false;
-            info!(target: "ppu_enabled", "Enabled");
-        }
-
         match self.mode {
+            PpuMode::Disabled => (),
             // Do evil initial line 0 shenanigans.
             // This timing matches GameRoy's PPU implementation.
             PpuMode::JustEnabled => {
@@ -561,7 +562,16 @@ impl Addressable for Ppu {
                 PpuMemAccess::Blocked => (),
                 _ => self.oam[(index - OAM_START) as usize] = value,
             },
-            LCDC => self.registers.lcdc = value.into(),
+            LCDC => {
+                self.registers.lcdc = value.into();
+                if self.registers.lcdc.lcd_and_ppu_enabled() {
+                    if self.is_disabled() {
+                        self.mode = PpuMode::JustEnabled;
+                    }
+                } else {
+                    self.disable();
+                }
+            }
             STAT => {
                 let stat = self.registers.stat.into_bits() & 0b1000_0111;
                 let masked_value = value & 0b0111_1000;
@@ -584,7 +594,7 @@ impl Default for Ppu {
     fn default() -> Self {
         Self {
             dot_counter: 0,
-            mode: PpuMode::JustEnabled,
+            mode: PpuMode::Disabled,
             dots_in_mode: 0,
             x: 0,
             pixels_to_drop: 0,
@@ -601,7 +611,6 @@ impl Default for Ppu {
             oam_access: PpuMemAccess::ReadWrite,
             vram_access: PpuMemAccess::ReadWrite,
             lcd_buffer: vec![0; SCREEN_SIZE],
-            disabled: true,
             clock: 0,
             next_vblank_interrupt: 0,
             next_lcd_interrupt: 0,
@@ -630,7 +639,6 @@ impl PostBoot for Ppu {
             oam_access: PpuMemAccess::ReadWrite,
             vram_access: PpuMemAccess::ReadWrite,
             lcd_buffer: vec![0; SCREEN_SIZE],
-            disabled: false,
             clock: 0,
             next_vblank_interrupt: 0,
             next_lcd_interrupt: 0,
