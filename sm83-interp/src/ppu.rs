@@ -49,6 +49,8 @@ enum PpuMode {
     JustEnabled5,
     JustEnabled6,
     HBlank,
+    HBlank2,
+    HBlank3,
     VBlank,
     OamScan,
     OamScan2,
@@ -322,30 +324,38 @@ impl Ppu {
                     assert!(self.x <= SCREEN_WIDTH);
                 }
                 PpuMode::HBlank => {
+                    self.clock += 3;
+                    self.dot_counter += 3;
+                    self.mode = PpuMode::HBlank2;
+                }
+                PpuMode::HBlank2 => {
                     // Observable 4 dots into HBlank, or 256 with the shortest mode 3.
-                    if self.dots_in_mode == 3 {
-                        self.oam_access = PpuMemAccess::ReadWrite;
-                        self.vram_access = PpuMemAccess::ReadWrite;
+                    self.oam_access = PpuMemAccess::ReadWrite;
+                    self.vram_access = PpuMemAccess::ReadWrite;
 
-                        self.update_stat_mode(StatMode::HBlank);
-                        self.stat_mode_for_interrupt = 0;
-                        self.update_stat_interrupt(interrupt_flags);
+                    self.update_stat_mode(StatMode::HBlank);
+                    self.stat_mode_for_interrupt = 0;
+                    self.update_stat_interrupt(interrupt_flags);
+
+                    let dots_remaining_in_scanline = DOTS_PER_SCANLINE - self.dots_this_line();
+
+                    self.clock += dots_remaining_in_scanline - 1;
+                    self.dot_counter += dots_remaining_in_scanline;
+                    self.mode = PpuMode::HBlank3;
+                }
+                PpuMode::HBlank3 => {
+                    if self.ly() == 144 {
+                        self.transition_vblank();
+                        self.update_ly_register();
+                        self.ly_to_compare_lyc = None;
+                    } else {
+                        // Update LCD Y coordinate.
+                        self.update_ly_register();
+                        self.transition_oam_scan();
                     }
 
+                    // TEMP: needed for mixed tick and catch up so we don't instantly go to OAM.
                     self.clock += 1;
-                    self.dot_counter += 1;
-                    self.dots_in_mode += 1;
-                    if self.dot_counter.is_multiple_of(DOTS_PER_SCANLINE) {
-                        if self.ly() == 144 {
-                            self.transition_vblank();
-                            self.update_ly_register();
-                            self.ly_to_compare_lyc = None;
-                        } else {
-                            // Update LCD Y coordinate.
-                            self.update_ly_register();
-                            self.transition_oam_scan();
-                        }
-                    }
                 }
                 PpuMode::VBlank => {
                     // TODO: Observable 2.
