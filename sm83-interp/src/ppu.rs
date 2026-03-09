@@ -51,6 +51,9 @@ enum PpuMode {
     HBlank,
     VBlank,
     OamScan,
+    OamScan2,
+    OamScan3,
+    OamScan4,
     Drawing,
 }
 
@@ -151,57 +154,62 @@ impl Ppu {
                     // TEMP: needed for mixed tick and catch up so we don't instantly go to OAM.
                     self.clock += 1;
                 }
+
                 PpuMode::OamScan => {
+                    self.clock += 2;
+                    self.dot_counter += 2;
+
+                    self.mode = PpuMode::OamScan2;
+                }
+                PpuMode::OamScan2 => {
+                    // Observable 3.
+                    self.oam_access = PpuMemAccess::WriteOnly;
+
                     // Mode 2 signals a mode interrupt 1-Tcycle *before* its bits change in STAT on line 1 onward.
                     // See: section 8.11.1 of TCAGBD.
                     // Also see cycles.txt based on SameBoy's timing.
-
-                    match self.dots_this_line() {
-                        // Observable 3.
-                        2 => {
-                            self.oam_access = PpuMemAccess::WriteOnly;
-
-                            if self.ly() == 0 {
-                                self.stat_mode_for_interrupt = 0xFF;
-                                self.ly_to_compare_lyc = Some(0);
-                            } else {
-                                self.stat_mode_for_interrupt = 2;
-                                self.ly_to_compare_lyc = None;
-                            }
-
-                            self.update_stat_mode(StatMode::HBlank);
-                            self.update_stat_interrupt(interrupt_flags);
-                        }
-
-                        // Observable 4.
-                        3 => {
-                            self.oam_access = PpuMemAccess::Blocked;
-
-                            self.update_stat_mode(StatMode::OamScan);
-
-                            self.ly_to_compare_lyc = Some(self.ly());
-
-                            self.stat_mode_for_interrupt = 2;
-                            self.update_stat_interrupt(interrupt_flags);
-
-                            self.stat_mode_for_interrupt = 0xFF;
-                            self.update_stat_interrupt(interrupt_flags);
-                        }
-
-                        // Observable 80.
-                        79 => {
-                            self.oam_access = PpuMemAccess::WriteOnly;
-                            self.vram_access = PpuMemAccess::WriteOnly;
-                        }
-                        _ => (),
+                    if self.ly() == 0 {
+                        self.stat_mode_for_interrupt = 0xFF;
+                        self.ly_to_compare_lyc = Some(0);
+                    } else {
+                        self.stat_mode_for_interrupt = 2;
+                        self.ly_to_compare_lyc = None;
                     }
+
+                    self.update_stat_mode(StatMode::HBlank);
+                    self.update_stat_interrupt(interrupt_flags);
 
                     self.clock += 1;
                     self.dot_counter += 1;
-                    self.dots_in_mode += 1;
-                    if self.dots_this_line() == OAM_SCAN_DOTS {
-                        self.transition_drawing();
-                    }
+                    self.mode = PpuMode::OamScan3;
+                }
+                PpuMode::OamScan3 => {
+                    // Observable 4.
+                    self.oam_access = PpuMemAccess::Blocked;
+
+                    self.update_stat_mode(StatMode::OamScan);
+
+                    self.ly_to_compare_lyc = Some(self.ly());
+
+                    self.stat_mode_for_interrupt = 2;
+                    self.update_stat_interrupt(interrupt_flags);
+
+                    self.stat_mode_for_interrupt = 0xFF;
+                    self.update_stat_interrupt(interrupt_flags);
+
+                    self.clock += 76;
+                    self.dot_counter += 76;
+                    self.mode = PpuMode::OamScan4;
+                }
+
+                PpuMode::OamScan4 => {
+                    // Observable 80.
+                    self.oam_access = PpuMemAccess::WriteOnly;
+                    self.vram_access = PpuMemAccess::WriteOnly;
+
+                    self.clock += 1;
+                    self.dot_counter += 1;
+                    self.transition_drawing();
                 }
                 PpuMode::Drawing => {
                     // Observable 84.
@@ -1188,5 +1196,52 @@ mod tests {
 
         let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
         assert_eq!(mode_3_dots, 182);
+    }
+
+    use std::fs::File;
+    use std::io::Write;
+
+    #[test]
+    fn lcd_on_vars() {
+        let mut ppu = Ppu::default();
+        ppu.write_byte(LCDC, 0x81); // Enable the LCD
+
+        let filename = "my_lcd_on_vars.csv";
+        let mut file = File::create(filename).unwrap();
+        writeln!(
+			&mut file,
+			"Dot, LY, LY for LYC, STAT Mode, OAM R Blocked, OAM W Blocked, VRAM R Blocked, VRAM W Blocked"
+		)
+		.unwrap();
+
+        // ONE FRAME
+        let mut previous_line_sans_dot = String::new();
+        for dot in 0..DOTS_PER_FRAME {
+            let output_line = format!(
+                "{dot}, {}, {}, {}, {}, {}, {}, {}",
+                ppu.read_byte(LY),
+                ppu.ly_to_compare_lyc.unwrap_or(0xFF),
+                ppu.read_byte(STAT) & 0b0000_0011,
+                matches!(
+                    ppu.oam_access,
+                    PpuMemAccess::Blocked | PpuMemAccess::WriteOnly
+                ),
+                matches!(ppu.oam_access, PpuMemAccess::Blocked),
+                matches!(
+                    ppu.vram_access,
+                    PpuMemAccess::Blocked | PpuMemAccess::WriteOnly
+                ),
+                matches!(ppu.vram_access, PpuMemAccess::Blocked),
+            );
+            if let Some((_, line_sans_dot)) = output_line.split_once(", ")
+                && line_sans_dot != previous_line_sans_dot
+            {
+                previous_line_sans_dot = line_sans_dot.into();
+                writeln!(&mut file, "{output_line}").unwrap();
+            }
+
+            let mut interrupt_flags = 0;
+            ppu.catch_up(dot + 1, &mut interrupt_flags);
+        }
     }
 }
