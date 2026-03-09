@@ -136,7 +136,9 @@ impl Cpu {
         }
 
         if self.halted {
+            #[cfg(feature = "cpu-logging")]
             info!(target: "cpu_halt", "Leaving HALT halt on dot: {}", self.memory.ppu.dots_this_line());
+
             self.halted = false;
         }
 
@@ -514,7 +516,9 @@ impl Cpu {
                 self.registers.pc += 1;
             }
             Opcode::Halt => {
+                #[cfg(feature = "cpu-logging")]
                 info!(target: "cpu_halt", "HALTING on PPU dot: {}", self.memory.ppu.dot_counter % 456);
+
                 self.registers.pc += 1;
                 self.halted = true;
             }
@@ -1049,8 +1053,12 @@ impl Cpu {
             Opcode::Ei => {
                 // TODO: For accuracy, wait until the next instruction to actually enable interrupts
                 // See: https://rgbds.gbdev.io/docs/v0.9.4/gbz80.7#EI
-                info!(target: "cpu_ei", "Enabling interrupts on dot: {}", self.memory.ppu.dots_this_line());
-                info!("FLAGS {:b}", self.memory.buffer[io_regs::IF as usize]);
+                #[cfg(feature = "cpu-logging")]
+                {
+                    info!(target: "cpu_ei", "Enabling interrupts on dot: {}", self.memory.ppu.dots_this_line());
+                    info!("FLAGS {:b}", self.memory.buffer[io_regs::IF as usize]);
+                }
+
                 self.ime = true;
                 self.registers.pc += 1;
             }

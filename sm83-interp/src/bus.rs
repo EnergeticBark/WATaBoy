@@ -49,7 +49,7 @@ impl AddressBus {
             | OBP1
             | WY
             | WX => {
-                self.ppu_catch_up();
+                self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.read_byte(index)
             }
 
@@ -68,7 +68,7 @@ impl AddressBus {
 
             // Delegate writes to VRAM and OAM to the PPU.
             VRAM_START..VRAM_END | OAM_START..OAM_END => {
-                self.ppu_catch_up();
+                self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.write_byte(index, value);
                 self.ppu_est_next_intr();
             }
@@ -118,7 +118,7 @@ impl AddressBus {
             LY => (),
             // Still needed until I can update interrupts without passing in all memory :(.
             STAT | LYC => {
-                self.ppu_catch_up();
+                self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.write_byte(index, value);
 
                 if !self.ppu.is_disabled() {
@@ -129,7 +129,7 @@ impl AddressBus {
                 self.ppu_est_next_intr();
             }
             LCDC | SCY | SCX | BGP | OBP0 | OBP1 | WY | WX => {
-                self.ppu_catch_up();
+                self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.write_byte(index, value);
                 self.ppu_est_next_intr();
             }
@@ -140,19 +140,11 @@ impl AddressBus {
                 self.buffer[index as usize] = value | 0b1111_1111;
             }
             IE => {
-                self.ppu_catch_up();
+                self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.buffer[index as usize] = value;
                 self.ppu_est_next_intr();
             }
             _ => self.buffer[index as usize] = value,
-        }
-    }
-
-    fn ppu_catch_up(&mut self) {
-        // Make the PPU catch up to the CPU!
-        for _ in self.ppu.clock..self.clock {
-            self.ppu.tick(&mut self.buffer[IF as usize]);
-            self.ppu.clock += 1;
         }
     }
 
@@ -165,7 +157,7 @@ impl AddressBus {
     pub fn half_increment_timers(&mut self) {
         self.clock += 2;
         if self.next_interrupt <= self.clock {
-            self.ppu_catch_up();
+            self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
             self.ppu_est_next_intr();
         }
 
@@ -192,7 +184,7 @@ impl AddressBus {
     pub fn increment_timers(&mut self, m_cycles: u16) {
         self.clock += m_cycles as usize * 4;
         if self.next_interrupt <= self.clock {
-            self.ppu_catch_up();
+            self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
             self.ppu_est_next_intr();
         }
 
