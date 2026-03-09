@@ -74,7 +74,7 @@ pub struct Ppu {
     vram_access: PpuMemAccess,
     // Buffer of greyscale pixel values, i.e. what the PPU would output to the LCD.
     pub lcd_buffer: Vec<u8>,
-    pub clock: usize,
+    clock: usize,
     pub next_vblank_interrupt: usize,
     pub next_lcd_interrupt: usize,
 }
@@ -88,6 +88,14 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
 }
 
 impl Ppu {
+    pub fn catch_up(&mut self, cpu_clock: usize, interrupt_flags: &mut u8) {
+        // Make the PPU catch up to the CPU!
+        for _ in self.clock..cpu_clock {
+            self.tick(interrupt_flags);
+            self.clock += 1;
+        }
+    }
+
     #[must_use]
     pub fn predict_next_interrupt(&mut self, cpu_clock: usize, ie: InterruptBits) -> usize {
         self.next_vblank_interrupt = if ie.vblank() {
@@ -241,36 +249,39 @@ impl Ppu {
             // Do evil initial line 0 shenanigans.
             // This timing matches GameRoy's PPU implementation.
             PpuMode::JustEnabled => {
-                // Observable 1.
-                if self.dot_counter == 0 {
-                    self.stat_mode_for_interrupt = 0xFF;
-                    self.update_stat_interrupt(interrupt_flags);
-                }
+                match self.dot_counter {
+                    // Observable 1.
+                    0 => {
+                        self.stat_mode_for_interrupt = 0xFF;
+                        self.update_stat_interrupt(interrupt_flags);
+                    }
 
-                // Observable 79.
-                if self.dot_counter == 78 {
-                    self.oam_access = PpuMemAccess::Blocked;
-                    self.vram_access = PpuMemAccess::Blocked;
+                    // Observable 79.
+                    78 => {
+                        self.oam_access = PpuMemAccess::Blocked;
+                        self.vram_access = PpuMemAccess::Blocked;
 
-                    self.update_stat_mode(StatMode::Drawing);
-                    self.stat_mode_for_interrupt = 3;
-                    self.update_stat_interrupt(interrupt_flags);
-                }
+                        self.update_stat_mode(StatMode::Drawing);
+                        self.stat_mode_for_interrupt = 3;
+                        self.update_stat_interrupt(interrupt_flags);
+                    }
 
-                // Observable 84.
-                if self.dot_counter == 83 {
-                    // Skip 5 extra cycles, 84 will be observed as 89.
-                    self.dot_counter += 5;
-                }
+                    // Observable 84.
+                    83 => {
+                        // Skip 5 extra cycles, 84 will be observed as 89.
+                        self.dot_counter += 5;
+                    }
 
-                // Observable 251.
-                if self.dot_counter == 255 {
-                    self.oam_access = PpuMemAccess::ReadWrite;
-                    self.vram_access = PpuMemAccess::ReadWrite;
+                    // Observable 251.
+                    255 => {
+                        self.oam_access = PpuMemAccess::ReadWrite;
+                        self.vram_access = PpuMemAccess::ReadWrite;
 
-                    self.update_stat_mode(StatMode::HBlank);
-                    // Skip 2 extra cycles.
-                    self.dot_counter += 2;
+                        self.update_stat_mode(StatMode::HBlank);
+                        // Skip 2 extra cycles.
+                        self.dot_counter += 2;
+                    }
+                    _ => (),
                 }
 
                 self.dot_counter += 1;
@@ -284,41 +295,44 @@ impl Ppu {
                 // See: section 8.11.1 of TCAGBD.
                 // Also see cycles.txt based on SameBoy's timing.
 
-                // Observable 3.
-                if self.dots_this_line() == 2 {
-                    self.oam_access = PpuMemAccess::WriteOnly;
+                match self.dots_this_line() {
+                    // Observable 3.
+                    2 => {
+                        self.oam_access = PpuMemAccess::WriteOnly;
 
-                    if self.ly() == 0 {
-                        self.stat_mode_for_interrupt = 0xFF;
-                        self.ly_to_compare_lyc = Some(0);
-                    } else {
-                        self.stat_mode_for_interrupt = 2;
-                        self.ly_to_compare_lyc = None;
+                        if self.ly() == 0 {
+                            self.stat_mode_for_interrupt = 0xFF;
+                            self.ly_to_compare_lyc = Some(0);
+                        } else {
+                            self.stat_mode_for_interrupt = 2;
+                            self.ly_to_compare_lyc = None;
+                        }
+
+                        self.update_stat_mode(StatMode::HBlank);
+                        self.update_stat_interrupt(interrupt_flags);
                     }
 
-                    self.update_stat_mode(StatMode::HBlank);
-                    self.update_stat_interrupt(interrupt_flags);
-                }
+                    // Observable 4.
+                    3 => {
+                        self.oam_access = PpuMemAccess::Blocked;
 
-                // Observable 4.
-                if self.dots_this_line() == 3 {
-                    self.oam_access = PpuMemAccess::Blocked;
+                        self.update_stat_mode(StatMode::OamScan);
 
-                    self.update_stat_mode(StatMode::OamScan);
+                        self.ly_to_compare_lyc = Some(self.ly());
 
-                    self.ly_to_compare_lyc = Some(self.ly());
+                        self.stat_mode_for_interrupt = 2;
+                        self.update_stat_interrupt(interrupt_flags);
 
-                    self.stat_mode_for_interrupt = 2;
-                    self.update_stat_interrupt(interrupt_flags);
+                        self.stat_mode_for_interrupt = 0xFF;
+                        self.update_stat_interrupt(interrupt_flags);
+                    }
 
-                    self.stat_mode_for_interrupt = 0xFF;
-                    self.update_stat_interrupt(interrupt_flags);
-                }
-
-                // Observable 80.
-                if self.dots_this_line() == 79 {
-                    self.oam_access = PpuMemAccess::WriteOnly;
-                    self.vram_access = PpuMemAccess::WriteOnly;
+                    // Observable 80.
+                    79 => {
+                        self.oam_access = PpuMemAccess::WriteOnly;
+                        self.vram_access = PpuMemAccess::WriteOnly;
+                    }
+                    _ => (),
                 }
 
                 self.dot_counter += 1;
