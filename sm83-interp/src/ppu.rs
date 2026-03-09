@@ -43,6 +43,11 @@ pub enum PpuMemAccess {
 enum PpuMode {
     Disabled,
     JustEnabled,
+    JustEnabled2,
+    JustEnabled3,
+    JustEnabled4,
+    JustEnabled5,
+    JustEnabled6,
     HBlank,
     VBlank,
     OamScan,
@@ -90,9 +95,300 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
 impl Ppu {
     pub fn catch_up(&mut self, cpu_clock: usize, interrupt_flags: &mut u8) {
         // Make the PPU catch up to the CPU!
-        for _ in self.clock..cpu_clock {
-            self.tick(interrupt_flags);
-            self.clock += 1;
+        while self.clock < cpu_clock {
+            match self.mode {
+                PpuMode::Disabled => self.clock = cpu_clock,
+                // Do evil initial line 0 shenanigans.
+                // This timing matches GameRoy's PPU implementation.
+                PpuMode::JustEnabled => {
+                    // Observable 1.
+                    self.stat_mode_for_interrupt = 0xFF;
+                    self.update_stat_interrupt(interrupt_flags);
+
+                    self.clock += 78;
+                    self.dot_counter += 78;
+                    self.mode = PpuMode::JustEnabled2;
+                }
+                PpuMode::JustEnabled2 => {
+                    // Observable 79.
+                    self.oam_access = PpuMemAccess::Blocked;
+                    self.vram_access = PpuMemAccess::Blocked;
+
+                    self.update_stat_mode(StatMode::Drawing);
+                    self.stat_mode_for_interrupt = 3;
+                    self.update_stat_interrupt(interrupt_flags);
+
+                    self.clock += 172;
+                    self.dot_counter += 172;
+                    self.mode = PpuMode::JustEnabled3;
+                }
+                PpuMode::JustEnabled3 => {
+                    // Observable 84.
+                    // Skip 5 extra cycles, 84 will be observed as 89.
+                    self.dot_counter += 5;
+                    self.mode = PpuMode::JustEnabled4;
+                }
+                PpuMode::JustEnabled4 => {
+                    // Observable 251.
+                    self.oam_access = PpuMemAccess::ReadWrite;
+                    self.vram_access = PpuMemAccess::ReadWrite;
+
+                    self.update_stat_mode(StatMode::HBlank);
+                    self.clock += 198;
+                    self.dot_counter += 198;
+                    self.mode = PpuMode::JustEnabled5;
+                }
+                PpuMode::JustEnabled5 => {
+                    // Skip 3 extra cycles.
+                    self.dot_counter += 3;
+                    self.mode = PpuMode::JustEnabled6;
+                }
+                PpuMode::JustEnabled6 => {
+                    println!("{}", self.dot_counter);
+                    println!("{}", self.ly());
+                    self.update_ly_register();
+                    self.transition_oam_scan();
+                    // TEMP: needed for mixed tick and catch up so we don't instantly go to OAM.
+                    self.clock += 1;
+                }
+                PpuMode::OamScan => {
+                    // Mode 2 signals a mode interrupt 1-Tcycle *before* its bits change in STAT on line 1 onward.
+                    // See: section 8.11.1 of TCAGBD.
+                    // Also see cycles.txt based on SameBoy's timing.
+
+                    match self.dots_this_line() {
+                        // Observable 3.
+                        2 => {
+                            self.oam_access = PpuMemAccess::WriteOnly;
+
+                            if self.ly() == 0 {
+                                self.stat_mode_for_interrupt = 0xFF;
+                                self.ly_to_compare_lyc = Some(0);
+                            } else {
+                                self.stat_mode_for_interrupt = 2;
+                                self.ly_to_compare_lyc = None;
+                            }
+
+                            self.update_stat_mode(StatMode::HBlank);
+                            self.update_stat_interrupt(interrupt_flags);
+                        }
+
+                        // Observable 4.
+                        3 => {
+                            self.oam_access = PpuMemAccess::Blocked;
+
+                            self.update_stat_mode(StatMode::OamScan);
+
+                            self.ly_to_compare_lyc = Some(self.ly());
+
+                            self.stat_mode_for_interrupt = 2;
+                            self.update_stat_interrupt(interrupt_flags);
+
+                            self.stat_mode_for_interrupt = 0xFF;
+                            self.update_stat_interrupt(interrupt_flags);
+                        }
+
+                        // Observable 80.
+                        79 => {
+                            self.oam_access = PpuMemAccess::WriteOnly;
+                            self.vram_access = PpuMemAccess::WriteOnly;
+                        }
+                        _ => (),
+                    }
+
+                    self.clock += 1;
+                    self.dot_counter += 1;
+                    self.dots_in_mode += 1;
+                    if self.dots_this_line() == OAM_SCAN_DOTS {
+                        self.transition_drawing();
+                    }
+                }
+                PpuMode::Drawing => {
+                    // Observable 84.
+                    if self.dots_this_line() == 83 {
+                        self.oam_access = PpuMemAccess::Blocked;
+                        self.vram_access = PpuMemAccess::Blocked;
+
+                        self.update_stat_mode(StatMode::Drawing);
+
+                        self.stat_mode_for_interrupt = 3;
+                        self.update_stat_interrupt(interrupt_flags);
+                    }
+
+                    if let Some(obj) = self.pop_next_obj() {
+                        self.obj_fetcher.push_obj(obj);
+                    }
+
+                    if self.obj_fetcher.idle_and_empty()
+                        || self.bg_fetcher.bg_fifo.is_empty()
+                        || !matches!(
+                            self.bg_fetcher.state,
+                            FetcherState::BeforeGetTileDataHigh
+                                | FetcherState::GetTileDataHigh
+                                | FetcherState::Push
+                        )
+                    {
+                        self.bg_fetcher.tick(
+                            &self.vram,
+                            self.registers.lcdc,
+                            self.registers.scx,
+                            self.registers.scy,
+                            self.ly(),
+                            self.window_y,
+                        );
+                    } else {
+                        self.obj_fetcher
+                            .tick(&self.vram, self.registers.lcdc, self.ly());
+                    }
+
+                    if self.obj_fetcher.idle_and_empty() {
+                        // Combine FIFOs.
+                        if let Some(bg_pixel) = self.bg_fetcher.shift_out() {
+                            let obj_pixel = self.obj_fetcher.shift_out().unwrap_or(TRANSPARENT);
+
+                            if self.pixels_to_drop > 0 {
+                                self.pixels_to_drop -= 1;
+                            } else {
+                                // If the background/window is disabled, use a pixel with a value of 0.
+                                // See: https://gbdev.io/pandocs/pixel_fifo.html#pixel-rendering
+                                let mut pixel_to_render =
+                                    if self.registers.lcdc.bg_and_window_enabled() {
+                                        bg_pixel
+                                    } else {
+                                        Pixel {
+                                            low: false,
+                                            high: false,
+                                            palette: PaletteSelect::Bgp,
+                                            priority: false,
+                                        }
+                                    };
+
+                                if self.registers.lcdc.obj_enabled() {
+                                    pixel_to_render = mix_pixels(pixel_to_render, obj_pixel);
+                                }
+
+                                let mut funny_greyscale = 0;
+                                if pixel_to_render.low {
+                                    funny_greyscale |= 0b0000_0001;
+                                }
+                                if pixel_to_render.high {
+                                    funny_greyscale |= 0b0000_0010;
+                                }
+
+                                let lcd_row = self.ly() as usize * SCREEN_WIDTH as usize;
+                                let lcd_pixel_index = lcd_row + self.x as usize;
+                                let palette = match pixel_to_render.palette {
+                                    PaletteSelect::Bgp => self.registers.bgp,
+                                    PaletteSelect::Obp0 => self.registers.obp0,
+                                    PaletteSelect::Obp1 => self.registers.obp1,
+                                };
+                                let color = palette::map_to_palette(palette, funny_greyscale);
+
+                                // Get the colors in their correct greyscale values.
+                                self.lcd_buffer[lcd_pixel_index] = 255 - color.into_bits() * 64;
+
+                                self.x += 1;
+                            }
+                        }
+                    }
+
+                    if self.drawing_window() && !self.bg_fetcher.drawing_window {
+                        #[cfg(feature = "ppu-logging")]
+                        trace!(target: "ppu_window", "Started drawing window at X {}", self.x);
+                        self.window_y = self.window_y.wrapping_add(1);
+                        self.bg_fetcher = BackgroundFetcher::default();
+                        self.bg_fetcher.warmup = false;
+                        self.bg_fetcher.drawing_window = true;
+                        // Prevent the window from being scrolled by the background scroll (SCX).
+                        // https://github.com/Ashiepaws/GBEDG/blob/master/ppu/index.md#scx-at-a-sub-tile-layer
+                        self.pixels_to_drop = 0;
+                    }
+
+                    self.clock += 1;
+                    self.dot_counter += 1;
+                    self.dots_in_mode += 1;
+                    // If we've finished drawing this line, then transition to the HBlank state.
+                    if self.x == SCREEN_WIDTH {
+                        self.transition_hblank();
+                    }
+                    assert!(self.x <= SCREEN_WIDTH);
+                }
+                PpuMode::HBlank => {
+                    // Observable 4 dots into HBlank, or 256 with the shortest mode 3.
+                    if self.dots_in_mode == 3 {
+                        self.oam_access = PpuMemAccess::ReadWrite;
+                        self.vram_access = PpuMemAccess::ReadWrite;
+
+                        self.update_stat_mode(StatMode::HBlank);
+                        self.stat_mode_for_interrupt = 0;
+                        self.update_stat_interrupt(interrupt_flags);
+                    }
+
+                    self.clock += 1;
+                    self.dot_counter += 1;
+                    self.dots_in_mode += 1;
+                    if self.dot_counter.is_multiple_of(DOTS_PER_SCANLINE) {
+                        if self.ly() == 144 {
+                            self.transition_vblank();
+                            self.update_ly_register();
+                            self.ly_to_compare_lyc = None;
+                        } else {
+                            // Update LCD Y coordinate.
+                            self.update_ly_register();
+                            self.transition_oam_scan();
+                        }
+                    }
+                }
+                PpuMode::VBlank => {
+                    // TODO: Observable 2.
+
+                    // Last line
+                    if self.ly() == 153 {
+                        // Observable 6.
+                        if self.dots_this_line() == 5 {
+                            // Force LY I/O register to 0 early.
+                            self.registers.ly = 0;
+                            self.ly_to_compare_lyc = Some(153);
+                            self.update_stat_interrupt(interrupt_flags);
+                        }
+
+                        // Observable 12.
+                        if self.dots_this_line() == 11 {
+                            self.ly_to_compare_lyc = Some(0);
+                            self.update_stat_interrupt(interrupt_flags);
+                        }
+                    } else {
+                        // Observable 4.
+                        if self.dots_this_line() == 3 {
+                            self.ly_to_compare_lyc = Some(self.ly());
+                            if self.ly() == 144 {
+                                self.update_stat_mode(StatMode::VBlank);
+                                // Request the VBlank interrupt.
+                                *interrupt_flags |= 0b0000_0001;
+
+                                // A VBlank also triggers as an OAM Scan... for some reason?
+                                // See: https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
+                                self.stat_mode_for_interrupt = 2;
+                                self.update_stat_interrupt(interrupt_flags);
+                                self.stat_mode_for_interrupt = 1;
+                            }
+                            self.update_stat_interrupt(interrupt_flags);
+                        }
+                    }
+
+                    self.clock += 1;
+                    self.dot_counter += 1;
+                    if self.dot_counter == DOTS_PER_FRAME {
+                        self.dot_counter = 0;
+                        self.window_y = 255;
+                        self.transition_oam_scan();
+                    }
+                    if self.dots_this_line() == 0 {
+                        // Update LCD Y coordinate.
+                        self.update_ly_register();
+                    }
+                }
+            }
         }
     }
 
@@ -523,6 +819,7 @@ impl Ppu {
                     self.update_ly_register();
                 }
             }
+            _ => (),
         }
 
         #[cfg(feature = "ppu-logging")]
