@@ -69,7 +69,7 @@ impl AddressBus {
             // Delegate writes to VRAM and OAM to the PPU.
             VRAM_START..VRAM_END | OAM_START..OAM_END => {
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
-                self.ppu.write_byte(index, value);
+                self.ppu.write_byte(index, value, self.clock);
                 self.ppu_est_next_intr();
             }
 
@@ -119,7 +119,7 @@ impl AddressBus {
             // Still needed until I can update interrupts without passing in all memory :(.
             STAT | LYC => {
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
-                self.ppu.write_byte(index, value);
+                self.ppu.write_byte(index, value, self.clock);
 
                 if !self.ppu.is_disabled() {
                     self.ppu
@@ -130,7 +130,7 @@ impl AddressBus {
             }
             LCDC | SCY | SCX | BGP | OBP0 | OBP1 | WY | WX => {
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
-                self.ppu.write_byte(index, value);
+                self.ppu.write_byte(index, value, self.clock);
                 self.ppu_est_next_intr();
             }
 
