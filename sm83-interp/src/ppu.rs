@@ -906,7 +906,7 @@ impl Addressable for Ppu {
         }
     }
 
-    fn write_byte(&mut self, index: u16, value: u8) {
+    fn write_byte(&mut self, index: u16, value: u8, cpu_clock: usize) {
         match index {
             // Ignore writes to VRAM when access is blocked.
             VRAM_START..VRAM_END => match self.vram_access {
@@ -923,6 +923,9 @@ impl Addressable for Ppu {
                 if self.registers.lcdc.lcd_and_ppu_enabled() {
                     if self.is_disabled() {
                         self.mode = PpuMode::JustEnabled;
+                        // The PPU may have had a pending state change later than the current CPU clock.
+                        // Bring the PPU clock back to the CPU's clock.
+                        self.clock = cpu_clock;
                     }
                 } else {
                     self.disable();
