@@ -243,6 +243,7 @@ impl PostBoot for AddressBus {
             timers: Timers::post_boot_dmg(),
             ppu: Ppu::post_boot_dmg(),
             // TODO: Might be worth running the boot rom to calculate clock and next_interrupt...
+            clock: 391, // Needed for the PPU to catch up.
             ..Default::default()
         }
     }

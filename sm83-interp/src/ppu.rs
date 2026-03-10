@@ -155,8 +155,6 @@ impl Ppu {
                     self.mode = PpuMode::JustEnabled6;
                 }
                 PpuMode::JustEnabled6 => {
-                    println!("{}", self.dot_counter);
-                    println!("{}", self.ly());
                     self.update_ly_register();
                     self.transition_oam_scan();
                     // TEMP: needed for mixed tick and catch up so we don't instantly go to OAM.
@@ -980,7 +978,7 @@ impl PostBoot for Ppu {
     fn post_boot_dmg() -> Self {
         Self {
             dot_counter: DOTS_PER_FRAME - 54,
-            mode: PpuMode::VBlank,
+            mode: PpuMode::LastLine3,
             dots_in_mode: 0,
             x: 0,
             pixels_to_drop: 0,
@@ -1248,9 +1246,9 @@ mod tests {
 		)
 		.unwrap();
 
-        // ONE FRAME
+        // TWO FRAMES
         let mut previous_line_sans_dot = String::new();
-        for dot in 0..DOTS_PER_FRAME {
+        for dot in 0..DOTS_PER_FRAME * 2 {
             let output_line = format!(
                 "{dot}, {}, {}, {}, {}, {}, {}, {}",
                 ppu.read_byte(LY),
@@ -1276,6 +1274,52 @@ mod tests {
 
             let mut interrupt_flags = 0;
             ppu.catch_up(dot + 1, &mut interrupt_flags);
+        }
+    }
+
+    #[test]
+    fn vars() {
+        let mut ppu = Ppu::post_boot_dmg();
+
+        let filename = "my_vars.csv";
+        let mut file = File::create(filename).unwrap();
+        writeln!(
+			&mut file,
+			"Dot, LY, LY for LYC, STAT Mode, OAM R Blocked, OAM W Blocked, VRAM R Blocked, VRAM W Blocked"
+		)
+		.unwrap();
+
+        let initial_clock = DOTS_PER_SCANLINE - 65;
+        ppu.mode = PpuMode::LastLine3;
+
+        // TWO FRAMES
+        let mut previous_line_sans_dot = String::new();
+        for dot in 0..DOTS_PER_FRAME * 2 {
+            let output_line = format!(
+                "{dot}, {}, {}, {}, {}, {}, {}, {}",
+                ppu.read_byte(LY),
+                ppu.ly_to_compare_lyc.unwrap_or(0xFF),
+                ppu.read_byte(STAT) & 0b0000_0011,
+                matches!(
+                    ppu.oam_access,
+                    PpuMemAccess::Blocked | PpuMemAccess::WriteOnly
+                ),
+                matches!(ppu.oam_access, PpuMemAccess::Blocked),
+                matches!(
+                    ppu.vram_access,
+                    PpuMemAccess::Blocked | PpuMemAccess::WriteOnly
+                ),
+                matches!(ppu.vram_access, PpuMemAccess::Blocked),
+            );
+            if let Some((_, line_sans_dot)) = output_line.split_once(", ")
+                && line_sans_dot != previous_line_sans_dot
+            {
+                previous_line_sans_dot = line_sans_dot.into();
+                writeln!(&mut file, "{output_line}").unwrap();
+            }
+
+            let mut interrupt_flags = 0;
+            ppu.catch_up(initial_clock + dot + 1, &mut interrupt_flags);
         }
     }
 }
