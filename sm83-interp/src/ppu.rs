@@ -52,6 +52,12 @@ enum PpuMode {
     HBlank2,
     HBlank3,
     VBlank,
+    VBlank2,
+    VBlank3,
+    LastLine,
+    LastLine2,
+    LastLine3,
+    LastLine4,
     OamScan,
     OamScan2,
     OamScan3,
@@ -84,7 +90,7 @@ pub struct Ppu {
     vram_access: PpuMemAccess,
     // Buffer of greyscale pixel values, i.e. what the PPU would output to the LCD.
     pub lcd_buffer: Vec<u8>,
-    clock: usize,
+    pub clock: usize,
     pub next_vblank_interrupt: usize,
     pub next_lcd_interrupt: usize,
 }
@@ -358,53 +364,71 @@ impl Ppu {
                     self.clock += 1;
                 }
                 PpuMode::VBlank => {
-                    // TODO: Observable 2.
+                    self.clock += 3;
+                    self.dot_counter += 3;
+                    self.mode = PpuMode::VBlank2;
+                }
+                // TODO: Observable 2.
+                PpuMode::VBlank2 => {
+                    // Observable 4.
+                    self.ly_to_compare_lyc = Some(self.ly());
+                    if self.ly() == 144 {
+                        self.update_stat_mode(StatMode::VBlank);
+                        // Request the VBlank interrupt.
+                        *interrupt_flags |= 0b0000_0001;
 
-                    // Last line
-                    if self.ly() == 153 {
-                        // Observable 6.
-                        if self.dots_this_line() == 5 {
-                            // Force LY I/O register to 0 early.
-                            self.registers.ly = 0;
-                            self.ly_to_compare_lyc = Some(153);
-                            self.update_stat_interrupt(interrupt_flags);
-                        }
-
-                        // Observable 12.
-                        if self.dots_this_line() == 11 {
-                            self.ly_to_compare_lyc = Some(0);
-                            self.update_stat_interrupt(interrupt_flags);
-                        }
-                    } else {
-                        // Observable 4.
-                        if self.dots_this_line() == 3 {
-                            self.ly_to_compare_lyc = Some(self.ly());
-                            if self.ly() == 144 {
-                                self.update_stat_mode(StatMode::VBlank);
-                                // Request the VBlank interrupt.
-                                *interrupt_flags |= 0b0000_0001;
-
-                                // A VBlank also triggers as an OAM Scan... for some reason?
-                                // See: https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
-                                self.stat_mode_for_interrupt = 2;
-                                self.update_stat_interrupt(interrupt_flags);
-                                self.stat_mode_for_interrupt = 1;
-                            }
-                            self.update_stat_interrupt(interrupt_flags);
-                        }
+                        // A VBlank also triggers as an OAM Scan... for some reason?
+                        // See: https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
+                        self.stat_mode_for_interrupt = 2;
+                        self.update_stat_interrupt(interrupt_flags);
+                        self.stat_mode_for_interrupt = 1;
                     }
+                    self.update_stat_interrupt(interrupt_flags);
 
+                    self.clock += 452;
+                    self.dot_counter += 452;
+                    self.mode = PpuMode::VBlank3;
+                }
+                PpuMode::VBlank3 => {
                     self.clock += 1;
                     self.dot_counter += 1;
-                    if self.dot_counter == DOTS_PER_FRAME {
-                        self.dot_counter = 0;
-                        self.window_y = 255;
-                        self.transition_oam_scan();
+                    if self.ly() == 153 {
+                        self.mode = PpuMode::LastLine;
+                    } else {
+                        self.mode = PpuMode::VBlank;
                     }
-                    if self.dots_this_line() == 0 {
-                        // Update LCD Y coordinate.
-                        self.update_ly_register();
-                    }
+                    // Update LCD Y coordinate.
+                    self.update_ly_register();
+                }
+                PpuMode::LastLine => {
+                    self.clock += 5;
+                    self.dot_counter += 5;
+                    self.mode = PpuMode::LastLine2;
+                }
+                PpuMode::LastLine2 => {
+                    // Observable 6.
+                    // Force LY I/O register to 0 early.
+                    self.registers.ly = 0;
+                    self.ly_to_compare_lyc = Some(153);
+                    self.update_stat_interrupt(interrupt_flags);
+
+                    self.clock += 6;
+                    self.dot_counter += 6;
+                    self.mode = PpuMode::LastLine3;
+                }
+                PpuMode::LastLine3 => {
+                    // Observable 12.
+                    self.ly_to_compare_lyc = Some(0);
+                    self.update_stat_interrupt(interrupt_flags);
+
+                    self.clock += 445;
+                    self.dot_counter += 445;
+                    self.mode = PpuMode::LastLine4;
+                }
+                PpuMode::LastLine4 => {
+                    self.dot_counter = 0;
+                    self.window_y = 255;
+                    self.transition_oam_scan();
                 }
             }
         }
