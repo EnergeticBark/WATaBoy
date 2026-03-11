@@ -219,7 +219,7 @@ impl Ppu {
                 }
                 PpuMode::Drawing => {
                     // Observable 84.
-                    if self.dots_this_line() == 83 {
+                    if self.dots_in_mode == 3 {
                         self.oam_access = PpuMemAccess::Blocked;
                         self.vram_access = PpuMemAccess::Blocked;
 
@@ -1239,7 +1239,7 @@ mod tests {
     #[test]
     fn lcd_on_vars() {
         let mut ppu = Ppu::default();
-        ppu.write_byte(LCDC, 0x81); // Enable the LCD
+        ppu.write_byte(LCDC, 0x81, 0); // Enable the LCD
 
         let filename = "my_lcd_on_vars.csv";
         let mut file = File::create(filename).unwrap();
