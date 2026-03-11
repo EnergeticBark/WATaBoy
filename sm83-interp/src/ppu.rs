@@ -63,6 +63,7 @@ enum PpuMode {
     OamScan3,
     OamScan4,
     Drawing,
+    DrawingCoarse,
 }
 
 pub struct Ppu {
@@ -104,6 +105,67 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
 }
 
 impl Ppu {
+    // TODO: Implement drawing the window and sprites.
+    // TODO: Fix jerky background scrolling.
+    fn coarse_scanline(&mut self) {
+        let ly = self.line_number.wrapping_add(self.registers.scy);
+
+        let line_start = self.line_number as usize * SCREEN_WIDTH as usize;
+        let line_end = line_start + SCREEN_WIDTH as usize;
+        let scanline = &mut self.lcd_buffer[line_start..line_end];
+
+        let mut tile_x = 0;
+
+        let tile_y_idx = ly / 8;
+
+        while tile_x * 8 < 160 {
+            let tile_map = if self.registers.lcdc.bg_tile_map() {
+                tiles::tile_map_1(&self.vram)
+            } else {
+                tiles::tile_map_0(&self.vram)
+            };
+
+            let tile_x_idx = ((self.registers.scx / 8) + tile_x) & 0x1F;
+
+            let tile_id = tile_map[tile_y_idx as usize * 32 + tile_x_idx as usize];
+            let tile_line = ly % 8;
+
+            let tile_data = if self.registers.lcdc.bg_and_window_tiles() {
+                tiles::unsigned_nth_tile(&self.vram, tile_id as usize)
+            } else {
+                tiles::signed_nth_tile(&self.vram, tile_id.cast_signed() as isize)
+            };
+
+            let tile_data_low = tile_data[tile_line as usize * 2];
+            let tile_data_high = tile_data[tile_line as usize * 2 + 1];
+
+            // Push
+            for nth_bit in 0..8 {
+                let pixel = Pixel {
+                    low: (tile_data_low >> nth_bit) & 1 == 1,
+                    high: (tile_data_high >> nth_bit) & 1 == 1,
+                    palette: PaletteSelect::Bgp,
+                    priority: false,
+                };
+
+                let mut funny_greyscale = 0;
+                if pixel.low {
+                    funny_greyscale |= 0b0000_0001;
+                }
+                if pixel.high {
+                    funny_greyscale |= 0b0000_0010;
+                }
+
+                let color = palette::map_to_palette(self.registers.bgp, funny_greyscale);
+
+                // Get the colors in their correct greyscale values.
+                scanline[tile_x as usize * 8 + (7 - nth_bit)] = 255 - color.into_bits() * 64;
+            }
+
+            tile_x += 1;
+        }
+    }
+
     pub fn catch_up(&mut self, cpu_clock: usize, interrupt_flags: &mut u8) {
         // Make the PPU catch up to the CPU!
         while self.clock < cpu_clock {
@@ -217,6 +279,12 @@ impl Ppu {
                     self.clock += 1;
                     self.dots_this_line += 1;
                     self.transition_drawing();
+
+                    // Using DOTS_PER_SCANLINE is wayyy too conservative, but it's a start.
+                    if cpu_clock > self.clock && cpu_clock - self.clock > DOTS_PER_SCANLINE as usize
+                    {
+                        self.mode = PpuMode::DrawingCoarse;
+                    }
                 }
                 PpuMode::Drawing => {
                     // Observable 84.
@@ -327,6 +395,23 @@ impl Ppu {
                     }
                     assert!(self.x <= SCREEN_WIDTH);
                 }
+                PpuMode::DrawingCoarse => {
+                    self.oam_access = PpuMemAccess::Blocked;
+                    self.vram_access = PpuMemAccess::Blocked;
+
+                    self.update_stat_mode(StatMode::Drawing);
+
+                    self.stat_mode_for_interrupt = 3;
+                    self.update_stat_interrupt(interrupt_flags);
+
+                    self.coarse_scanline();
+                    // TODO: Actually compute this line length beforehand and use it to determine whether we can enter "DrawingCoarse" to begin with.
+                    // Right now it's hard coded, which is very wrong.
+                    self.clock += 172;
+                    self.dots_this_line += 172;
+                    self.transition_hblank();
+                }
+
                 PpuMode::HBlank => {
                     self.clock += 3;
                     self.dots_this_line += 3;
