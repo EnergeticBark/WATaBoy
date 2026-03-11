@@ -118,7 +118,7 @@ impl Ppu {
 
         let tile_y_idx = ly / 8;
 
-        while tile_x * 8 < 160 {
+        while tile_x * 8 < 168 {
             let tile_map = if self.registers.lcdc.bg_tile_map() {
                 tiles::tile_map_1(&self.vram)
             } else {
@@ -158,8 +158,13 @@ impl Ppu {
 
                 let color = palette::map_to_palette(self.registers.bgp, funny_greyscale);
 
-                // Get the colors in their correct greyscale values.
-                scanline[tile_x as usize * 8 + (7 - nth_bit)] = 255 - color.into_bits() * 64;
+                let scrolled_left = self.registers.scx & 7;
+                let pixel_index =
+                    (tile_x as usize * 8 + (7 - nth_bit)).saturating_sub(scrolled_left as usize);
+                if pixel_index < SCREEN_WIDTH as usize {
+                    // Get the colors in their correct greyscale values.
+                    scanline[pixel_index] = 255 - color.into_bits() * 64;
+                }
             }
 
             tile_x += 1;
