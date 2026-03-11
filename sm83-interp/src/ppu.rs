@@ -168,9 +168,70 @@ impl Ppu {
 
             tile_x += 1;
         }
+
+        if self.registers.lcdc.window_enabled() && self.line_number >= self.registers.wy {
+            self.window_y = self.window_y.wrapping_add(1);
+
+            let ly = self.window_y;
+
+            let tile_y_idx = ly / 8;
+            let tile_line = ly & 7;
+
+            let window_tile_map = if self.registers.lcdc.window_tile_map() {
+                tiles::tile_map_1(&self.vram)
+            } else {
+                tiles::tile_map_0(&self.vram)
+            };
+
+            tile_x = 0;
+            while tile_x * 8 < 168 {
+                let tile_x_idx = tile_x;
+                let tile_id = window_tile_map[tile_y_idx as usize * 32 + tile_x_idx as usize];
+
+                let tile_data = if self.registers.lcdc.bg_and_window_tiles() {
+                    tiles::unsigned_nth_tile(&self.vram, tile_id as usize)
+                } else {
+                    tiles::signed_nth_tile(&self.vram, tile_id.cast_signed() as isize)
+                };
+
+                let tile_data_low = tile_data[tile_line as usize * 2];
+                let tile_data_high = tile_data[tile_line as usize * 2 + 1];
+
+                // Push
+                for nth_bit in 0..8 {
+                    let pixel = Pixel {
+                        low: (tile_data_low >> nth_bit) & 1 == 1,
+                        high: (tile_data_high >> nth_bit) & 1 == 1,
+                        palette: PaletteSelect::Bgp,
+                        priority: false,
+                    };
+
+                    let mut funny_greyscale = 0;
+                    if pixel.low {
+                        funny_greyscale |= 0b0000_0001;
+                    }
+                    if pixel.high {
+                        funny_greyscale |= 0b0000_0010;
+                    }
+
+                    let color = palette::map_to_palette(self.registers.bgp, funny_greyscale);
+
+                    let pixel_index = (self.registers.wx as usize
+                        + (tile_x as usize * 8 + (7 - nth_bit)))
+                        .saturating_sub(7);
+                    if pixel_index < SCREEN_WIDTH as usize {
+                        // Get the colours in their correct greyscale values.
+                        scanline[pixel_index] = 255 - color.into_bits() * 64;
+                    }
+                }
+
+                tile_x += 1;
+            }
+        }
     }
 
     pub fn catch_up(&mut self, cpu_clock: usize, interrupt_flags: &mut u8) {
+        assert!(cpu_clock <= u32::MAX as usize);
         // Make the PPU catch up to the CPU!
         while self.clock < cpu_clock {
             match self.mode {
