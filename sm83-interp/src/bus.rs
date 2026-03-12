@@ -23,8 +23,8 @@ pub struct AddressBus {
     half_ticked: bool,
     #[rkyv(with = Skip)]
     pub buttons_held: ButtonsHeld,
-    pub clock: usize,
-    pub next_interrupt: usize,
+    pub clock: u64,
+    pub next_interrupt: u64,
 }
 
 impl AddressBus {
@@ -182,7 +182,7 @@ impl AddressBus {
     }
 
     pub fn increment_timers(&mut self, m_cycles: u16) {
-        self.clock += m_cycles as usize * 4;
+        self.clock += u64::from(m_cycles) * 4;
         if self.next_interrupt <= self.clock {
             self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
             self.ppu_est_next_intr();

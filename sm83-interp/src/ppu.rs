@@ -91,9 +91,9 @@ pub struct Ppu {
     vram_access: PpuMemAccess,
     // Buffer of greyscale pixel values, i.e. what the PPU would output to the LCD.
     pub lcd_buffer: Vec<u8>,
-    pub clock: usize,
-    pub next_vblank_interrupt: usize,
-    pub next_lcd_interrupt: usize,
+    pub clock: u64,
+    pub next_vblank_interrupt: u64,
+    pub next_lcd_interrupt: u64,
 }
 
 fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
@@ -105,8 +105,7 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
 }
 
 impl Ppu {
-    // TODO: Implement drawing the window and sprites.
-    // TODO: Fix jerky background scrolling.
+    // TODO: Implement drawing sprites.
     fn coarse_scanline(&mut self) {
         let ly = self.line_number.wrapping_add(self.registers.scy);
 
@@ -230,8 +229,7 @@ impl Ppu {
         }
     }
 
-    pub fn catch_up(&mut self, cpu_clock: usize, interrupt_flags: &mut u8) {
-        assert!(cpu_clock <= u32::MAX as usize);
+    pub fn catch_up(&mut self, cpu_clock: u64, interrupt_flags: &mut u8) {
         // Make the PPU catch up to the CPU!
         while self.clock < cpu_clock {
             match self.mode {
@@ -346,7 +344,8 @@ impl Ppu {
                     self.transition_drawing();
 
                     // Using DOTS_PER_SCANLINE is wayyy too conservative, but it's a start.
-                    if cpu_clock > self.clock && cpu_clock - self.clock > DOTS_PER_SCANLINE as usize
+                    if cpu_clock > self.clock
+                        && cpu_clock - self.clock > u64::from(DOTS_PER_SCANLINE)
                     {
                         self.mode = PpuMode::DrawingCoarse;
                     }
@@ -493,7 +492,7 @@ impl Ppu {
 
                     let dots_remaining_in_scanline = DOTS_PER_SCANLINE - self.dots_this_line;
 
-                    self.clock += dots_remaining_in_scanline as usize - 1;
+                    self.clock += u64::from(dots_remaining_in_scanline) - 1;
                     self.dots_this_line = 0;
                     self.line_number += 1;
                     self.mode = PpuMode::HBlank3;
@@ -586,7 +585,7 @@ impl Ppu {
     }
 
     #[must_use]
-    pub fn predict_next_interrupt(&mut self, cpu_clock: usize, ie: InterruptBits) -> usize {
+    pub fn predict_next_interrupt(&mut self, cpu_clock: u64, ie: InterruptBits) -> u64 {
         self.next_vblank_interrupt = if ie.vblank() {
             // VBlank always happens on this dot.
             let vblank_dot = (DOTS_PER_SCANLINE as isize * 144) + 4;
@@ -596,11 +595,11 @@ impl Ppu {
             if dots_from_vblank.is_negative() {
                 dots_from_vblank = DOTS_PER_FRAME as isize + dots_from_vblank;
             }
-            cpu_clock + dots_from_vblank as usize
+            cpu_clock + dots_from_vblank as u64
         } else {
-            usize::MAX
+            u64::MAX
         };
-        self.next_lcd_interrupt = if ie.lcd() { cpu_clock } else { usize::MAX };
+        self.next_lcd_interrupt = if ie.lcd() { cpu_clock } else { u64::MAX };
 
         self.next_vblank_interrupt.min(self.next_lcd_interrupt)
         // TODO: actual prediction...
@@ -742,7 +741,7 @@ impl Addressable for Ppu {
         }
     }
 
-    fn write_byte(&mut self, index: u16, value: u8, cpu_clock: usize) {
+    fn write_byte(&mut self, index: u16, value: u8, cpu_clock: u64) {
         match index {
             // Ignore writes to VRAM when access is blocked.
             VRAM_START..VRAM_END => match self.vram_access {
@@ -1087,7 +1086,7 @@ mod tests {
 
         // TWO FRAMES
         let mut previous_line_sans_dot = String::new();
-        for dot in 0..DOTS_PER_FRAME as usize * 2 {
+        for dot in 0..u64::from(DOTS_PER_FRAME) * 2 {
             let output_line = format!(
                 "{dot}, {}, {}, {}, {}, {}, {}, {}",
                 ppu.read_byte(LY),
@@ -1128,12 +1127,12 @@ mod tests {
 		)
 		.unwrap();
 
-        let initial_clock = DOTS_PER_SCANLINE as usize - 65;
+        let initial_clock = u64::from(DOTS_PER_SCANLINE) - 65;
         ppu.mode = PpuMode::LastLine3;
 
         // TWO FRAMES
         let mut previous_line_sans_dot = String::new();
-        for dot in 0..DOTS_PER_FRAME as usize * 2 {
+        for dot in 0..u64::from(DOTS_PER_FRAME) * 2 {
             let output_line = format!(
                 "{dot}, {}, {}, {}, {}, {}, {}, {}",
                 ppu.read_byte(LY),
