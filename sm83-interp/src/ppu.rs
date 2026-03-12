@@ -30,7 +30,7 @@ const SCANLINES_PER_FRAME: u32 = 154;
 const DOTS_PER_SCANLINE: u16 = 456;
 const DOTS_PER_FRAME: u32 = DOTS_PER_SCANLINE as u32 * SCANLINES_PER_FRAME;
 
-const OAM_SCAN_DOTS: u32 = 80;
+const OAM_SCAN_DOTS: u16 = 80;
 
 // OAM and VRAM access is never "read only", so we represent this state as a ternary value rather than 2 bools for readable and writable.
 pub enum PpuMemAccess {
@@ -850,16 +850,18 @@ mod tests {
     // - no objects (0)
     // is 172 dots.
     // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
-    /*#[test]
+    #[test]
     fn test_minimum_bg_mode_3_dots() {
         let mut ppu = Ppu::post_boot_dmg();
-        let mut interrupt_flags = 0;
 
+        let mut dot = 0;
+        let mut interrupt_flags = 0;
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&mut interrupt_flags);
+            dot += 1;
+            ppu.catch_up(dot, &mut interrupt_flags);
         }
 
-        let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
+        let mode_3_dots = ppu.dots_this_line - OAM_SCAN_DOTS;
         assert_eq!(mode_3_dots, 172);
     }
 
@@ -874,12 +876,14 @@ mod tests {
         let mut ppu = Ppu::post_boot_dmg();
         ppu.registers.scx = 7;
 
+        let mut dot = 0;
         let mut interrupt_flags = 0;
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&mut interrupt_flags);
+            dot += 1;
+            ppu.catch_up(dot, &mut interrupt_flags);
         }
 
-        let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
+        let mode_3_dots = ppu.dots_this_line - OAM_SCAN_DOTS;
         assert_eq!(mode_3_dots, 179);
     }
 
@@ -897,12 +901,14 @@ mod tests {
         // Scroll it to x=50px
         ppu.registers.wx = 50 + 7;
 
+        let mut dot = 0;
         let mut interrupt_flags = 0;
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&mut interrupt_flags);
+            dot += 1;
+            ppu.catch_up(dot, &mut interrupt_flags);
         }
 
-        let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
+        let mode_3_dots = ppu.dots_this_line - OAM_SCAN_DOTS;
         assert_eq!(mode_3_dots, 178);
     }
 
@@ -922,12 +928,14 @@ mod tests {
         // Scroll it to x=50px
         ppu.registers.wx = 50 + 7;
 
+        let mut dot = 0;
         let mut interrupt_flags = 0;
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&mut interrupt_flags);
+            dot += 1;
+            ppu.catch_up(dot, &mut interrupt_flags);
         }
 
-        let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
+        let mode_3_dots = ppu.dots_this_line - OAM_SCAN_DOTS;
         assert_eq!(mode_3_dots, 185);
     }
 
@@ -944,12 +952,14 @@ mod tests {
         ppu.oam[0x01] = 0; // OBJ X
         ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
 
+        let mut dot = 0;
         let mut interrupt_flags = 0;
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&mut interrupt_flags);
+            dot += 1;
+            ppu.catch_up(dot, &mut interrupt_flags);
         }
 
-        let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
+        let mode_3_dots = ppu.dots_this_line - OAM_SCAN_DOTS;
         assert_eq!(mode_3_dots, 183);
     }
 
@@ -968,12 +978,14 @@ mod tests {
         ppu.oam[0x05] = 0; // OBJ X
         ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
 
+        let mut dot = 0;
         let mut interrupt_flags = 0;
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&mut interrupt_flags);
+            dot += 1;
+            ppu.catch_up(dot, &mut interrupt_flags);
         }
 
-        let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
+        let mode_3_dots = ppu.dots_this_line - OAM_SCAN_DOTS;
         assert_eq!(mode_3_dots, 189);
     }
 
@@ -993,12 +1005,14 @@ mod tests {
         }
         ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
 
+        let mut dot = 0;
         let mut interrupt_flags = 0;
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&mut interrupt_flags);
+            dot += 1;
+            ppu.catch_up(dot, &mut interrupt_flags);
         }
 
-        let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
+        let mode_3_dots = ppu.dots_this_line - OAM_SCAN_DOTS;
         assert_eq!(mode_3_dots, 236);
     }
 
@@ -1015,12 +1029,14 @@ mod tests {
         ppu.oam[0x01] = 2; // OBJ X
         ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
 
+        let mut dot = 0;
         let mut interrupt_flags = 0;
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&mut interrupt_flags);
+            dot += 1;
+            ppu.catch_up(dot, &mut interrupt_flags);
         }
 
-        let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
+        let mode_3_dots = ppu.dots_this_line - OAM_SCAN_DOTS;
         assert_eq!(mode_3_dots, 181);
     }
 
@@ -1037,12 +1053,14 @@ mod tests {
         ppu.oam[0x01] = 8; // OBJ X
         ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
 
+        let mut dot = 0;
         let mut interrupt_flags = 0;
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&mut interrupt_flags);
+            dot += 1;
+            ppu.catch_up(dot, &mut interrupt_flags);
         }
 
-        let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
+        let mode_3_dots = ppu.dots_this_line - OAM_SCAN_DOTS;
         assert_eq!(mode_3_dots, 183);
     }
 
@@ -1059,14 +1077,16 @@ mod tests {
         ppu.oam[0x01] = 9; // OBJ X
         ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
 
+        let mut dot = 0;
         let mut interrupt_flags = 0;
         while !matches!(ppu.mode, PpuMode::HBlank) {
-            ppu.tick(&mut interrupt_flags);
+            dot += 1;
+            ppu.catch_up(dot, &mut interrupt_flags);
         }
 
-        let mode_3_dots = ppu.dot_counter - OAM_SCAN_DOTS;
+        let mode_3_dots = ppu.dots_this_line - OAM_SCAN_DOTS;
         assert_eq!(mode_3_dots, 182);
-    }*/
+    }
 
     use std::fs::File;
     use std::io::Write;
