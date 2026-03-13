@@ -4,10 +4,21 @@ use super::palette::PaletteSelect;
 use super::registers::LcdControl;
 use super::tiles;
 
+use bitfield_struct::bitfield;
+
+#[bitfield(u8, order = Msb)]
+pub struct ColorIndex {
+    #[bits(6)]
+    __: u8, // Padding
+    #[bits(1)]
+    pub high: bool,
+    #[bits(1)]
+    pub low: bool,
+}
+
 #[derive(Copy, Clone)]
 pub struct Pixel {
-    pub low: bool,
-    pub high: bool,
+    pub color_index: ColorIndex,
     pub palette: PaletteSelect,
     pub priority: bool,
 }
@@ -54,8 +65,9 @@ impl BackgroundFetcher {
 
         for nth_bit in 0..8 {
             let pixel = Pixel {
-                low: (self.tile_data_low >> nth_bit) & 1 == 1,
-                high: (self.tile_data_high >> nth_bit) & 1 == 1,
+                color_index: ColorIndex::new()
+                    .with_low((self.tile_data_low >> nth_bit) & 1 == 1)
+                    .with_high((self.tile_data_high >> nth_bit) & 1 == 1),
                 palette: PaletteSelect::Bgp,
                 priority: false,
             };
@@ -155,8 +167,7 @@ impl BackgroundFetcher {
                     // These will be merged and discarded with any sprite pixels that are past the left edge of the LCD.
                     for _ in 0..8 {
                         let pixel = Pixel {
-                            low: false,
-                            high: false,
+                            color_index: ColorIndex::from_bits(0),
                             palette: PaletteSelect::Bgp,
                             priority: false,
                         };
