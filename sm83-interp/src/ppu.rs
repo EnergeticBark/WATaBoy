@@ -567,14 +567,17 @@ impl Ppu {
     pub fn predict_next_interrupt(&mut self, cpu_clock: u64, ie: InterruptBits) -> u64 {
         self.next_vblank_interrupt = if ie.vblank() {
             // VBlank always happens on this dot.
-            let vblank_dot = (DOTS_PER_SCANLINE as isize * 144) + 4;
-            let mut dots_from_vblank = vblank_dot
-                - (DOTS_PER_SCANLINE as isize * self.line_number as isize)
-                + self.dots_this_line as isize;
+            // TODO: This might need to be +3 actually, needs testing.
+            let vblank_dot = 144 * i64::from(DOTS_PER_SCANLINE) + 4;
+            let current_dot = i64::from(self.line_number) * i64::from(DOTS_PER_SCANLINE)
+                + i64::from(self.dots_this_line);
+
+            let mut dots_from_vblank = vblank_dot - current_dot;
             if dots_from_vblank.is_negative() {
-                dots_from_vblank = DOTS_PER_FRAME as isize + dots_from_vblank;
+                dots_from_vblank += i64::from(DOTS_PER_FRAME);
             }
-            cpu_clock + dots_from_vblank as u64
+
+            cpu_clock + dots_from_vblank.cast_unsigned()
         } else {
             u64::MAX
         };
