@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use hw_constants::VRAM_SIZE;
 
-use super::bg_fetcher::Pixel;
+use super::bg_fetcher::{ColorIndex, Pixel};
 use super::oam::Obj;
 use super::palette::PaletteSelect;
 use super::registers::LcdControl;
@@ -13,8 +13,7 @@ use super::tiles;
 // Any transparent pixels can be overwritten by opaque object pixels in the push() function.
 
 pub const TRANSPARENT: Pixel = Pixel {
-    low: false,
-    high: false,
+    color_index: ColorIndex::from_bits(0),
     palette: PaletteSelect::Obp0,
     priority: false,
 };
@@ -85,8 +84,9 @@ impl ObjectFetcher {
 
         let old_pixels = self.fifo.iter_mut();
         let new_pixels = bit_range.map(|nth_bit| Pixel {
-            low: (self.tile_data_low >> nth_bit) & 1 == 1,
-            high: (self.tile_data_high >> nth_bit) & 1 == 1,
+            color_index: ColorIndex::new()
+                .with_low((self.tile_data_low >> nth_bit) & 1 == 1)
+                .with_high((self.tile_data_high >> nth_bit) & 1 == 1),
             palette: {
                 if obj.attributes.palette() {
                     PaletteSelect::Obp1
@@ -98,7 +98,7 @@ impl ObjectFetcher {
         });
         // Replace any transparent pixels that are currently on the queue with the new pixels.
         for (old, new) in old_pixels.zip(new_pixels) {
-            if !(old.low || old.high) {
+            if old.color_index.into_bits() == 0 {
                 *old = new;
             }
         }

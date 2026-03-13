@@ -1,6 +1,8 @@
 use bitfield_struct::bitenum;
 use bitfield_struct::bitfield;
 
+use super::bg_fetcher::ColorIndex;
+
 // See: https://gbdev.io/pandocs/Palettes.html#lcd-monochrome-palettes
 
 #[bitenum]
@@ -33,8 +35,8 @@ pub enum PaletteSelect {
     Obp1,
 }
 
-pub fn map_to_palette(palette: Palette, value: u8) -> Color {
-    match value {
+pub fn map_to_palette(palette: Palette, color_index: ColorIndex) -> Color {
+    match color_index.into() {
         0 => palette.id_0(),
         1 => palette.id_1(),
         2 => palette.id_2(),

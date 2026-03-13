@@ -8,7 +8,9 @@ mod registers;
 
 pub use registers::{LcdControl, LcdStatus, StatMode};
 
+#[cfg(feature = "ppu-logging")]
 use log::{info, trace};
+
 use std::collections::VecDeque;
 
 use hw_constants::io_regs::{BGP, LCDC, LY, LYC, OBP0, OBP1, SCX, SCY, STAT, WX, WY};
@@ -17,20 +19,18 @@ use hw_constants::{
     VRAM_START,
 };
 
-use bg_fetcher::{BackgroundFetcher, FetcherState, Pixel};
+use bg_fetcher::{BackgroundFetcher, ColorIndex, FetcherState, Pixel};
 use oam::Obj;
 use obj_fetcher::{ObjectFetcher, TRANSPARENT};
 use palette::PaletteSelect;
+use registers::IoRegisters;
 
 use crate::addressable::Addressable;
 use crate::cpu::InterruptBits;
-use crate::ppu::registers::IoRegisters;
 
 const SCANLINES_PER_FRAME: u32 = 154;
 const DOTS_PER_SCANLINE: u16 = 456;
 const DOTS_PER_FRAME: u32 = DOTS_PER_SCANLINE as u32 * SCANLINES_PER_FRAME;
-
-const OAM_SCAN_DOTS: u16 = 80;
 
 // OAM and VRAM access is never "read only", so we represent this state as a ternary value rather than 2 bools for readable and writable.
 pub enum PpuMemAccess {
@@ -98,8 +98,8 @@ pub struct Ppu {
 
 fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
     let mut render_bg = false;
-    render_bg |= !(obj_pixel.low || obj_pixel.high);
-    render_bg |= obj_pixel.priority && (bg_pixel.low || bg_pixel.high);
+    render_bg |= obj_pixel.color_index.into_bits() == 0;
+    render_bg |= obj_pixel.priority && bg_pixel.color_index.into_bits() > 0;
 
     if render_bg { bg_pixel } else { obj_pixel }
 }
@@ -125,6 +125,7 @@ impl Ppu {
             tiles::tile_map_0(&self.vram)
         };
 
+        // TODO: don't draw tiles that will be covered by the window.
         while tile_x * 8 < 168 {
             let tile_x_idx = ((self.registers.scx / 8) + tile_x) & 0x1F;
             let tile_id = tile_map[tile_y_idx as usize * 32 + tile_x_idx as usize];
@@ -141,21 +142,14 @@ impl Ppu {
             // Push
             for nth_bit in 0..8 {
                 let pixel = Pixel {
-                    low: (tile_data_low >> nth_bit) & 1 == 1,
-                    high: (tile_data_high >> nth_bit) & 1 == 1,
+                    color_index: ColorIndex::new()
+                        .with_low((tile_data_low >> nth_bit) & 1 == 1)
+                        .with_high((tile_data_high >> nth_bit) & 1 == 1),
                     palette: PaletteSelect::Bgp,
                     priority: false,
                 };
 
-                let mut funny_greyscale = 0;
-                if pixel.low {
-                    funny_greyscale |= 0b0000_0001;
-                }
-                if pixel.high {
-                    funny_greyscale |= 0b0000_0010;
-                }
-
-                let color = palette::map_to_palette(self.registers.bgp, funny_greyscale);
+                let color = palette::map_to_palette(self.registers.bgp, pixel.color_index);
 
                 let pixel_index =
                     (tile_x as usize * 8 + (7 - nth_bit)).saturating_sub(scrolled_left as usize);
@@ -199,21 +193,14 @@ impl Ppu {
                 // Push
                 for nth_bit in 0..8 {
                     let pixel = Pixel {
-                        low: (tile_data_low >> nth_bit) & 1 == 1,
-                        high: (tile_data_high >> nth_bit) & 1 == 1,
+                        color_index: ColorIndex::new()
+                            .with_low((tile_data_low >> nth_bit) & 1 == 1)
+                            .with_high((tile_data_high >> nth_bit) & 1 == 1),
                         palette: PaletteSelect::Bgp,
                         priority: false,
                     };
 
-                    let mut funny_greyscale = 0;
-                    if pixel.low {
-                        funny_greyscale |= 0b0000_0001;
-                    }
-                    if pixel.high {
-                        funny_greyscale |= 0b0000_0010;
-                    }
-
-                    let color = palette::map_to_palette(self.registers.bgp, funny_greyscale);
+                    let color = palette::map_to_palette(self.registers.bgp, pixel.color_index);
 
                     let pixel_index = (self.registers.wx as usize
                         + (tile_x as usize * 8 + (7 - nth_bit)))
@@ -396,15 +383,14 @@ impl Ppu {
                             if self.pixels_to_drop > 0 {
                                 self.pixels_to_drop -= 1;
                             } else {
-                                // If the background/window is disabled, use a pixel with a value of 0.
+                                // If the background/window is disabled, use a pixel with a colour index of 0.
                                 // See: https://gbdev.io/pandocs/pixel_fifo.html#pixel-rendering
                                 let mut pixel_to_render =
                                     if self.registers.lcdc.bg_and_window_enabled() {
                                         bg_pixel
                                     } else {
                                         Pixel {
-                                            low: false,
-                                            high: false,
+                                            color_index: ColorIndex::from_bits(0),
                                             palette: PaletteSelect::Bgp,
                                             priority: false,
                                         }
@@ -414,14 +400,6 @@ impl Ppu {
                                     pixel_to_render = mix_pixels(pixel_to_render, obj_pixel);
                                 }
 
-                                let mut funny_greyscale = 0;
-                                if pixel_to_render.low {
-                                    funny_greyscale |= 0b0000_0001;
-                                }
-                                if pixel_to_render.high {
-                                    funny_greyscale |= 0b0000_0010;
-                                }
-
                                 let lcd_row = self.line_number as usize * SCREEN_WIDTH as usize;
                                 let lcd_pixel_index = lcd_row + self.x as usize;
                                 let palette = match pixel_to_render.palette {
@@ -429,7 +407,8 @@ impl Ppu {
                                     PaletteSelect::Obp0 => self.registers.obp0,
                                     PaletteSelect::Obp1 => self.registers.obp1,
                                 };
-                                let color = palette::map_to_palette(palette, funny_greyscale);
+                                let color =
+                                    palette::map_to_palette(palette, pixel_to_render.color_index);
 
                                 // Get the colors in their correct greyscale values.
                                 self.lcd_buffer[lcd_pixel_index] = 255 - color.into_bits() * 64;
@@ -843,6 +822,8 @@ impl PostBoot for Ppu {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const OAM_SCAN_DOTS: u16 = 80;
 
     // Assert that the minimum Mode 3 length (172) with:
     // - unscrolled background tiles (0)
