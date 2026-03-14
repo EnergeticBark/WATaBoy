@@ -51,12 +51,20 @@ pub struct BackgroundFetcher {
     tile_data_high: u8,
 }
 
-/* The BackgroundFetcher has no "clear" or "reset" method as it stands right now.
-   When a fresh FIFO queue is needed just make a whole new BackgroundFetcher. As far as I can tell none
-   of the state gets carried over anyway. Write some good comments if anything ends up contradicting
-   this.
-*/
 impl BackgroundFetcher {
+    // Having a reset function is quicker than calling default, because nothing will be reallocated.
+    pub fn reset(&mut self) {
+        self.state = FetcherState::BeforeGetTile;
+        self.drawing_window = false;
+        self.warmup = true;
+        self.bg_fifo.clear();
+        self.tile_id = 0;
+        self.tile_line = 0;
+        self.tile_x = 0;
+        self.tile_data_low = 0;
+        self.tile_data_high = 0;
+    }
+
     // Shift out a pixel from the background FIFO.
     pub fn shift_out(&mut self) -> Option<Pixel> {
         self.bg_fifo.pop()
