@@ -2,6 +2,8 @@ use egui::{Checkbox, Color32, RichText, Ui};
 use egui_extras::{Column, TableBody, TableBuilder};
 use sm83_interp::cpu::Cpu;
 
+const ROW_HEIGHT: f32 = 18.0;
+
 pub fn draw_register_table(ui: &mut Ui, dmg_state: &Cpu) {
     ui.horizontal(|ui| {
         ui.vertical(|ui| {
@@ -28,14 +30,14 @@ pub fn draw_register_table(ui: &mut Ui, dmg_state: &Cpu) {
         ui.separator();
 
         ui.vertical(|ui| {
-            let name = "CPU State";
+            let name = "Misc. State";
             ui.heading(name);
             TableBuilder::new(ui)
                 .id_salt(name)
                 .striped(true)
                 .column(Column::auto())
                 .column(Column::remainder())
-                .header(18.0, |mut header| {
+                .header(ROW_HEIGHT, |mut header| {
                     header.col(|ui| {
                         ui.label("State");
                     });
@@ -43,8 +45,8 @@ pub fn draw_register_table(ui: &mut Ui, dmg_state: &Cpu) {
                         ui.label("Value");
                     });
                 })
-                .body(|body| {
-                    draw_flags_body(body, dmg_state);
+                .body(|mut body| {
+                    draw_flags_body(&mut body, dmg_state);
                 });
         });
     });
@@ -65,7 +67,7 @@ fn draw_registers_body(body: TableBody<'_>, dmg_state: &Cpu) {
         .map(|(name, value)| (name, format!("{value:#06X}")))
         .collect();
 
-    body.rows(18.0, reg_names_and_values.len(), |mut row| {
+    body.rows(ROW_HEIGHT, reg_names_and_values.len(), |mut row| {
         let row_index = row.index();
         let (name, value) = &formatted[row_index];
 
@@ -89,19 +91,35 @@ fn draw_registers_body(body: TableBody<'_>, dmg_state: &Cpu) {
     });
 }
 
-fn draw_flags_body(body: TableBody<'_>, dmg_state: &Cpu) {
-    let reg_names_and_values = [("HALTED", dmg_state.halted), ("IME", dmg_state.ime)];
-
-    body.rows(18.0, reg_names_and_values.len(), |mut row| {
-        let row_index = row.index();
-        let (name, value) = reg_names_and_values[row_index];
-
-        row.col(|ui| {
-            ui.label(name);
-        });
-        row.col(|ui| {
-            let mut checked: bool = value;
-            ui.add_enabled(false, Checkbox::new(&mut checked, ""));
-        });
+fn draw_flags_body(body: &mut TableBody<'_>, dmg_state: &Cpu) {
+    body.row(ROW_HEIGHT, |mut row| {
+        row.col(|ui| _ = ui.label("HALTED"));
+        let mut checked = dmg_state.halted;
+        row.col(|ui| _ = ui.add_enabled(false, Checkbox::new(&mut checked, "")));
+    });
+    body.row(ROW_HEIGHT, |mut row| {
+        row.col(|ui| _ = ui.label("IME"));
+        let mut checked = dmg_state.ime;
+        row.col(|ui| _ = ui.add_enabled(false, Checkbox::new(&mut checked, "")));
+    });
+    body.row(ROW_HEIGHT, |mut row| {
+        row.col(|ui| _ = ui.label("CPU Clock"));
+        let formatted = format!("{}", dmg_state.memory.clock);
+        row.col(|ui| _ = ui.label(formatted));
+    });
+    body.row(ROW_HEIGHT, |mut row| {
+        row.col(|ui| _ = ui.label("PPU Clock"));
+        let formatted = format!("{}", dmg_state.memory.ppu.clock);
+        row.col(|ui| _ = ui.label(formatted));
+    });
+    body.row(ROW_HEIGHT, |mut row| {
+        row.col(|ui| _ = ui.label("Next VBlank"));
+        let formatted = format!("{}", dmg_state.memory.ppu.next_vblank_interrupt);
+        row.col(|ui| _ = ui.label(formatted));
+    });
+    body.row(ROW_HEIGHT, |mut row| {
+        row.col(|ui| _ = ui.label("Next LCD"));
+        let formatted = format!("{}", dmg_state.memory.ppu.next_lcd_interrupt);
+        row.col(|ui| _ = ui.label(formatted));
     });
 }

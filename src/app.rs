@@ -28,6 +28,7 @@ pub struct PPUViewApp {
     screen: TextureHandle,
     step_by_cycles: u32,
     step_by_frames: u32,
+    speed: f32,
     play: bool,
     buttons_held: ButtonsHeld,
     logger_open: bool,
@@ -90,6 +91,7 @@ impl PPUViewApp {
             ),
             step_by_cycles: 10000,
             step_by_frames: 1,
+            speed: 0.0,
             play: false,
             buttons_held: ButtonsHeld::default(),
             logger_open: false,
@@ -145,12 +147,8 @@ fn step_multiple(steps: u32, dmg_state: &mut Cpu, buttons_held: ButtonsHeld) {
 }
 
 fn step_vblank(dmg_state: &mut Cpu, buttons_held: ButtonsHeld) {
-    loop {
-        let ly_before_vblank = dmg_state.memory.ppu.ly() == 143;
+    for _ in 0..70224 {
         step_once(dmg_state, buttons_held);
-        if ly_before_vblank && dmg_state.memory.ppu.ly() == 144 {
-            return;
-        }
     }
 }
 
@@ -203,8 +201,8 @@ impl eframe::App for PPUViewApp {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
-                draw_tile_map_0(ui, &mut self.tile_map_0, &self.dmg_state);
-                draw_tile_map_1(ui, &mut self.tile_map_1, &self.dmg_state);
+                draw_tile_map_0(ui, &mut self.tile_map_0, &self.dmg_state.memory.ppu);
+                draw_tile_map_1(ui, &mut self.tile_map_1, &self.dmg_state.memory.ppu);
             });
 
             if ui.button("Step once").clicked() {
@@ -237,12 +235,13 @@ impl eframe::App for PPUViewApp {
                 ui.add(Slider::new(&mut self.step_by_frames, 0..=100));
             });
 
-            if ui.button("Play/pause").clicked() {
-                self.play = !self.play;
-            }
-            if self.play {
-                step_vblank(&mut self.dmg_state, self.buttons_held);
-            }
+            ui.horizontal(|ui| {
+                if ui.button("Play/pause").clicked() {
+                    self.play = !self.play;
+                }
+
+                ui.add(Slider::new(&mut self.speed, -2.0..=2.0));
+            });
 
             draw_oam_table(ui, &mut self.tiles, &self.dmg_state);
         });
@@ -263,6 +262,19 @@ impl eframe::App for PPUViewApp {
                 up: i.key_down(Key::ArrowUp),
                 left: i.key_down(Key::ArrowLeft),
                 right: i.key_down(Key::ArrowRight),
+            };
+
+            if self.play {
+                let dmg_clock_speed = 2.0_f32.powi(22);
+
+                let cycles_to_execute =
+                    i.unstable_dt * dmg_clock_speed * (10.0_f32.powf(self.speed));
+                #[allow(clippy::cast_possible_truncation)]
+                #[allow(clippy::cast_sign_loss)]
+                let target_cycle = self.dmg_state.memory.clock + cycles_to_execute as u64;
+                while self.dmg_state.memory.clock < target_cycle {
+                    step_once(&mut self.dmg_state, self.buttons_held);
+                }
             }
         });
 

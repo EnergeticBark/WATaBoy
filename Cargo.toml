@@ -11,7 +11,10 @@ targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
 [dependencies]
 hw-constants = { path = "../wasmboy/hw-constants" }
-sm83-interp = { path = "../wasmboy/sm83-interp" }
+sm83-interp = {
+    path = "../wasmboy/sm83-interp",
+    #features = ["ppu-logging", "cpu-logging"],
+}
 egui = "0.33.3"
 egui_extras = "0.33.3"
 eframe = { version = "0.33.3", default-features = false, features = [

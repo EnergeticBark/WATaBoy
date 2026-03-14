@@ -5,9 +5,9 @@ use egui::emath::RectTransform;
 use egui::{Color32, Frame, Stroke, StrokeKind, Ui, Vec2, pos2};
 use hw_constants::TILE_MAP_SIZE;
 use hw_constants::io_regs::{LCDC, SCX, SCY, WX, WY};
-use sm83_interp::cpu::Cpu;
-use sm83_interp::ppu::LcdControl;
+use sm83_interp::addressable::Addressable;
 use sm83_interp::ppu::tiles;
+use sm83_interp::ppu::{LcdControl, Ppu};
 
 const TILE_MAP_SCALE: f32 = 1.0;
 
@@ -16,7 +16,7 @@ fn draw_tile_map(
     rect: Rect,
     tile_map_texture: &mut TextureHandle,
     tile_map: &[u8; 0x0400],
-    dmg_state: &Cpu,
+    ppu: &Ppu,
 ) {
     let mut tile_map_bitmap: Vec<u8> = vec![0; 256 * 256];
 
@@ -24,9 +24,9 @@ fn draw_tile_map(
         for column in 0..32 {
             let tile_id = tile_map[row * 32 + column];
 
-            let lcdc = LcdControl::from_bits(dmg_state.memory.read_byte(LCDC));
+            let lcdc = LcdControl::from_bits(ppu.read_byte(LCDC));
 
-            let vram = dmg_state.memory.ppu.vram.as_array().unwrap();
+            let vram = ppu.vram.as_array().unwrap();
             let tile_data = if lcdc.bg_and_window_tiles() {
                 tiles::unsigned_nth_tile(vram, tile_id as usize)
             } else {
@@ -48,10 +48,10 @@ fn draw_tile_map(
     egui::Image::from_texture(&*tile_map_texture).paint_at(ui, rect);
 }
 
-fn highlight_background(ui: &mut Ui, to_screen: RectTransform, dmg_state: &Cpu) {
+fn highlight_background(ui: &mut Ui, to_screen: RectTransform, ppu: &Ppu) {
     // Draw a red rectangle around the visible portion of the background tile map.
-    let sc_y = dmg_state.memory.read_byte(SCY);
-    let sc_x = dmg_state.memory.read_byte(SCX);
+    let sc_y = ppu.read_byte(SCY);
+    let sc_x = ppu.read_byte(SCX);
     let bottom = f32::from(sc_y.wrapping_add(143));
     let right = f32::from(sc_x.wrapping_add(159));
     let visible = Rect::from_min_max(
@@ -67,10 +67,10 @@ fn highlight_background(ui: &mut Ui, to_screen: RectTransform, dmg_state: &Cpu) 
     );
 }
 
-fn highlight_window(ui: &mut Ui, to_screen: RectTransform, dmg_state: &Cpu) {
+fn highlight_window(ui: &mut Ui, to_screen: RectTransform, ppu: &Ppu) {
     // Draw a blue rectangle around the visible portion of the window tile map.
-    let wy = dmg_state.memory.read_byte(WY);
-    let wx = dmg_state.memory.read_byte(WX).wrapping_sub(7);
+    let wy = ppu.read_byte(WY);
+    let wx = ppu.read_byte(WX).wrapping_sub(7);
     let bottom = f32::from(143u8.wrapping_sub(wy));
     let right = f32::from(159u8.wrapping_sub(wx));
     let visible = Rect::from_min_max(
@@ -86,11 +86,11 @@ fn highlight_window(ui: &mut Ui, to_screen: RectTransform, dmg_state: &Cpu) {
     );
 }
 
-pub fn draw_tile_map_0(ui: &mut Ui, tile_map_0_texture: &mut TextureHandle, dmg_state: &Cpu) {
+pub fn draw_tile_map_0(ui: &mut Ui, tile_map_0_texture: &mut TextureHandle, ppu: &Ppu) {
     ui.vertical(|ui| {
         ui.heading("Tile Map 0: 0x9800-0x9C00");
 
-        let vram = dmg_state.memory.ppu.vram.as_array().unwrap();
+        let vram = ppu.vram.as_array().unwrap();
         let tile_map = tiles::tile_map_0(vram);
 
         Frame::canvas(ui.style()).show(ui, |ui| {
@@ -106,26 +106,26 @@ pub fn draw_tile_map_0(ui: &mut Ui, tile_map_0_texture: &mut TextureHandle, dmg_
                 rect,
             );
 
-            draw_tile_map(ui, rect, tile_map_0_texture, tile_map, dmg_state);
+            draw_tile_map(ui, rect, tile_map_0_texture, tile_map, ppu);
 
-            let lcdc = LcdControl::from_bits(dmg_state.memory.read_byte(LCDC));
+            let lcdc = LcdControl::from_bits(ppu.read_byte(LCDC));
             if lcdc.bg_and_window_enabled() {
                 if !lcdc.bg_tile_map() {
-                    highlight_background(ui, to_screen, dmg_state);
+                    highlight_background(ui, to_screen, ppu);
                 }
                 if !lcdc.window_tile_map() && lcdc.window_enabled() {
-                    highlight_window(ui, to_screen, dmg_state);
+                    highlight_window(ui, to_screen, ppu);
                 }
             }
         });
     });
 }
 
-pub fn draw_tile_map_1(ui: &mut Ui, tile_map_1_texture: &mut TextureHandle, dmg_state: &Cpu) {
+pub fn draw_tile_map_1(ui: &mut Ui, tile_map_1_texture: &mut TextureHandle, ppu: &Ppu) {
     ui.vertical(|ui| {
         ui.heading("Tile Map 1: 0x9C00-0xA000");
 
-        let vram = dmg_state.memory.ppu.vram.as_array().unwrap();
+        let vram = ppu.vram.as_array().unwrap();
         let tile_map = tiles::tile_map_1(vram);
 
         Frame::canvas(ui.style()).show(ui, |ui| {
@@ -141,15 +141,15 @@ pub fn draw_tile_map_1(ui: &mut Ui, tile_map_1_texture: &mut TextureHandle, dmg_
                 rect,
             );
 
-            draw_tile_map(ui, rect, tile_map_1_texture, tile_map, dmg_state);
+            draw_tile_map(ui, rect, tile_map_1_texture, tile_map, ppu);
 
-            let lcdc = LcdControl::from_bits(dmg_state.memory.read_byte(LCDC));
+            let lcdc = LcdControl::from_bits(ppu.read_byte(LCDC));
             if lcdc.bg_and_window_enabled() {
                 if lcdc.bg_tile_map() {
-                    highlight_background(ui, to_screen, dmg_state);
+                    highlight_background(ui, to_screen, ppu);
                 }
                 if lcdc.window_tile_map() && lcdc.window_enabled() {
-                    highlight_window(ui, to_screen, dmg_state);
+                    highlight_window(ui, to_screen, ppu);
                 }
             }
         });
