@@ -303,10 +303,12 @@ impl Ppu {
                     PaletteSelect::Obp0 => self.registers.obp0,
                     PaletteSelect::Obp1 => self.registers.obp1,
                 };
-                let color = palette.map_to_color(pixel.color_index());
+                // Bitshift by hand instead of calling map_to_color() because this actually auto vectorises.
+                let color =
+                    (palette.into_bits() >> (pixel.color_index().into_bits() * 2)) & 0b0000_0011;
 
                 // Get the colour's correct greyscale value.
-                *lcd_byte = 255 - color.into_bits() * 64;
+                *lcd_byte = 255 - color * 64;
             });
     }
 
