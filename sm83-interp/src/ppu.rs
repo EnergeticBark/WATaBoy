@@ -105,7 +105,6 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
 }
 
 impl Ppu {
-    // TODO: Implement drawing sprites.
     fn coarse_scanline(&mut self) {
         let mut line_buffer = [Pixel {
             color_index: ColorIndex::from_bits(0),
@@ -162,6 +161,7 @@ impl Ppu {
             }
         }
 
+        // Draw window tiles.
         {
             if self.registers.lcdc.window_enabled() && self.line_number >= self.registers.wy {
                 self.window_y = self.window_y.wrapping_add(1);
@@ -208,6 +208,94 @@ impl Ppu {
                     tile_x += 1;
                 }
             }
+        }
+
+        // Draw object tiles.
+        for obj in &self.obj_buffer {
+            let obj_line = {
+                let obj_line = self.line_number + 16 - obj.y_pos;
+                // If the object isn't flipped vertically, just return the line.
+                if obj.attributes.y_flip() {
+                    // If the object is flipped we need to subtract from its height - 1.
+                    if self.registers.lcdc.obj_size() {
+                        15 - obj_line
+                    } else {
+                        7 - obj_line
+                    }
+                } else {
+                    // If the object isn't flipped vertically, just return the line.
+                    obj_line
+                }
+            };
+
+            let tile = {
+                let mut tile_index = obj.tile_index;
+                if self.registers.lcdc.obj_size() {
+                    // Override the first bit as described in PanDocs.
+                    // See: https://gbdev.io/pandocs/OAM.html#byte-2--tile-index
+                    if obj_line < 8 {
+                        tile_index &= !0b0000_0001;
+                    } else {
+                        tile_index |= 0b0000_0001;
+                    }
+                }
+
+                tiles::unsigned_nth_tile(&self.vram, tile_index as usize)
+            };
+
+            let tile_line = obj_line % 8;
+            let tile_data_low = tile[tile_line as usize * 2];
+            let tile_data_high = tile[tile_line as usize * 2 + 1];
+
+            // Push
+            let mut obj_line_buffer = [Pixel {
+                color_index: ColorIndex::from_bits(0),
+                palette: PaletteSelect::Bgp,
+                priority: false,
+            }; 8];
+
+            obj_line_buffer
+                .iter_mut()
+                .enumerate()
+                .for_each(|(nth_bit, buffer_pixel)| {
+                    *buffer_pixel = Pixel {
+                        color_index: ColorIndex::new()
+                            .with_low((tile_data_low >> nth_bit) & 1 == 1)
+                            .with_high((tile_data_high >> nth_bit) & 1 == 1),
+                        palette: {
+                            if obj.attributes.palette() {
+                                PaletteSelect::Obp1
+                            } else {
+                                PaletteSelect::Obp0
+                            }
+                        },
+                        priority: obj.attributes.priority(),
+                    }
+                });
+
+            if !obj.attributes.x_flip() {
+                obj_line_buffer.reverse();
+            }
+
+            obj_line_buffer
+                .into_iter()
+                .enumerate()
+                .for_each(|(nth_bit, new_pixel)| {
+                    let pixel_index = (obj.x_pos as usize + nth_bit).saturating_sub(8);
+                    if pixel_index < SCREEN_WIDTH as usize {
+                        let old_pixel = &mut line_buffer[pixel_index];
+                        match old_pixel.palette {
+                            PaletteSelect::Bgp => *old_pixel = mix_pixels(*old_pixel, new_pixel),
+                            // Replace any transparent pixels that are currently on the queue with the new pixels.
+                            PaletteSelect::Obp0 | PaletteSelect::Obp1
+                                if old_pixel.color_index.into_bits() == 0 =>
+                            {
+                                *old_pixel = new_pixel;
+                            }
+                            _ => (),
+                        }
+                    }
+                });
         }
 
         let line_start = self.line_number as usize * SCREEN_WIDTH as usize;
