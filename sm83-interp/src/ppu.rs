@@ -106,14 +106,14 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
 
 impl Ppu {
     fn coarse_scanline(&mut self) {
-        let mut line_buffer = [Pixel::from_bits(0); SCREEN_WIDTH as usize];
+        let mut line_buffer = [Pixel::from_bits(0); SCREEN_WIDTH as usize + 8];
 
         // Draw background tiles.
         {
             let ly = self.line_number.wrapping_add(self.registers.scy);
             let tile_y_idx = ly / 8;
             let tile_line = ly & 7;
-            let scrolled_left = self.registers.scx & 7;
+            let tile_scrolled_left = self.registers.scx / 8;
 
             let tile_map = if self.registers.lcdc.bg_tile_map() {
                 tiles::tile_map_1(&self.vram)
@@ -122,9 +122,8 @@ impl Ppu {
             };
 
             // TODO: don't draw tiles that will be covered by the window.
-            let mut tile_x = 0;
-            while tile_x * 8 < 168 {
-                let tile_x_idx = ((self.registers.scx / 8) + tile_x) & 0x1F;
+            for tile_x in 0..21 {
+                let tile_x_idx = (tile_scrolled_left + tile_x) & 0x1F;
                 let tile_id = tile_map[tile_y_idx as usize * 32 + tile_x_idx as usize];
 
                 let tile_data = if self.registers.lcdc.bg_and_window_tiles() {
@@ -137,25 +136,25 @@ impl Ppu {
                 let tile_data_high = tile_data[tile_line as usize * 2 + 1];
 
                 // Push
-                for nth_bit in 0..8 {
+                let tile = (0..8).rev().map(|nth_bit| {
                     let color_index = ColorIndex::new()
                         .with_low((tile_data_low >> nth_bit) & 1 == 1)
                         .with_high((tile_data_high >> nth_bit) & 1 == 1);
-                    let pixel = Pixel::new()
+                    Pixel::new()
                         .with_color_index(color_index)
                         .with_palette(PaletteSelect::Bgp)
-                        .with_priority(false);
+                        .with_priority(false)
+                });
 
-                    let pixel_index = (tile_x as usize * 8 + (7 - nth_bit))
-                        .saturating_sub(scrolled_left as usize);
-                    if pixel_index < SCREEN_WIDTH as usize {
-                        line_buffer[pixel_index] = pixel;
-                    }
-                }
-
-                tile_x += 1;
+                let pixel_index = tile_x as usize * 8;
+                line_buffer[pixel_index..pixel_index + 8]
+                    .iter_mut()
+                    .zip(tile)
+                    .for_each(|(buf_pixel, new_pixel)| *buf_pixel = new_pixel);
             }
         }
+
+        let scrolled_left = self.registers.scx & 7;
 
         // Draw window tiles.
         {
@@ -171,7 +170,7 @@ impl Ppu {
                 };
 
                 let mut tile_x = 0;
-                while tile_x * 8 < 168 {
+                while tile_x * 8 < SCREEN_WIDTH as usize + 8 {
                     let tile_id = window_tile_map[tile_y_idx as usize * 32 + tile_x];
 
                     let tile_data = if self.registers.lcdc.bg_and_window_tiles() {
@@ -193,10 +192,11 @@ impl Ppu {
                             .with_palette(PaletteSelect::Bgp)
                             .with_priority(false);
 
-                        let pixel_index = (self.registers.wx as usize
+                        let pixel_index = ((self.registers.wx as usize
                             + (tile_x * 8 + (7 - nth_bit)))
+                            + (scrolled_left as usize))
                             .saturating_sub(7);
-                        if pixel_index < SCREEN_WIDTH as usize {
+                        if pixel_index < SCREEN_WIDTH as usize + 8 {
                             line_buffer[pixel_index] = pixel;
                         }
                     }
@@ -262,7 +262,7 @@ impl Ppu {
                     *buffer_pixel = Pixel::new()
                         .with_color_index(color_index)
                         .with_palette(palette)
-                        .with_priority(obj.attributes.priority())
+                        .with_priority(obj.attributes.priority());
                 });
 
             if !obj.attributes.x_flip() {
@@ -273,8 +273,9 @@ impl Ppu {
                 .into_iter()
                 .enumerate()
                 .for_each(|(nth_bit, new_pixel)| {
-                    let pixel_index = (obj.x_pos as usize + nth_bit).saturating_sub(8);
-                    if pixel_index < SCREEN_WIDTH as usize {
+                    let pixel_index =
+                        (obj.x_pos as usize + nth_bit + scrolled_left as usize).wrapping_sub(8);
+                    if pixel_index < SCREEN_WIDTH as usize + 8 {
                         let old_pixel = &mut line_buffer[pixel_index];
                         match old_pixel.palette() {
                             PaletteSelect::Bgp => *old_pixel = mix_pixels(*old_pixel, new_pixel),
@@ -296,7 +297,7 @@ impl Ppu {
 
         scanline
             .iter_mut()
-            .zip(line_buffer.iter())
+            .zip(line_buffer[scrolled_left as usize..].iter())
             .for_each(|(lcd_byte, pixel)| {
                 let palette = match pixel.palette() {
                     PaletteSelect::Bgp => self.registers.bgp,
@@ -703,7 +704,7 @@ impl Ppu {
 
         self.x = 0;
         // Reset each of the fetchers.
-        self.bg_fetcher = BackgroundFetcher::default();
+        self.bg_fetcher.reset();
         self.obj_fetcher = ObjectFetcher::default();
     }
 
