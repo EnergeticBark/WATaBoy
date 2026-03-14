@@ -107,78 +107,30 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
 impl Ppu {
     // TODO: Implement drawing sprites.
     fn coarse_scanline(&mut self) {
-        let ly = self.line_number.wrapping_add(self.registers.scy);
+        let mut line_buffer = [Pixel {
+            color_index: ColorIndex::from_bits(0),
+            palette: PaletteSelect::Bgp,
+            priority: false,
+        }; SCREEN_WIDTH as usize];
 
-        let line_start = self.line_number as usize * SCREEN_WIDTH as usize;
-        let line_end = line_start + SCREEN_WIDTH as usize;
-        let scanline = &mut self.lcd_buffer[line_start..line_end];
-
-        let mut tile_x = 0;
-
-        let tile_y_idx = ly / 8;
-        let tile_line = ly & 7;
-        let scrolled_left = self.registers.scx & 7;
-
-        let tile_map = if self.registers.lcdc.bg_tile_map() {
-            tiles::tile_map_1(&self.vram)
-        } else {
-            tiles::tile_map_0(&self.vram)
-        };
-
-        // TODO: don't draw tiles that will be covered by the window.
-        while tile_x * 8 < 168 {
-            let tile_x_idx = ((self.registers.scx / 8) + tile_x) & 0x1F;
-            let tile_id = tile_map[tile_y_idx as usize * 32 + tile_x_idx as usize];
-
-            let tile_data = if self.registers.lcdc.bg_and_window_tiles() {
-                tiles::unsigned_nth_tile(&self.vram, tile_id as usize)
-            } else {
-                tiles::signed_nth_tile(&self.vram, tile_id.cast_signed() as isize)
-            };
-
-            let tile_data_low = tile_data[tile_line as usize * 2];
-            let tile_data_high = tile_data[tile_line as usize * 2 + 1];
-
-            // Push
-            for nth_bit in 0..8 {
-                let pixel = Pixel {
-                    color_index: ColorIndex::new()
-                        .with_low((tile_data_low >> nth_bit) & 1 == 1)
-                        .with_high((tile_data_high >> nth_bit) & 1 == 1),
-                    palette: PaletteSelect::Bgp,
-                    priority: false,
-                };
-                let color = self.registers.bgp.map_to_color(pixel.color_index);
-
-                let pixel_index =
-                    (tile_x as usize * 8 + (7 - nth_bit)).saturating_sub(scrolled_left as usize);
-                if pixel_index < SCREEN_WIDTH as usize {
-                    // Get the colours in their correct greyscale values.
-                    scanline[pixel_index] = 255 - color.into_bits() * 64;
-                }
-            }
-
-            tile_x += 1;
-        }
-
-        if self.registers.lcdc.window_enabled() && self.line_number >= self.registers.wy {
-            self.window_y = self.window_y.wrapping_add(1);
-
-            let ly = self.window_y;
-
+        // Draw background tiles.
+        {
+            let ly = self.line_number.wrapping_add(self.registers.scy);
             let tile_y_idx = ly / 8;
             let tile_line = ly & 7;
+            let scrolled_left = self.registers.scx & 7;
 
-            let window_tile_map = if self.registers.lcdc.window_tile_map() {
+            let tile_map = if self.registers.lcdc.bg_tile_map() {
                 tiles::tile_map_1(&self.vram)
             } else {
                 tiles::tile_map_0(&self.vram)
             };
 
-            tile_x = 0;
+            // TODO: don't draw tiles that will be covered by the window.
+            let mut tile_x = 0;
             while tile_x * 8 < 168 {
-                let tile_x_idx = tile_x;
-                let tile_id = window_tile_map[tile_y_idx as usize * 32 + tile_x_idx as usize];
+                let tile_x_idx = ((self.registers.scx / 8) + tile_x) & 0x1F;
+                let tile_id = tile_map[tile_y_idx as usize * 32 + tile_x_idx as usize];
 
                 let tile_data = if self.registers.lcdc.bg_and_window_tiles() {
                     tiles::unsigned_nth_tile(&self.vram, tile_id as usize)
@@ -198,20 +150,82 @@ impl Ppu {
                         palette: PaletteSelect::Bgp,
                         priority: false,
                     };
-                    let color = self.registers.bgp.map_to_color(pixel.color_index);
 
-                    let pixel_index = (self.registers.wx as usize
-                        + (tile_x as usize * 8 + (7 - nth_bit)))
-                        .saturating_sub(7);
+                    let pixel_index = (tile_x as usize * 8 + (7 - nth_bit))
+                        .saturating_sub(scrolled_left as usize);
                     if pixel_index < SCREEN_WIDTH as usize {
-                        // Get the colours in their correct greyscale values.
-                        scanline[pixel_index] = 255 - color.into_bits() * 64;
+                        line_buffer[pixel_index] = pixel;
                     }
                 }
 
                 tile_x += 1;
             }
         }
+
+        {
+            if self.registers.lcdc.window_enabled() && self.line_number >= self.registers.wy {
+                self.window_y = self.window_y.wrapping_add(1);
+                let tile_y_idx = self.window_y / 8;
+                let tile_line = self.window_y & 7;
+
+                let window_tile_map = if self.registers.lcdc.window_tile_map() {
+                    tiles::tile_map_1(&self.vram)
+                } else {
+                    tiles::tile_map_0(&self.vram)
+                };
+
+                let mut tile_x = 0;
+                while tile_x * 8 < 168 {
+                    let tile_id = window_tile_map[tile_y_idx as usize * 32 + tile_x];
+
+                    let tile_data = if self.registers.lcdc.bg_and_window_tiles() {
+                        tiles::unsigned_nth_tile(&self.vram, tile_id as usize)
+                    } else {
+                        tiles::signed_nth_tile(&self.vram, tile_id.cast_signed() as isize)
+                    };
+
+                    let tile_data_low = tile_data[tile_line as usize * 2];
+                    let tile_data_high = tile_data[tile_line as usize * 2 + 1];
+
+                    // Push
+                    for nth_bit in 0..8 {
+                        let pixel = Pixel {
+                            color_index: ColorIndex::new()
+                                .with_low((tile_data_low >> nth_bit) & 1 == 1)
+                                .with_high((tile_data_high >> nth_bit) & 1 == 1),
+                            palette: PaletteSelect::Bgp,
+                            priority: false,
+                        };
+
+                        let pixel_index = (self.registers.wx as usize
+                            + (tile_x * 8 + (7 - nth_bit)))
+                            .saturating_sub(7);
+                        if pixel_index < SCREEN_WIDTH as usize {
+                            line_buffer[pixel_index] = pixel;
+                        }
+                    }
+
+                    tile_x += 1;
+                }
+            }
+        }
+
+        let line_start = self.line_number as usize * SCREEN_WIDTH as usize;
+        let line_end = line_start + SCREEN_WIDTH as usize;
+        self.lcd_buffer[line_start..line_end]
+            .iter_mut()
+            .zip(line_buffer)
+            .for_each(|(lcd_byte, pixel)| {
+                let palette = match pixel.palette {
+                    PaletteSelect::Bgp => self.registers.bgp,
+                    PaletteSelect::Obp0 => self.registers.obp0,
+                    PaletteSelect::Obp1 => self.registers.obp1,
+                };
+                let color = palette.map_to_color(pixel.color_index);
+
+                // Get the colour's correct greyscale value.
+                *lcd_byte = 255 - color.into_bits() * 64;
+            });
     }
 
     pub fn catch_up(&mut self, cpu_clock: u64, interrupt_flags: &mut u8) {
