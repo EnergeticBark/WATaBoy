@@ -16,11 +16,16 @@ pub struct ColorIndex {
     pub low: bool,
 }
 
-#[derive(Copy, Clone)]
+#[bitfield(u8, order = Msb)]
 pub struct Pixel {
-    pub color_index: ColorIndex,
-    pub palette: PaletteSelect,
+    #[bits(3)]
+    __: u8, // Padding
+    #[bits(1)]
     pub priority: bool,
+    #[bits(2)]
+    pub palette: PaletteSelect,
+    #[bits(2)]
+    pub color_index: ColorIndex,
 }
 
 #[derive(Debug)]
@@ -64,13 +69,14 @@ impl BackgroundFetcher {
         }
 
         for nth_bit in 0..8 {
-            let pixel = Pixel {
-                color_index: ColorIndex::new()
-                    .with_low((self.tile_data_low >> nth_bit) & 1 == 1)
-                    .with_high((self.tile_data_high >> nth_bit) & 1 == 1),
-                palette: PaletteSelect::Bgp,
-                priority: false,
-            };
+            let pixel = Pixel::new()
+                .with_color_index(
+                    ColorIndex::new()
+                        .with_low((self.tile_data_low >> nth_bit) & 1 == 1)
+                        .with_high((self.tile_data_high >> nth_bit) & 1 == 1),
+                )
+                .with_palette(PaletteSelect::Bgp)
+                .with_priority(false);
 
             self.bg_fifo.push(pixel);
         }
@@ -166,11 +172,10 @@ impl BackgroundFetcher {
                     // Fill the FIFO with 8 transparent pixels for overscan.
                     // These will be merged and discarded with any sprite pixels that are past the left edge of the LCD.
                     for _ in 0..8 {
-                        let pixel = Pixel {
-                            color_index: ColorIndex::from_bits(0),
-                            palette: PaletteSelect::Bgp,
-                            priority: false,
-                        };
+                        let pixel = Pixel::new()
+                            .with_color_index(ColorIndex::from_bits(0))
+                            .with_palette(PaletteSelect::Bgp)
+                            .with_priority(false);
 
                         self.bg_fifo.push(pixel);
                     }

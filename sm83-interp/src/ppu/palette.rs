@@ -1,3 +1,5 @@
+use std::hint::unreachable_unchecked;
+
 use bitfield_struct::bitenum;
 use bitfield_struct::bitfield;
 
@@ -17,7 +19,7 @@ pub enum Color {
 }
 
 #[bitfield(u8, order = Msb)]
-pub struct Palette {
+pub(super) struct Palette {
     #[bits(2)]
     pub id_3: Color,
     #[bits(2)]
@@ -29,20 +31,24 @@ pub struct Palette {
 }
 
 impl Palette {
-    pub fn map_to_color(self, color_index: ColorIndex) -> Color {
-        match color_index.into() {
+    #[inline]
+    pub(super) fn map_to_color(self, color_index: ColorIndex) -> Color {
+        match color_index.into_bits() {
             0 => self.id_0(),
             1 => self.id_1(),
             2 => self.id_2(),
             3 => self.id_3(),
-            _ => unreachable!(),
+            _ => unsafe { unreachable_unchecked() },
         }
     }
 }
 
-#[derive(Copy, Clone)]
+#[bitenum]
+#[derive(Copy, Clone, Debug)]
+#[repr(u8)]
 pub enum PaletteSelect {
-    Bgp,
-    Obp0,
-    Obp1,
+    #[fallback]
+    Bgp = 0,
+    Obp0 = 1,
+    Obp1 = 2,
 }

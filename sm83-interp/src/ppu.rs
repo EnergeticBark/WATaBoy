@@ -98,19 +98,15 @@ pub struct Ppu {
 
 fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
     let mut render_bg = false;
-    render_bg |= obj_pixel.color_index.into_bits() == 0;
-    render_bg |= obj_pixel.priority && bg_pixel.color_index.into_bits() > 0;
+    render_bg |= obj_pixel.color_index().into_bits() == 0;
+    render_bg |= obj_pixel.priority() && bg_pixel.color_index().into_bits() > 0;
 
     if render_bg { bg_pixel } else { obj_pixel }
 }
 
 impl Ppu {
     fn coarse_scanline(&mut self) {
-        let mut line_buffer = [Pixel {
-            color_index: ColorIndex::from_bits(0),
-            palette: PaletteSelect::Bgp,
-            priority: false,
-        }; SCREEN_WIDTH as usize];
+        let mut line_buffer = [Pixel::from_bits(0); SCREEN_WIDTH as usize];
 
         // Draw background tiles.
         {
@@ -142,13 +138,13 @@ impl Ppu {
 
                 // Push
                 for nth_bit in 0..8 {
-                    let pixel = Pixel {
-                        color_index: ColorIndex::new()
-                            .with_low((tile_data_low >> nth_bit) & 1 == 1)
-                            .with_high((tile_data_high >> nth_bit) & 1 == 1),
-                        palette: PaletteSelect::Bgp,
-                        priority: false,
-                    };
+                    let color_index = ColorIndex::new()
+                        .with_low((tile_data_low >> nth_bit) & 1 == 1)
+                        .with_high((tile_data_high >> nth_bit) & 1 == 1);
+                    let pixel = Pixel::new()
+                        .with_color_index(color_index)
+                        .with_palette(PaletteSelect::Bgp)
+                        .with_priority(false);
 
                     let pixel_index = (tile_x as usize * 8 + (7 - nth_bit))
                         .saturating_sub(scrolled_left as usize);
@@ -189,13 +185,13 @@ impl Ppu {
 
                     // Push
                     for nth_bit in 0..8 {
-                        let pixel = Pixel {
-                            color_index: ColorIndex::new()
-                                .with_low((tile_data_low >> nth_bit) & 1 == 1)
-                                .with_high((tile_data_high >> nth_bit) & 1 == 1),
-                            palette: PaletteSelect::Bgp,
-                            priority: false,
-                        };
+                        let color_index = ColorIndex::new()
+                            .with_low((tile_data_low >> nth_bit) & 1 == 1)
+                            .with_high((tile_data_high >> nth_bit) & 1 == 1);
+                        let pixel = Pixel::new()
+                            .with_color_index(color_index)
+                            .with_palette(PaletteSelect::Bgp)
+                            .with_priority(false);
 
                         let pixel_index = (self.registers.wx as usize
                             + (tile_x * 8 + (7 - nth_bit)))
@@ -248,29 +244,25 @@ impl Ppu {
             let tile_data_high = tile[tile_line as usize * 2 + 1];
 
             // Push
-            let mut obj_line_buffer = [Pixel {
-                color_index: ColorIndex::from_bits(0),
-                palette: PaletteSelect::Bgp,
-                priority: false,
-            }; 8];
+            let mut obj_line_buffer = [Pixel::from_bits(0); 8];
 
             obj_line_buffer
                 .iter_mut()
                 .enumerate()
                 .for_each(|(nth_bit, buffer_pixel)| {
-                    *buffer_pixel = Pixel {
-                        color_index: ColorIndex::new()
-                            .with_low((tile_data_low >> nth_bit) & 1 == 1)
-                            .with_high((tile_data_high >> nth_bit) & 1 == 1),
-                        palette: {
-                            if obj.attributes.palette() {
-                                PaletteSelect::Obp1
-                            } else {
-                                PaletteSelect::Obp0
-                            }
-                        },
-                        priority: obj.attributes.priority(),
-                    }
+                    let color_index = ColorIndex::new()
+                        .with_low((tile_data_low >> nth_bit) & 1 == 1)
+                        .with_high((tile_data_high >> nth_bit) & 1 == 1);
+                    let palette = if obj.attributes.palette() {
+                        PaletteSelect::Obp1
+                    } else {
+                        PaletteSelect::Obp0
+                    };
+
+                    *buffer_pixel = Pixel::new()
+                        .with_color_index(color_index)
+                        .with_palette(palette)
+                        .with_priority(obj.attributes.priority())
                 });
 
             if !obj.attributes.x_flip() {
@@ -284,11 +276,11 @@ impl Ppu {
                     let pixel_index = (obj.x_pos as usize + nth_bit).saturating_sub(8);
                     if pixel_index < SCREEN_WIDTH as usize {
                         let old_pixel = &mut line_buffer[pixel_index];
-                        match old_pixel.palette {
+                        match old_pixel.palette() {
                             PaletteSelect::Bgp => *old_pixel = mix_pixels(*old_pixel, new_pixel),
                             // Replace any transparent pixels that are currently on the queue with the new pixels.
                             PaletteSelect::Obp0 | PaletteSelect::Obp1
-                                if old_pixel.color_index.into_bits() == 0 =>
+                                if old_pixel.color_index().into_bits() == 0 =>
                             {
                                 *old_pixel = new_pixel;
                             }
@@ -300,16 +292,18 @@ impl Ppu {
 
         let line_start = self.line_number as usize * SCREEN_WIDTH as usize;
         let line_end = line_start + SCREEN_WIDTH as usize;
-        self.lcd_buffer[line_start..line_end]
+        let scanline = &mut self.lcd_buffer[line_start..line_end];
+
+        scanline
             .iter_mut()
-            .zip(line_buffer)
+            .zip(line_buffer.iter())
             .for_each(|(lcd_byte, pixel)| {
-                let palette = match pixel.palette {
+                let palette = match pixel.palette() {
                     PaletteSelect::Bgp => self.registers.bgp,
                     PaletteSelect::Obp0 => self.registers.obp0,
                     PaletteSelect::Obp1 => self.registers.obp1,
                 };
-                let color = palette.map_to_color(pixel.color_index);
+                let color = palette.map_to_color(pixel.color_index());
 
                 // Get the colour's correct greyscale value.
                 *lcd_byte = 255 - color.into_bits() * 64;
@@ -489,11 +483,7 @@ impl Ppu {
                                     if self.registers.lcdc.bg_and_window_enabled() {
                                         bg_pixel
                                     } else {
-                                        Pixel {
-                                            color_index: ColorIndex::from_bits(0),
-                                            palette: PaletteSelect::Bgp,
-                                            priority: false,
-                                        }
+                                        Pixel::from_bits(0)
                                     };
 
                                 if self.registers.lcdc.obj_enabled() {
@@ -502,12 +492,12 @@ impl Ppu {
 
                                 let lcd_row = self.line_number as usize * SCREEN_WIDTH as usize;
                                 let lcd_pixel_index = lcd_row + self.x as usize;
-                                let palette = match pixel_to_render.palette {
+                                let palette = match pixel_to_render.palette() {
                                     PaletteSelect::Bgp => self.registers.bgp,
                                     PaletteSelect::Obp0 => self.registers.obp0,
                                     PaletteSelect::Obp1 => self.registers.obp1,
                                 };
-                                let color = palette.map_to_color(pixel_to_render.color_index);
+                                let color = palette.map_to_color(pixel_to_render.color_index());
 
                                 // Get the colors in their correct greyscale values.
                                 self.lcd_buffer[lcd_pixel_index] = 255 - color.into_bits() * 64;
