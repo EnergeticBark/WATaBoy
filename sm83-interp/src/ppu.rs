@@ -148,8 +148,7 @@ impl Ppu {
                     palette: PaletteSelect::Bgp,
                     priority: false,
                 };
-
-                let color = palette::map_to_palette(self.registers.bgp, pixel.color_index);
+                let color = self.registers.bgp.map_to_color(pixel.color_index);
 
                 let pixel_index =
                     (tile_x as usize * 8 + (7 - nth_bit)).saturating_sub(scrolled_left as usize);
@@ -199,8 +198,7 @@ impl Ppu {
                         palette: PaletteSelect::Bgp,
                         priority: false,
                     };
-
-                    let color = palette::map_to_palette(self.registers.bgp, pixel.color_index);
+                    let color = self.registers.bgp.map_to_color(pixel.color_index);
 
                     let pixel_index = (self.registers.wx as usize
                         + (tile_x as usize * 8 + (7 - nth_bit)))
@@ -407,8 +405,7 @@ impl Ppu {
                                     PaletteSelect::Obp0 => self.registers.obp0,
                                     PaletteSelect::Obp1 => self.registers.obp1,
                                 };
-                                let color =
-                                    palette::map_to_palette(palette, pixel_to_render.color_index);
+                                let color = palette.map_to_color(pixel_to_render.color_index);
 
                                 // Get the colors in their correct greyscale values.
                                 self.lcd_buffer[lcd_pixel_index] = 255 - color.into_bits() * 64;

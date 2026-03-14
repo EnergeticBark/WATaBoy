@@ -28,19 +28,21 @@ pub struct Palette {
     pub id_0: Color,
 }
 
+impl Palette {
+    pub fn map_to_color(self, color_index: ColorIndex) -> Color {
+        match color_index.into() {
+            0 => self.id_0(),
+            1 => self.id_1(),
+            2 => self.id_2(),
+            3 => self.id_3(),
+            _ => unreachable!(),
+        }
+    }
+}
+
 #[derive(Copy, Clone)]
 pub enum PaletteSelect {
     Bgp,
     Obp0,
     Obp1,
-}
-
-pub fn map_to_palette(palette: Palette, color_index: ColorIndex) -> Color {
-    match color_index.into() {
-        0 => palette.id_0(),
-        1 => palette.id_1(),
-        2 => palette.id_2(),
-        3 => palette.id_3(),
-        _ => unreachable!(),
-    }
 }
