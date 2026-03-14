@@ -705,7 +705,7 @@ impl Ppu {
         self.x = 0;
         // Reset each of the fetchers.
         self.bg_fetcher.reset();
-        self.obj_fetcher = ObjectFetcher::default();
+        self.obj_fetcher.reset();
     }
 
     fn transition_vblank(&mut self) {
