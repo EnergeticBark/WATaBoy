@@ -53,6 +53,13 @@ pub struct ObjectFetcher {
    this.
 */
 impl ObjectFetcher {
+    // Having a reset function is quicker than calling default, because nothing will be reallocated.
+    pub fn reset(&mut self) {
+        self.obj_buffer.clear();
+        self.state = ObjectFetcherState::Idle;
+        self.fifo.clear();
+    }
+
     pub fn push_obj(&mut self, obj: Obj) {
         self.obj_buffer.push_back(obj);
     }
