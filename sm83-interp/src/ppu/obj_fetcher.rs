@@ -12,11 +12,10 @@ use super::tiles;
 // Before an object is pushed to the queue, transparent pixels are pushed to the back to maintain a length of 8 pixels.
 // Any transparent pixels can be overwritten by opaque object pixels in the push() function.
 
-pub const TRANSPARENT: Pixel = Pixel {
-    color_index: ColorIndex::from_bits(0),
-    palette: PaletteSelect::Obp0,
-    priority: false,
-};
+pub const TRANSPARENT: Pixel = Pixel::new()
+    .with_color_index(ColorIndex::from_bits(0))
+    .with_palette(PaletteSelect::Obp0)
+    .with_priority(false);
 
 #[derive(Debug)]
 pub enum ObjectFetcherState {
@@ -83,22 +82,24 @@ impl ObjectFetcher {
         }
 
         let old_pixels = self.fifo.iter_mut();
-        let new_pixels = bit_range.map(|nth_bit| Pixel {
-            color_index: ColorIndex::new()
+        let new_pixels = bit_range.map(|nth_bit| {
+            let color_index = ColorIndex::new()
                 .with_low((self.tile_data_low >> nth_bit) & 1 == 1)
-                .with_high((self.tile_data_high >> nth_bit) & 1 == 1),
-            palette: {
-                if obj.attributes.palette() {
-                    PaletteSelect::Obp1
-                } else {
-                    PaletteSelect::Obp0
-                }
-            },
-            priority: obj.attributes.priority(),
+                .with_high((self.tile_data_high >> nth_bit) & 1 == 1);
+            let palette = if obj.attributes.palette() {
+                PaletteSelect::Obp1
+            } else {
+                PaletteSelect::Obp0
+            };
+
+            Pixel::new()
+                .with_color_index(color_index)
+                .with_palette(palette)
+                .with_priority(obj.attributes.priority())
         });
         // Replace any transparent pixels that are currently on the queue with the new pixels.
         for (old, new) in old_pixels.zip(new_pixels) {
-            if old.color_index.into_bits() == 0 {
+            if old.color_index().into_bits() == 0 {
                 *old = new;
             }
         }
