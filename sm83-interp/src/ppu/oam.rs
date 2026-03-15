@@ -26,8 +26,7 @@ pub struct Obj {
 }
 
 impl Obj {
-    #[must_use]
-    pub fn from_bytes(bytes: &[u8; OBJ_SIZE]) -> Self {
+    fn from_bytes(bytes: [u8; OBJ_SIZE]) -> Self {
         Self {
             y_pos: bytes[0],
             x_pos: bytes[1],
@@ -36,8 +35,7 @@ impl Obj {
         }
     }
 
-    #[must_use]
-    pub fn intersects_y(&self, y: u8, obj_size: bool) -> bool {
+    fn intersects_y(self, y: u8, obj_size: bool) -> bool {
         let obj_height = if obj_size { 16 } else { 8 };
 
         let y_top = self.y_pos;
@@ -66,7 +64,7 @@ pub fn nth_obj(oam: &[u8; OAM_SIZE as usize], index: usize) -> Obj {
 }
 
 // Place objects into a sorted queue so we can pop them in-order as we draw the scanline.
-pub fn oam_scan(
+pub(super) fn oam_scan(
     obj_buffer: &mut VecDeque<Obj>,
     oam: &[u8; OAM_SIZE as usize],
     lcdc: LcdControl,
@@ -75,16 +73,15 @@ pub fn oam_scan(
     let obj_size = lcdc.obj_size();
 
     obj_buffer.clear();
-    for index in 0..40 {
-        let obj = nth_obj(oam, index);
-        // Only consider objects on screen (y value between 1 and 160).
-        if (1..160).contains(&obj.y_pos) && obj.intersects_y(ly, obj_size) {
-            obj_buffer.push_back(obj);
-            if obj_buffer.len() == 10 {
-                break;
-            }
-        }
-    }
+    let (chunks, []) = oam.as_chunks() else {
+        unreachable!()
+    };
+    chunks
+        .iter()
+        .map(|bytes| Obj::from_bytes(*bytes))
+        .filter(|obj| (1..160).contains(&obj.y_pos) && obj.intersects_y(ly, obj_size))
+        .take(10)
+        .for_each(|obj| obj_buffer.push_back(obj));
 
     // This sort is stable, so "objects earlier in the OAM should have higher priority" still holds.
     obj_buffer.make_contiguous().sort_by_key(|obj| obj.x_pos);
