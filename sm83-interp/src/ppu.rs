@@ -117,13 +117,10 @@ fn bytes_to_morton(low: u8, high: u8) -> u16 {
             & 0xAAAA) as u16
 }
 
-// Temporary workaround to give these functions the same signature so I can take them out of a hot loop.
-fn unsigned_nth_tile(vram: &[u8; VRAM_SIZE as usize], tile_id: u8) -> &[u8; 16] {
-    tiles::unsigned_nth_tile(vram, tile_id as usize)
-}
-
-fn signed_nth_tile(vram: &[u8; VRAM_SIZE as usize], tile_id: u8) -> &[u8; 16] {
-    tiles::signed_nth_tile(vram, tile_id.cast_signed() as isize)
+fn load_background_tile_morton(tile_data: &[u8; 16], tile_line: u8) -> u16 {
+    let tile_data_low = tile_data[tile_line as usize * 2].reverse_bits();
+    let tile_data_high = tile_data[tile_line as usize * 2 + 1].reverse_bits();
+    bytes_to_morton(tile_data_low, tile_data_high)
 }
 
 impl Ppu {
@@ -143,41 +140,42 @@ impl Ppu {
                 tiles::tile_map_0(&self.vram)
             };
 
-            let get_tile_data = if self.registers.lcdc.bg_and_window_tiles() {
-                unsigned_nth_tile
-            } else {
-                signed_nth_tile
-            };
-
             // TODO: don't draw tiles that will be covered by the window.
-            for tile_x in 0..21 {
-                let tile_x_idx = (tile_scrolled_left + tile_x) & 0x1F;
-                let tile_id = tile_map[tile_y_idx as usize * 32 + tile_x_idx as usize];
-                let tile_data = get_tile_data(&self.vram, tile_id);
+            let tile_ids = (0..21).map(|tile_x| {
+                let tile_x_idx = (tile_scrolled_left as usize + tile_x) & 0x1F;
+                tile_map[tile_y_idx as usize * 32 + tile_x_idx]
+            });
 
-                let tile_data_low = tile_data[tile_line as usize * 2];
-                let tile_data_high = tile_data[tile_line as usize * 2 + 1];
-
-                let tile_data_morton = bytes_to_morton(tile_data_low, tile_data_high);
-
-                // Push
-                let tile = (0..8).rev().map(|nth_bit| {
-                    #[allow(clippy::cast_possible_truncation)]
-                    let color_index = ColorIndex::from_bits(
-                        (tile_data_morton >> (nth_bit * 2)) as u8 & 0b0000_0011,
-                    );
-                    Pixel::new()
-                        .with_color_index(color_index)
-                        .with_palette(PaletteSelect::Bgp)
-                        .with_priority(false)
-                });
-
-                let pixel_index = tile_x as usize * 8;
-                line_buffer[pixel_index..pixel_index + 8]
-                    .iter_mut()
-                    .zip(tile)
-                    .for_each(|(buf_pixel, new_pixel)| *buf_pixel = new_pixel);
+            let mut tile_data_mortons: [u16; 21] = [0_u16; 21];
+            if self.registers.lcdc.bg_and_window_tiles() {
+                std::iter::zip(
+                    tile_data_mortons.iter_mut(),
+                    tile_ids
+                        .map(|tile_id| tiles::unsigned_nth_tile(&self.vram, tile_id as usize))
+                        .map(|tile_data| load_background_tile_morton(tile_data, tile_line)),
+                )
+                .for_each(|(buf_mortons, tile_data_morton)| *buf_mortons = tile_data_morton);
+            } else {
+                std::iter::zip(
+                    tile_data_mortons.iter_mut(),
+                    tile_ids
+                        .map(|tile_id| {
+                            tiles::signed_nth_tile(&self.vram, tile_id.cast_signed() as isize)
+                        })
+                        .map(|tile_data| load_background_tile_morton(tile_data, tile_line)),
+                )
+                .for_each(|(buf_mortons, tile_data_morton)| *buf_mortons = tile_data_morton);
             }
+
+            line_buffer
+                .iter_mut()
+                .enumerate()
+                .for_each(|(nth_pixel, buf_pixel)| {
+                    *buf_pixel = Pixel::from_bits(
+                        (tile_data_mortons[nth_pixel / 8] >> ((nth_pixel & 7) * 2)) as u8
+                            & 0b0000_0011,
+                    );
+                });
         }
 
         let scrolled_left = self.registers.scx & 7;
