@@ -35,14 +35,6 @@ impl Obj {
         }
     }
 
-    fn intersects_y(self, y: u8, obj_size: bool) -> bool {
-        let obj_height = if obj_size { 16 } else { 8 };
-
-        let y_top = self.y_pos;
-        let y_bottom = y_top + obj_height;
-        (y_top..y_bottom).contains(&(y + 16))
-    }
-
     #[must_use]
     pub fn intersects_x(&self, x: u8) -> bool {
         let x_left = self.x_pos;
@@ -71,6 +63,7 @@ pub(super) fn oam_scan(
     ly: u8,
 ) {
     let obj_size = lcdc.obj_size();
+    let obj_height = if obj_size { 16 } else { 8 };
 
     obj_buffer.clear();
     let (chunks, []) = oam.as_chunks() else {
@@ -79,7 +72,7 @@ pub(super) fn oam_scan(
     chunks
         .iter()
         .map(|bytes| Obj::from_bytes(*bytes))
-        .filter(|obj| (1..160).contains(&obj.y_pos) && obj.intersects_y(ly, obj_size))
+        .filter(|obj| (ly + 16) >= obj.y_pos && (ly + 16) < obj.y_pos.saturating_add(obj_height))
         .take(10)
         .for_each(|obj| obj_buffer.push_back(obj));
 
