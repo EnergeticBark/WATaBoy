@@ -104,17 +104,25 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
     if render_bg { bg_pixel } else { obj_pixel }
 }
 
-// See: https://graphics.stanford.edu/%7Eseander/bithacks.html#Interleave64bitOps
-#[allow(clippy::cast_possible_truncation)]
-fn bytes_to_morton(low: u8, high: u8) -> u16 {
-    (((u64::from(low).wrapping_mul(0x0101_0101_0101_0101) & 0x8040_2010_0804_0201)
-        .wrapping_mul(0x0102_0408_1020_4081)
-        >> 49)
-        & 0x5555
-        | ((u64::from(high).wrapping_mul(0x0101_0101_0101_0101) & 0x8040_2010_0804_0201)
-            .wrapping_mul(0x0102_0408_1020_4081)
-            >> 48)
-            & 0xAAAA) as u16
+// See: https://graphics.stanford.edu/%7Eseander/bithacks.html#InterleaveBMN
+fn shorts_to_morton(low: u16, high: u16) -> u32 {
+    const B: [u32; 4] = [0x5555_5555, 0x3333_3333, 0x0F0F_0F0F, 0x00FF_00FF];
+    const S: [u32; 4] = [1, 2, 4, 8];
+
+    let mut low = u32::from(low);
+    let mut high = u32::from(high);
+
+    low = (low | (low << S[3])) & B[3];
+    low = (low | (low << S[2])) & B[2];
+    low = (low | (low << S[1])) & B[1];
+    low = (low | (low << S[0])) & B[0];
+
+    high = (high | (high << S[3])) & B[3];
+    high = (high | (high << S[2])) & B[2];
+    high = (high | (high << S[1])) & B[1];
+    high = (high | (high << S[0])) & B[0];
+
+    low | (high << 1)
 }
 
 impl Ppu {
@@ -134,13 +142,15 @@ impl Ppu {
                 tiles::tile_map_0(&self.vram)
             };
 
-            // TODO: don't draw tiles that will be covered by the window.
+            // TODO: Maybe don't draw tiles that will be covered by the window?
             let tile_ids = (0..21).map(|tile_x| {
                 let tile_x_idx = (tile_scrolled_left as usize + tile_x) & 0x1F;
                 tile_map[tile_y_idx as usize * 32 + tile_x_idx]
             });
 
-            let mut interleaved_tile_bytes = [0_u8; 42];
+            // Two extra bytes to align with our 32-bit Morton numbers.
+            // The last two bytes will be left as zeros and won't be included in the line_buffer.
+            let mut interleaved_tile_bytes = [0_u8; 44];
             if self.registers.lcdc.bg_and_window_tiles() {
                 let (chunks, _) = interleaved_tile_bytes.as_chunks_mut();
                 std::iter::zip(
@@ -173,22 +183,25 @@ impl Ppu {
                 .for_each(|(chunk, tile_data_low_high)| *chunk = tile_data_low_high);
             }
 
-            let mut tile_data_mortons: [u16; 21] = [0_u16; 21];
+            let mut tile_data_mortons: [u32; 11] = [0_u32; 11];
             let (chunks, _) = interleaved_tile_bytes.as_chunks();
-            std::iter::zip(
-                tile_data_mortons.iter_mut(),
-                chunks
-                    .iter()
-                    .map(|[low, high]| bytes_to_morton(*low, *high)),
-            )
-            .for_each(|(buf_mortons, tile_data_morton)| *buf_mortons = tile_data_morton);
+            tile_data_mortons
+                .iter_mut()
+                .zip(chunks.iter().map(|[low, high, low2, high2]| {
+                    shorts_to_morton(
+                        u16::from_le_bytes([*low, *low2]),
+                        u16::from_le_bytes([*high, *high2]),
+                    )
+                }))
+                .for_each(|(buf_mortons, tile_data_morton)| *buf_mortons = tile_data_morton);
 
+            #[allow(clippy::cast_possible_truncation)]
             line_buffer
                 .iter_mut()
                 .enumerate()
                 .for_each(|(nth_pixel, buf_pixel)| {
                     *buf_pixel = Pixel::from_bits(
-                        (tile_data_mortons[nth_pixel / 8] >> ((nth_pixel & 7) * 2)) as u8
+                        (tile_data_mortons[nth_pixel / 16] >> ((nth_pixel & 15) * 2)) as u8
                             & 0b0000_0011,
                     );
                 });
