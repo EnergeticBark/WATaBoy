@@ -117,12 +117,6 @@ fn bytes_to_morton(low: u8, high: u8) -> u16 {
             & 0xAAAA) as u16
 }
 
-fn load_background_tile_morton(tile_data: &[u8; 16], tile_line: u8) -> u16 {
-    let tile_data_low = tile_data[tile_line as usize * 2].reverse_bits();
-    let tile_data_high = tile_data[tile_line as usize * 2 + 1].reverse_bits();
-    bytes_to_morton(tile_data_low, tile_data_high)
-}
-
 impl Ppu {
     fn coarse_scanline(&mut self) {
         let mut line_buffer = [Pixel::from_bits(0); SCREEN_WIDTH as usize + 8];
@@ -146,26 +140,48 @@ impl Ppu {
                 tile_map[tile_y_idx as usize * 32 + tile_x_idx]
             });
 
-            let mut tile_data_mortons: [u16; 21] = [0_u16; 21];
+            let mut interleaved_tile_bytes = [0_u8; 42];
             if self.registers.lcdc.bg_and_window_tiles() {
+                let (chunks, _) = interleaved_tile_bytes.as_chunks_mut();
                 std::iter::zip(
-                    tile_data_mortons.iter_mut(),
+                    chunks,
                     tile_ids
                         .map(|tile_id| tiles::unsigned_nth_tile(&self.vram, tile_id as usize))
-                        .map(|tile_data| load_background_tile_morton(tile_data, tile_line)),
+                        .map(|tile_data| {
+                            [
+                                tile_data[tile_line as usize * 2].reverse_bits(),
+                                tile_data[tile_line as usize * 2 + 1].reverse_bits(),
+                            ]
+                        }),
                 )
-                .for_each(|(buf_mortons, tile_data_morton)| *buf_mortons = tile_data_morton);
+                .for_each(|(chunk, tile_data_low_high)| *chunk = tile_data_low_high);
             } else {
+                let (chunks, _) = interleaved_tile_bytes.as_chunks_mut();
                 std::iter::zip(
-                    tile_data_mortons.iter_mut(),
+                    chunks,
                     tile_ids
                         .map(|tile_id| {
                             tiles::signed_nth_tile(&self.vram, tile_id.cast_signed() as isize)
                         })
-                        .map(|tile_data| load_background_tile_morton(tile_data, tile_line)),
+                        .map(|tile_data| {
+                            [
+                                tile_data[tile_line as usize * 2].reverse_bits(),
+                                tile_data[tile_line as usize * 2 + 1].reverse_bits(),
+                            ]
+                        }),
                 )
-                .for_each(|(buf_mortons, tile_data_morton)| *buf_mortons = tile_data_morton);
+                .for_each(|(chunk, tile_data_low_high)| *chunk = tile_data_low_high);
             }
+
+            let mut tile_data_mortons: [u16; 21] = [0_u16; 21];
+            let (chunks, _) = interleaved_tile_bytes.as_chunks();
+            std::iter::zip(
+                tile_data_mortons.iter_mut(),
+                chunks
+                    .iter()
+                    .map(|[low, high]| bytes_to_morton(*low, *high)),
+            )
+            .for_each(|(buf_mortons, tile_data_morton)| *buf_mortons = tile_data_morton);
 
             line_buffer
                 .iter_mut()
