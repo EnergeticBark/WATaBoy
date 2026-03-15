@@ -104,6 +104,19 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
     if render_bg { bg_pixel } else { obj_pixel }
 }
 
+// See: https://graphics.stanford.edu/%7Eseander/bithacks.html#Interleave64bitOps
+#[allow(clippy::cast_possible_truncation)]
+fn bytes_to_morton(low: u8, high: u8) -> u16 {
+    (((u64::from(low).wrapping_mul(0x0101_0101_0101_0101) & 0x8040_2010_0804_0201)
+        .wrapping_mul(0x0102_0408_1020_4081)
+        >> 49)
+        & 0x5555
+        | ((u64::from(high).wrapping_mul(0x0101_0101_0101_0101) & 0x8040_2010_0804_0201)
+            .wrapping_mul(0x0102_0408_1020_4081)
+            >> 48)
+            & 0xAAAA) as u16
+}
+
 impl Ppu {
     fn coarse_scanline(&mut self) {
         let mut line_buffer = [Pixel::from_bits(0); SCREEN_WIDTH as usize + 8];
@@ -135,11 +148,14 @@ impl Ppu {
                 let tile_data_low = tile_data[tile_line as usize * 2];
                 let tile_data_high = tile_data[tile_line as usize * 2 + 1];
 
+                let tile_data_morton = bytes_to_morton(tile_data_low, tile_data_high);
+
                 // Push
                 let tile = (0..8).rev().map(|nth_bit| {
-                    let color_index = ColorIndex::new()
-                        .with_low((tile_data_low >> nth_bit) & 1 == 1)
-                        .with_high((tile_data_high >> nth_bit) & 1 == 1);
+                    #[allow(clippy::cast_possible_truncation)]
+                    let color_index = ColorIndex::from_bits(
+                        (tile_data_morton >> (nth_bit * 2)) as u8 & 0b0000_0011,
+                    );
                     Pixel::new()
                         .with_color_index(color_index)
                         .with_palette(PaletteSelect::Bgp)
