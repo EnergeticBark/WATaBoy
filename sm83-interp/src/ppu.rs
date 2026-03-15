@@ -117,6 +117,15 @@ fn bytes_to_morton(low: u8, high: u8) -> u16 {
             & 0xAAAA) as u16
 }
 
+// Temporary workaround to give these functions the same signature so I can take them out of a hot loop.
+fn unsigned_nth_tile(vram: &[u8; VRAM_SIZE as usize], tile_id: u8) -> &[u8; 16] {
+    tiles::unsigned_nth_tile(vram, tile_id as usize)
+}
+
+fn signed_nth_tile(vram: &[u8; VRAM_SIZE as usize], tile_id: u8) -> &[u8; 16] {
+    tiles::signed_nth_tile(vram, tile_id.cast_signed() as isize)
+}
+
 impl Ppu {
     fn coarse_scanline(&mut self) {
         let mut line_buffer = [Pixel::from_bits(0); SCREEN_WIDTH as usize + 8];
@@ -134,16 +143,17 @@ impl Ppu {
                 tiles::tile_map_0(&self.vram)
             };
 
+            let get_tile_data = if self.registers.lcdc.bg_and_window_tiles() {
+                unsigned_nth_tile
+            } else {
+                signed_nth_tile
+            };
+
             // TODO: don't draw tiles that will be covered by the window.
             for tile_x in 0..21 {
                 let tile_x_idx = (tile_scrolled_left + tile_x) & 0x1F;
                 let tile_id = tile_map[tile_y_idx as usize * 32 + tile_x_idx as usize];
-
-                let tile_data = if self.registers.lcdc.bg_and_window_tiles() {
-                    tiles::unsigned_nth_tile(&self.vram, tile_id as usize)
-                } else {
-                    tiles::signed_nth_tile(&self.vram, tile_id.cast_signed() as isize)
-                };
+                let tile_data = get_tile_data(&self.vram, tile_id);
 
                 let tile_data_low = tile_data[tile_line as usize * 2];
                 let tile_data_high = tile_data[tile_line as usize * 2 + 1];
