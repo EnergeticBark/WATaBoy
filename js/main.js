@@ -61,7 +61,7 @@ const update_lcd = () => {
 
 const renderLoop = () => {
 	frametimeCounter.start();
-	for (let i = 0; i < 100; i += 1) {
+	for (let i = 0; i < 10; i += 1) {
 		instance.exports.step_vblank(jitRuntime);
 	}
 	frametimeCounter.end();
