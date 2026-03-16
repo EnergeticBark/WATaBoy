@@ -161,17 +161,18 @@ impl Ppu {
             }
 
             // Ahh, the things we do for auto vectorisation... :3
-            interleaved_tile_bytes
-                .chunks_exact(2)
+            let (chunks, _): (&[[u8; 2]], _) = interleaved_tile_bytes.as_chunks();
+            chunks
+                .iter()
                 .enumerate()
-                .for_each(|(nth_tile, low_high)| {
+                .for_each(|(nth_tile, [low, high])| {
                     (0..8).for_each(|nth_pixel| {
                         #[allow(clippy::cast_possible_truncation)]
                         // Create the background pixels directly from the low and high bits.
                         // The upper 6 bits of each Pixel will be left as zero, meaning they'll use the background palette.
                         let pixel = Pixel::from_bits(
-                            ((low_high[0] >> nth_pixel) & 0b0000_0001)
-                                | (low_high[1].rotate_left(1).rotate_right(nth_pixel as u32)
+                            ((low >> nth_pixel) & 0b0000_0001)
+                                | (high.rotate_left(1).rotate_right(nth_pixel as u32)
                                     & 0b0000_0010),
                         );
 
