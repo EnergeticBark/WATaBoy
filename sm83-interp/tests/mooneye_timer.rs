@@ -61,3 +61,9 @@ fn test_tim11() {
     let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/timer/tim11.gb"));
     assert_eq!(bcdehl, FIBONACCI);
 }
+
+#[test]
+fn test_tima_reload() {
+    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/timer/tima_reload.gb"));
+    assert_eq!(bcdehl, FIBONACCI);
+}

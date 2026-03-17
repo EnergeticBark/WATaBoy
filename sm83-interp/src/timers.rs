@@ -13,6 +13,11 @@ pub struct Timers {
     tima_enabled: bool,
     clock_select_bit: u8,
     tima_edge: bool,
+    // TMA being copied and the interrupt being fired are both delayed by 4 T-Cycles.
+    // When this is Some(), it's value is the number of cycles remaining until TMA is
+    // copied and the timer flag is raised.
+    // See: https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html#timer-overflow-behavior
+    tima_overflow_countdown: Option<u8>,
     interrupt_queued: bool,
 }
 
@@ -51,13 +56,23 @@ impl Timers {
                 let (next_tima, carry) = self.tima.overflowing_add(1);
                 self.tima = next_tima;
 
-                // Overflow, set timer counter to the timer modulo and request for a timer interrupt.
+                // Overflow, queue setting the timer counter to the timer modulo and requesting for a timer interrupt.
                 if carry {
-                    self.tima = self.tma;
-                    self.interrupt_queued = true;
+                    self.tima_overflow_countdown = Some(4);
                 }
             }
             self.tima_edge = next_tima_edge;
+
+            if let Some(t_cycles_remaining) = self.tima_overflow_countdown {
+                let new_remaining = t_cycles_remaining - 1;
+                self.tima_overflow_countdown = if new_remaining == 0 {
+                    self.tima = self.tma;
+                    self.interrupt_queued = true;
+                    None
+                } else {
+                    Some(new_remaining)
+                }
+            }
         }
     }
 
