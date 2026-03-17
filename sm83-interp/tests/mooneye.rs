@@ -19,3 +19,9 @@ fn test_boot_regs_mgb() {
     let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/boot_regs-mgb.gb"));
     assert_eq!(bcdehl, FIBONACCI);
 }
+
+#[test]
+fn test_div_timing() {
+    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/div_timing.gb"));
+    assert_eq!(bcdehl, FIBONACCI);
+}
