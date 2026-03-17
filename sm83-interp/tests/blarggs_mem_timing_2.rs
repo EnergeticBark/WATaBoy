@@ -22,21 +22,21 @@ const MODIFY_TIMING_03: BlarggTest = BlarggTest {
 
 #[test]
 fn test_01_read_timing() {
-    let mut cpu = Cpu::post_boot_dmg();
+    let mut cpu = Cpu::post_boot_mgb();
     let lines = run_blargg_test(&mut cpu, &READ_TIMING_01);
     assert!(lines[3].starts_with("Passed"));
 }
 
 #[test]
 fn test_02_read_timing() {
-    let mut cpu = Cpu::post_boot_dmg();
+    let mut cpu = Cpu::post_boot_mgb();
     let lines = run_blargg_test(&mut cpu, &WRITE_TIMING_02);
     assert!(lines[3].starts_with("Passed"));
 }
 
 #[test]
 fn test_03_modify_timing() {
-    let mut cpu = Cpu::post_boot_dmg();
+    let mut cpu = Cpu::post_boot_mgb();
     let lines = run_blargg_test(&mut cpu, &MODIFY_TIMING_03);
     assert!(lines[3].starts_with("Passed"));
 }

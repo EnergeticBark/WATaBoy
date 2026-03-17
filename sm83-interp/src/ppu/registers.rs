@@ -26,7 +26,7 @@ pub(super) struct IoRegisters {
 }
 
 impl PostBoot for IoRegisters {
-    fn post_boot_dmg() -> Self {
+    fn post_boot_mgb() -> Self {
         IoRegisters {
             lcdc: 0x91.into(),
             stat: 0x85.into(),

@@ -12,7 +12,7 @@ const INSTR_TIMING: BlarggTest = BlarggTest {
 
 #[test]
 fn test_instr_timing() {
-    let mut cpu = Cpu::post_boot_dmg();
+    let mut cpu = Cpu::post_boot_mgb();
     let lines = run_blargg_test(&mut cpu, &INSTR_TIMING);
     assert!(lines[3].starts_with("Passed"));
 }
