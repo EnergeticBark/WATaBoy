@@ -1,4 +1,7 @@
-use hw_constants::{PostBoot, io_regs::DIV};
+use hw_constants::{
+    PostBoot,
+    io_regs::{DIV, TIMA},
+};
 use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::addressable::Addressable;
@@ -22,8 +25,10 @@ pub struct Timers {
 }
 
 impl Timers {
-    pub fn update_timer_counter(&mut self, tima: u8) {
+    fn update_timer_counter(&mut self, tima: u8) {
         self.tima = tima;
+        // Writing to TIMA when an overflow update is queued cancels the update.
+        self.tima_overflow_countdown = None;
     }
 
     pub fn update_timer_modulo(&mut self, tma: u8) {
@@ -80,10 +85,6 @@ impl Timers {
         (self.system_clock >> 8) as u8
     }
 
-    pub fn tima(&self) -> u8 {
-        self.tima
-    }
-
     pub fn process_interrupt(&mut self) -> bool {
         if self.interrupt_queued {
             self.interrupt_queued = false;
@@ -97,15 +98,17 @@ impl Addressable for Timers {
     fn read_byte(&self, index: u16) -> u8 {
         match index {
             DIV => self.div(),
+            TIMA => self.tima,
             _ => unreachable!(),
         }
     }
 
-    fn write_byte(&mut self, index: u16, _: u8, _: u64) {
+    fn write_byte(&mut self, index: u16, value: u8, _: u64) {
         match index {
             // Writing any value to this register resets it to 0.
             // See: https://gbdev.io/pandocs/Timer_and_Divider_Registers.html#ff04--div-divider-register
             DIV => self.system_clock = 0,
+            TIMA => self.update_timer_counter(value),
             _ => unreachable!(),
         }
     }
