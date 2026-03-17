@@ -99,7 +99,10 @@ impl Addressable for Timers {
 impl PostBoot for Timers {
     fn post_boot_mgb() -> Self {
         Self {
-            system_clock: 0xABD4,
+            // Upper byte (0xAB) is based on documented value of the DIV register after an MGB boots.
+            // See: https://gbdev.io/pandocs/Power_Up_Sequence.html#hardware-registers
+            // Lower byte (0xCC) is just the lowest value that managed to pass boot_div-dmgABCmgb.gb
+            system_clock: 0xABCC,
             ..Self::default()
         }
     }
