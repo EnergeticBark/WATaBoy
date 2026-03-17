@@ -1,11 +1,13 @@
-use hw_constants::PostBoot;
+use hw_constants::{PostBoot, io_regs::DIV};
 use rkyv::{Archive, Deserialize, Serialize};
+
+use crate::addressable::Addressable;
 
 #[derive(Default, Archive, Deserialize, Serialize)]
 pub struct Timers {
     // Clock register incremented every T-Cycle.
     // Upper 8-bits exposed as the DIV register in memory.
-    pub system_clock: u16,
+    system_clock: u16,
     tima: u8,
     tma: u8,
     tima_enabled: bool,
@@ -59,7 +61,7 @@ impl Timers {
         }
     }
 
-    pub fn div(&self) -> u8 {
+    fn div(&self) -> u8 {
         (self.system_clock >> 8) as u8
     }
 
@@ -73,6 +75,24 @@ impl Timers {
             return true;
         }
         false
+    }
+}
+
+impl Addressable for Timers {
+    fn read_byte(&self, index: u16) -> u8 {
+        match index {
+            DIV => self.div(),
+            _ => unreachable!(),
+        }
+    }
+
+    fn write_byte(&mut self, index: u16, _: u8, _: u64) {
+        match index {
+            // Writing any value to this register resets it to 0.
+            // See: https://gbdev.io/pandocs/Timer_and_Divider_Registers.html#ff04--div-divider-register
+            DIV => self.system_clock = 0,
+            _ => unreachable!(),
+        }
     }
 }
 
