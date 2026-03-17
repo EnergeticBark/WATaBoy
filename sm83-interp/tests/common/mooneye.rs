@@ -1,3 +1,4 @@
+use hw_constants::PostBoot;
 use sm83_interp::cpu::Cpu;
 use sm83_interp::cpu::opcodes::Opcode;
 use sm83_interp::cpu::opcodes::parameters::R8;
@@ -26,9 +27,11 @@ fn execute_until_ld_b_b(cpu: &mut Cpu) {
     }
 }
 
-pub fn run_mooneye_test(cpu: &mut Cpu, rom: &[u8]) -> [u8; 6] {
+#[must_use]
+pub fn run_mooneye_test(rom: &[u8]) -> [u8; 6] {
+    let mut cpu = Cpu::post_boot_mgb();
     cpu.memory.load_rom(rom);
-    execute_until_ld_b_b(cpu);
+    execute_until_ld_b_b(&mut cpu);
 
-    read_bcdehl(cpu)
+    read_bcdehl(&cpu)
 }
