@@ -85,11 +85,11 @@ impl Registers {
 }
 
 impl PostBoot for Registers {
-    /// Initialize registers to the value they'd be just after executing the DMG boot rom.
+    /// Initialize registers to the value they'd be just after executing the MGB boot rom.
     /// See: <https://gbdev.io/pandocs/Power_Up_Sequence.html#cpu-registers>
-    fn post_boot_dmg() -> Self {
+    fn post_boot_mgb() -> Self {
         Self {
-            af: AccumAndFlags::new().with_a(0x01).with_f(
+            af: AccumAndFlags::new().with_a(0xFF).with_f(
                 Flags::new()
                     .with_z(true)
                     .with_n(false)

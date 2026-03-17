@@ -7,7 +7,7 @@ use sm83_interp::cpu::Cpu;
 
 #[test]
 fn test_hblank_ly_scx_timing_gs() {
-    let mut cpu = Cpu::post_boot_dmg();
+    let mut cpu = Cpu::post_boot_mgb();
     let bcdehl = run_mooneye_test(
         &mut cpu,
         include_bytes!("roms/mooneye/ppu/hblank_ly_scx_timing-GS.gb"),
@@ -18,7 +18,7 @@ fn test_hblank_ly_scx_timing_gs() {
 
 #[test]
 fn test_intr_1_2_timing_gs() {
-    let mut cpu = Cpu::post_boot_dmg();
+    let mut cpu = Cpu::post_boot_mgb();
     let bcdehl = run_mooneye_test(
         &mut cpu,
         include_bytes!("roms/mooneye/ppu/intr_1_2_timing-GS.gb"),
@@ -29,7 +29,7 @@ fn test_intr_1_2_timing_gs() {
 
 #[test]
 fn test_intr_2_0_timing() {
-    let mut cpu = Cpu::post_boot_dmg();
+    let mut cpu = Cpu::post_boot_mgb();
     let bcdehl = run_mooneye_test(
         &mut cpu,
         include_bytes!("roms/mooneye/ppu/intr_2_0_timing.gb"),
@@ -40,7 +40,7 @@ fn test_intr_2_0_timing() {
 
 #[test]
 fn test_intr_2_mode0_timing_sprites() {
-    let mut cpu = Cpu::post_boot_dmg();
+    let mut cpu = Cpu::post_boot_mgb();
     let bcdehl = run_mooneye_test(
         &mut cpu,
         include_bytes!("roms/mooneye/ppu/intr_2_mode0_timing_sprites.gb"),
@@ -51,7 +51,7 @@ fn test_intr_2_mode0_timing_sprites() {
 
 #[test]
 fn test_intr_2_mode0_timing() {
-    let mut cpu = Cpu::post_boot_dmg();
+    let mut cpu = Cpu::post_boot_mgb();
     let bcdehl = run_mooneye_test(
         &mut cpu,
         include_bytes!("roms/mooneye/ppu/intr_2_mode0_timing.gb"),
@@ -62,7 +62,7 @@ fn test_intr_2_mode0_timing() {
 
 #[test]
 fn test_intr_2_mode3_timing() {
-    let mut cpu = Cpu::post_boot_dmg();
+    let mut cpu = Cpu::post_boot_mgb();
     let bcdehl = run_mooneye_test(
         &mut cpu,
         include_bytes!("roms/mooneye/ppu/intr_2_mode3_timing.gb"),
@@ -73,7 +73,7 @@ fn test_intr_2_mode3_timing() {
 
 #[test]
 fn test_intr_2_oam_ok_timing() {
-    let mut cpu = Cpu::post_boot_dmg();
+    let mut cpu = Cpu::post_boot_mgb();
     let bcdehl = run_mooneye_test(
         &mut cpu,
         include_bytes!("roms/mooneye/ppu/intr_2_oam_ok_timing.gb"),
@@ -84,7 +84,7 @@ fn test_intr_2_oam_ok_timing() {
 
 #[test]
 fn test_lcdon_timing_gs() {
-    let mut cpu = Cpu::post_boot_dmg();
+    let mut cpu = Cpu::post_boot_mgb();
     let bcdehl = run_mooneye_test(
         &mut cpu,
         include_bytes!("roms/mooneye/ppu/lcdon_timing-GS.gb"),
@@ -95,7 +95,7 @@ fn test_lcdon_timing_gs() {
 
 #[test]
 fn test_lcdon_write_timing_gs() {
-    let mut cpu = Cpu::post_boot_dmg();
+    let mut cpu = Cpu::post_boot_mgb();
     let bcdehl = run_mooneye_test(
         &mut cpu,
         include_bytes!("roms/mooneye/ppu/lcdon_write_timing-GS.gb"),
@@ -106,7 +106,7 @@ fn test_lcdon_write_timing_gs() {
 
 #[test]
 fn test_stat_irq_blocking() {
-    let mut cpu = Cpu::post_boot_dmg();
+    let mut cpu = Cpu::post_boot_mgb();
     let bcdehl = run_mooneye_test(
         &mut cpu,
         include_bytes!("roms/mooneye/ppu/stat_irq_blocking.gb"),
@@ -117,7 +117,7 @@ fn test_stat_irq_blocking() {
 
 #[test]
 fn test_stat_lyc_onoff() {
-    let mut cpu = Cpu::post_boot_dmg();
+    let mut cpu = Cpu::post_boot_mgb();
     let bcdehl = run_mooneye_test(
         &mut cpu,
         include_bytes!("roms/mooneye/ppu/stat_lyc_onoff.gb"),
@@ -128,7 +128,7 @@ fn test_stat_lyc_onoff() {
 
 #[test]
 fn test_vblank_stat_intr_gs() {
-    let mut cpu = Cpu::post_boot_dmg();
+    let mut cpu = Cpu::post_boot_mgb();
     let bcdehl = run_mooneye_test(
         &mut cpu,
         include_bytes!("roms/mooneye/ppu/vblank_stat_intr-GS.gb"),

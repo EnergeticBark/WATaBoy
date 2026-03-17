@@ -97,7 +97,7 @@ impl Addressable for Timers {
 }
 
 impl PostBoot for Timers {
-    fn post_boot_dmg() -> Self {
+    fn post_boot_mgb() -> Self {
         Self {
             system_clock: 0xABD4,
             ..Self::default()

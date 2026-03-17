@@ -1276,10 +1276,10 @@ impl Cpu {
 }
 
 impl PostBoot for Cpu {
-    fn post_boot_dmg() -> Self {
+    fn post_boot_mgb() -> Self {
         Self {
-            registers: Registers::post_boot_dmg(),
-            memory: AddressBus::post_boot_dmg(),
+            registers: Registers::post_boot_mgb(),
+            memory: AddressBus::post_boot_mgb(),
             ..Self::default()
         }
     }

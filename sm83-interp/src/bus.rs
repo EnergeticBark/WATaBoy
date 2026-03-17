@@ -241,11 +241,11 @@ impl Default for AddressBus {
 }
 
 impl PostBoot for AddressBus {
-    fn post_boot_dmg() -> Self {
+    fn post_boot_mgb() -> Self {
         Self {
             buffer: hw_constants::post_boot_hwio(),
-            timers: Timers::post_boot_dmg(),
-            ppu: Ppu::post_boot_dmg(),
+            timers: Timers::post_boot_mgb(),
+            ppu: Ppu::post_boot_mgb(),
             // TODO: Might be worth running the boot rom to calculate clock and next_interrupt...
             clock: 391, // Needed for the PPU to catch up.
             ..Default::default()

@@ -7,7 +7,7 @@ use sm83_interp::cpu::Cpu;
 
 #[test]
 fn test_boot_hwio_dmg_abc_mgb() {
-    let mut cpu = Cpu::post_boot_dmg();
+    let mut cpu = Cpu::post_boot_mgb();
     let bcdehl = run_mooneye_test(
         &mut cpu,
         include_bytes!("roms/mooneye/boot_hwio-dmgABCmgb.gb"),
@@ -17,9 +17,9 @@ fn test_boot_hwio_dmg_abc_mgb() {
 }
 
 #[test]
-fn test_boot_regs_dmg_abc() {
-    let mut cpu = Cpu::post_boot_dmg();
-    let bcdehl = run_mooneye_test(&mut cpu, include_bytes!("roms/mooneye/boot_regs-dmgABC.gb"));
+fn test_boot_regs_mgb() {
+    let mut cpu = Cpu::post_boot_mgb();
+    let bcdehl = run_mooneye_test(&mut cpu, include_bytes!("roms/mooneye/boot_regs-mgb.gb"));
 
     assert_eq!(bcdehl, FIBONACCI);
 }

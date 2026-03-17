@@ -914,7 +914,7 @@ impl Default for Ppu {
 }
 
 impl PostBoot for Ppu {
-    fn post_boot_dmg() -> Self {
+    fn post_boot_mgb() -> Self {
         Self {
             dots_this_line: DOTS_PER_SCANLINE - 54,
             line_number: 153,
@@ -927,7 +927,7 @@ impl PostBoot for Ppu {
             obj_fetcher: ObjectFetcher::default(),
             vram: [0; VRAM_SIZE as usize],
             oam: [0; OAM_SIZE as usize],
-            registers: IoRegisters::post_boot_dmg(),
+            registers: IoRegisters::post_boot_mgb(),
             stat_interrupt_line: false,
             stat_mode_for_interrupt: 1,
             ly_to_compare_lyc: Some(0),
@@ -955,7 +955,7 @@ mod tests {
     // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
     #[test]
     fn test_minimum_bg_mode_3_dots() {
-        let mut ppu = Ppu::post_boot_dmg();
+        let mut ppu = Ppu::post_boot_mgb();
 
         let mut dot = 0;
         let mut interrupt_flags = 0;
@@ -976,7 +976,7 @@ mod tests {
     // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
     #[test]
     fn test_scrolled_bg_mode_3_dots() {
-        let mut ppu = Ppu::post_boot_dmg();
+        let mut ppu = Ppu::post_boot_mgb();
         ppu.registers.scx = 7;
 
         let mut dot = 0;
@@ -998,7 +998,7 @@ mod tests {
     // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
     #[test]
     fn test_minimum_bg_window_mode_3_dots() {
-        let mut ppu = Ppu::post_boot_dmg();
+        let mut ppu = Ppu::post_boot_mgb();
         // Enable the window.
         ppu.registers.lcdc.set_window_enabled(true);
         // Scroll it to x=50px
@@ -1023,7 +1023,7 @@ mod tests {
     // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
     #[test]
     fn test_scrolled_bg_window_mode_3_dots() {
-        let mut ppu = Ppu::post_boot_dmg();
+        let mut ppu = Ppu::post_boot_mgb();
         ppu.registers.scx = 7;
 
         // Enable the window.
@@ -1050,7 +1050,7 @@ mod tests {
     // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
     #[test]
     fn test_bg_obj_x_0_mode_3_dots() {
-        let mut ppu = Ppu::post_boot_dmg();
+        let mut ppu = Ppu::post_boot_mgb();
         ppu.oam[0x00] = 16; // OBJ Y
         ppu.oam[0x01] = 0; // OBJ X
         ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
@@ -1074,7 +1074,7 @@ mod tests {
     // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
     #[test]
     fn test_bg_2_obj_x_0_mode_3_dots() {
-        let mut ppu = Ppu::post_boot_dmg();
+        let mut ppu = Ppu::post_boot_mgb();
         ppu.oam[0x00] = 16; // OBJ Y
         ppu.oam[0x01] = 0; // OBJ X
         ppu.oam[0x04] = 16; // OBJ Y
@@ -1100,7 +1100,7 @@ mod tests {
     // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
     #[test]
     fn test_bg_10_obj_x_1_mode_3_dots() {
-        let mut ppu = Ppu::post_boot_dmg();
+        let mut ppu = Ppu::post_boot_mgb();
         for i in 0..10 {
             let obj_idx = i * 4;
             ppu.oam[obj_idx] = 16; // OBJ Y
@@ -1127,7 +1127,7 @@ mod tests {
     // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
     #[test]
     fn test_bg_obj_x_2_mode_3_dots() {
-        let mut ppu = Ppu::post_boot_dmg();
+        let mut ppu = Ppu::post_boot_mgb();
         ppu.oam[0x00] = 16; // OBJ Y
         ppu.oam[0x01] = 2; // OBJ X
         ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
@@ -1151,7 +1151,7 @@ mod tests {
     // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
     #[test]
     fn test_bg_obj_x_8_mode_3_dots() {
-        let mut ppu = Ppu::post_boot_dmg();
+        let mut ppu = Ppu::post_boot_mgb();
         ppu.oam[0x00] = 16; // OBJ Y
         ppu.oam[0x01] = 8; // OBJ X
         ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
@@ -1175,7 +1175,7 @@ mod tests {
     // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
     #[test]
     fn test_bg_obj_x_9_mode_3_dots() {
-        let mut ppu = Ppu::post_boot_dmg();
+        let mut ppu = Ppu::post_boot_mgb();
         ppu.oam[0x00] = 16; // OBJ Y
         ppu.oam[0x01] = 9; // OBJ X
         ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
@@ -1240,7 +1240,7 @@ mod tests {
 
     #[test]
     fn vars() {
-        let mut ppu = Ppu::post_boot_dmg();
+        let mut ppu = Ppu::post_boot_mgb();
 
         let filename = "my_vars.csv";
         let mut file = File::create(filename).unwrap();

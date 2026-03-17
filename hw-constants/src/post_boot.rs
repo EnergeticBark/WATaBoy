@@ -1,7 +1,7 @@
 use crate::{MEM_MAP_SIZE, io_regs};
 
 pub trait PostBoot: Sized {
-    fn post_boot_dmg() -> Self;
+    fn post_boot_mgb() -> Self;
 }
 
 // Values are from the "DMG / MGB" column of Pan Docs's table on hardware registers.
