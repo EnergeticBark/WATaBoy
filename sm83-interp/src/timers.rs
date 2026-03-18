@@ -6,6 +6,12 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::addressable::Addressable;
 
+#[derive(Archive, Deserialize, Serialize)]
+enum TimaOverflowState {
+    Cancelable,
+    IgnoringWrites,
+}
+
 #[derive(Default, Archive, Deserialize, Serialize)]
 pub struct Timers {
     // Clock register incremented every T-Cycle.
@@ -16,19 +22,21 @@ pub struct Timers {
     tima_enabled: bool,
     clock_select_bit: u8,
     tima_edge: bool,
-    // TMA being copied and the interrupt being fired are both delayed by 4 T-Cycles.
-    // When this is Some(), it's value is the number of cycles remaining until TMA is
-    // copied and the timer flag is raised.
+    // TMA being copied and the interrupt being fired are both delayed by 1 M-Cycles.
     // See: https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html#timer-overflow-behavior
-    tima_overflow_countdown: Option<u8>,
+    tima_overflow_state: Option<TimaOverflowState>,
     interrupt_queued: bool,
 }
 
 impl Timers {
     fn update_timer_counter(&mut self, tima: u8) {
+        println!("Write {:02X} to TIMA at SYS: {}", tima, self.system_clock);
+        if let Some(TimaOverflowState::IgnoringWrites) = self.tima_overflow_state {
+            return;
+        }
         self.tima = tima;
         // Writing to TIMA when an overflow update is queued cancels the update.
-        self.tima_overflow_countdown = None;
+        self.tima_overflow_state = None;
     }
 
     pub fn update_timer_modulo(&mut self, tma: u8) {
@@ -48,12 +56,24 @@ impl Timers {
 
     pub fn increment(&mut self, m_cycles: u16) {
         // 1 TCycle = 4 MCycles
-        let t_cycles = m_cycles * 4;
 
         let mask: u16 = 1 << self.clock_select_bit;
 
-        for _ in 0..t_cycles {
-            self.system_clock = self.system_clock.wrapping_add(1);
+        for _ in 0..m_cycles {
+            self.system_clock = self.system_clock.wrapping_add(4);
+
+            self.tima_overflow_state = match self.tima_overflow_state {
+                Some(TimaOverflowState::Cancelable) => {
+                    println!(
+                        "Overflow with {:02X} at SYS: {}",
+                        self.tma, self.system_clock
+                    );
+                    self.tima = self.tma;
+                    self.interrupt_queued = true;
+                    Some(TimaOverflowState::IgnoringWrites)
+                }
+                Some(TimaOverflowState::IgnoringWrites) | None => None,
+            };
 
             let next_tima_edge = self.tima_enabled && self.system_clock & mask == mask;
             // If there was a falling edge, increment TIMA.
@@ -63,21 +83,11 @@ impl Timers {
 
                 // Overflow, queue setting the timer counter to the timer modulo and requesting for a timer interrupt.
                 if carry {
-                    self.tima_overflow_countdown = Some(4);
+                    println!("Queue overflow at SYS: {}", self.system_clock);
+                    self.tima_overflow_state = Some(TimaOverflowState::Cancelable);
                 }
             }
             self.tima_edge = next_tima_edge;
-
-            if let Some(t_cycles_remaining) = self.tima_overflow_countdown {
-                let new_remaining = t_cycles_remaining - 1;
-                self.tima_overflow_countdown = if new_remaining == 0 {
-                    self.tima = self.tma;
-                    self.interrupt_queued = true;
-                    None
-                } else {
-                    Some(new_remaining)
-                }
-            }
         }
     }
 
@@ -98,7 +108,13 @@ impl Addressable for Timers {
     fn read_byte(&self, index: u16) -> u8 {
         match index {
             DIV => self.div(),
-            TIMA => self.tima,
+            TIMA => {
+                println!(
+                    "Reading TIMA {:02X} at SYS: {}",
+                    self.tima, self.system_clock
+                );
+                self.tima
+            }
             _ => unreachable!(),
         }
     }
