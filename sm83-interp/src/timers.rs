@@ -1,8 +1,12 @@
+mod registers;
+
 use hw_constants::{
     PostBoot,
-    io_regs::{DIV, TIMA},
+    io_regs::{DIV, TAC, TIMA},
 };
 use rkyv::{Archive, Deserialize, Serialize};
+
+use registers::TimerControl;
 
 use crate::addressable::Addressable;
 
@@ -12,6 +16,9 @@ enum TimaOverflowState {
     IgnoringWrites,
 }
 
+// TODO: On monochrome consoles, disabling the timer if the currently selected bit is set, will send a “Timer tick” once.
+// See: https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html#relation-between-timer-and-divider-register
+// Is there a test ROM for this functionality?
 #[derive(Default, Archive, Deserialize, Serialize)]
 pub struct Timers {
     // Clock register incremented every T-Cycle.
@@ -19,8 +26,7 @@ pub struct Timers {
     system_clock: u16,
     tima: u8,
     tma: u8,
-    tima_enabled: bool,
-    clock_select_bit: u8,
+    tac: TimerControl,
     tima_edge: bool,
     // TMA being copied and the interrupt being fired are both delayed by 1 M-Cycles.
     // See: https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html#timer-overflow-behavior
@@ -43,51 +49,45 @@ impl Timers {
         self.tma = tma;
     }
 
-    pub fn update_timer_control(&mut self, tac: u8) {
-        self.tima_enabled = tac & 0b0000_0100 == 0b0000_0100;
-        self.clock_select_bit = match tac & 0b0000_0011 {
-            0 => 9,
-            1 => 3,
-            2 => 5,
-            3 => 7,
-            _ => unreachable!(),
+    fn update_timer_control(&mut self, tac: u8) {
+        self.tac = TimerControl::from_bits(tac);
+        self.try_ticking_tima();
+    }
+
+    fn try_ticking_tima(&mut self) {
+        self.tima_overflow_state = match self.tima_overflow_state {
+            Some(TimaOverflowState::Cancelable) => {
+                println!(
+                    "Overflow with {:02X} at SYS: {}",
+                    self.tma, self.system_clock
+                );
+                self.tima = self.tma;
+                self.interrupt_queued = true;
+                Some(TimaOverflowState::IgnoringWrites)
+            }
+            Some(TimaOverflowState::IgnoringWrites) | None => None,
         };
+
+        let mask = self.tac.clock_select().mask();
+        let next_tima_edge = self.tac.tima_enabled() && self.system_clock & mask == mask;
+        // If there was a falling edge, increment TIMA.
+        if self.tima_edge && !next_tima_edge {
+            let (next_tima, carry) = self.tima.overflowing_add(1);
+            self.tima = next_tima;
+
+            // Overflow, queue setting the timer counter to the timer modulo and requesting for a timer interrupt.
+            if carry {
+                println!("Queue overflow at SYS: {}", self.system_clock);
+                self.tima_overflow_state = Some(TimaOverflowState::Cancelable);
+            }
+        }
+        self.tima_edge = next_tima_edge;
     }
 
     pub fn increment(&mut self, m_cycles: u16) {
-        // 1 TCycle = 4 MCycles
-
-        let mask: u16 = 1 << self.clock_select_bit;
-
         for _ in 0..m_cycles {
             self.system_clock = self.system_clock.wrapping_add(4);
-
-            self.tima_overflow_state = match self.tima_overflow_state {
-                Some(TimaOverflowState::Cancelable) => {
-                    println!(
-                        "Overflow with {:02X} at SYS: {}",
-                        self.tma, self.system_clock
-                    );
-                    self.tima = self.tma;
-                    self.interrupt_queued = true;
-                    Some(TimaOverflowState::IgnoringWrites)
-                }
-                Some(TimaOverflowState::IgnoringWrites) | None => None,
-            };
-
-            let next_tima_edge = self.tima_enabled && self.system_clock & mask == mask;
-            // If there was a falling edge, increment TIMA.
-            if self.tima_edge && !next_tima_edge {
-                let (next_tima, carry) = self.tima.overflowing_add(1);
-                self.tima = next_tima;
-
-                // Overflow, queue setting the timer counter to the timer modulo and requesting for a timer interrupt.
-                if carry {
-                    println!("Queue overflow at SYS: {}", self.system_clock);
-                    self.tima_overflow_state = Some(TimaOverflowState::Cancelable);
-                }
-            }
-            self.tima_edge = next_tima_edge;
+            self.try_ticking_tima();
         }
     }
 
@@ -115,6 +115,8 @@ impl Addressable for Timers {
                 );
                 self.tima
             }
+            // TODO: See if there's a way to just make these bits 1 using bitfield_struct.
+            TAC => self.tac.into_bits() | 0b1111_1000,
             _ => unreachable!(),
         }
     }
@@ -123,8 +125,12 @@ impl Addressable for Timers {
         match index {
             // Writing any value to this register resets it to 0.
             // See: https://gbdev.io/pandocs/Timer_and_Divider_Registers.html#ff04--div-divider-register
-            DIV => self.system_clock = 0,
+            DIV => {
+                self.system_clock = 0;
+                self.try_ticking_tima();
+            }
             TIMA => self.update_timer_counter(value),
+            TAC => self.update_timer_control(value),
             _ => unreachable!(),
         }
     }
