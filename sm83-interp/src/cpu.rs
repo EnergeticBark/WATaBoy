@@ -16,8 +16,6 @@ use opcodes::parameters::{Condition, R8, R16, R16Mem};
 use opcodes::{Opcode, PrefixOpcode};
 use registers::Registers;
 
-const DMG_BOOT_ROM: &[u8] = include_bytes!("../dmg.bin");
-
 #[derive(Default, Archive, Deserialize, Serialize)]
 pub struct Cpu {
     pub registers: Registers,
@@ -105,11 +103,6 @@ impl Cpu {
             Condition::Nc => !flags.c(),
             Condition::C => flags.c(),
         }
-    }
-
-    pub fn load_boot_rom(&mut self) {
-        #[allow(clippy::cast_possible_truncation)]
-        self.memory.buffer[0..DMG_BOOT_ROM.len()].copy_from_slice(DMG_BOOT_ROM);
     }
 
     fn handle_interrupts(&mut self) {
@@ -1292,7 +1285,6 @@ mod tests {
     #[test]
     fn first_bootrom_instruction() {
         let mut cpu = Cpu::default();
-        cpu.load_boot_rom();
         cpu.execute().unwrap();
         assert_eq!(cpu.registers.sp, 0xFFFE);
     }

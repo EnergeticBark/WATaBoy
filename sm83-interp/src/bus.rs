@@ -6,15 +6,18 @@ use crate::ppu::Ppu;
 use crate::timers::Timers;
 
 use hw_constants::io_regs::{
-    BGP, DIV, IF, JOYP, LCDC, LY, LYC, NR10, NR30, NR32, NR41, NR44, NR52, OBP0, OBP1, SC, SCX,
-    SCY, STAT, TAC, TIMA, TMA, WX, WY,
+    BANK, BGP, DIV, IF, JOYP, LCDC, LY, LYC, NR10, NR30, NR32, NR41, NR44, NR52, OBP0, OBP1, SC,
+    SCX, SCY, STAT, TAC, TIMA, TMA, WX, WY,
 };
 use hw_constants::{IE, MEM_MAP_SIZE, OAM_END, OAM_START, PostBoot, VRAM_END, VRAM_START};
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize, with::Skip};
 
+const MGB_BOOT_ROM: &[u8; 0x100] = include_bytes!("../mgb_boot.bin");
+
 #[derive(Archive, Deserialize, Serialize)]
 pub struct AddressBus {
+    boot_rom: Option<[u8; 0x100]>,
     pub buffer: Box<[u8; MEM_MAP_SIZE]>,
     timers: Timers,
     #[rkyv(with = Skip)]
@@ -35,6 +38,9 @@ impl AddressBus {
 
     pub fn read_byte(&mut self, index: u16) -> u8 {
         match index {
+            // Delegate reads to the boot ROM.
+            0..0x100 if self.boot_rom.is_some() => self.boot_rom.unwrap()[index as usize],
+
             // Delegate reads to the PPU.
             VRAM_START..VRAM_END
             | OAM_START..OAM_END
@@ -139,6 +145,9 @@ impl AddressBus {
                 self.ppu_est_next_intr();
             }
 
+            // Unmount the boot ROM.
+            BANK => self.boot_rom = None,
+
             // There is *nothing* at these addresses, so they don't have names.
             // Their bits are always pulled high.
             0xFF03 | 0xFF08..0xFF0F | 0xFF15 | 0xFF1F | 0xFF27..0xFF30 | 0xFF4C..0xFF80 => {
@@ -215,6 +224,7 @@ impl AddressBus {
 impl Default for AddressBus {
     fn default() -> Self {
         Self {
+            boot_rom: Some(*MGB_BOOT_ROM),
             buffer: vec![0; MEM_MAP_SIZE].into_boxed_slice().try_into().unwrap(),
             timers: Timers::default(),
             ppu: Ppu::default(),
@@ -230,6 +240,7 @@ impl Default for AddressBus {
 impl PostBoot for AddressBus {
     fn post_boot_mgb() -> Self {
         Self {
+            boot_rom: None,
             buffer: hw_constants::post_boot_hwio(),
             timers: Timers::post_boot_mgb(),
             ppu: Ppu::post_boot_mgb(),
