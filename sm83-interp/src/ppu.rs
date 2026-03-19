@@ -873,7 +873,10 @@ impl Addressable for Ppu {
                 self.registers.stat = (stat | masked_value).into();
             }
             SCY => self.registers.scy = value,
-            SCX => self.registers.scx = value,
+            SCX => {
+                self.registers.scx = value;
+                println!("Writing to SCX: {value}");
+            }
             LYC => self.registers.lyc = value,
             BGP => self.registers.bgp = value.into(),
             OBP0 => self.registers.obp0 = value.into(),
@@ -919,24 +922,9 @@ impl PostBoot for Ppu {
             dots_this_line: DOTS_PER_SCANLINE - 54,
             line_number: 153,
             mode: PpuMode::LastLine3,
-            x: 0,
-            pixels_to_drop: 0,
-            window_y: 255,
-            bg_fetcher: BackgroundFetcher::default(),
-            obj_buffer: VecDeque::with_capacity(10),
-            obj_fetcher: ObjectFetcher::default(),
-            vram: [0; VRAM_SIZE as usize],
-            oam: [0; OAM_SIZE as usize],
             registers: IoRegisters::post_boot_mgb(),
-            stat_interrupt_line: false,
             stat_mode_for_interrupt: 1,
-            ly_to_compare_lyc: Some(0),
-            oam_access: PpuMemAccess::ReadWrite,
-            vram_access: PpuMemAccess::ReadWrite,
-            lcd_buffer: vec![0; SCREEN_SIZE],
-            clock: 0,
-            next_vblank_interrupt: 0,
-            next_lcd_interrupt: 0,
+            ..Default::default()
         }
     }
 }
