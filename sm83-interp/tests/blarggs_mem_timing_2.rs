@@ -1,9 +1,6 @@
 pub mod common;
 
-use crate::common::blarggs::{BlarggTest, run_blargg_test};
-
-use hw_constants::PostBoot;
-use sm83_interp::cpu::Cpu;
+use common::blarggs::{BlarggTest, run_blargg_test};
 
 const READ_TIMING_01: BlarggTest = BlarggTest {
     rom: include_bytes!("roms/blarggs/mem_timing_2/rom_singles/01-read_timing.gb"),
@@ -22,21 +19,18 @@ const MODIFY_TIMING_03: BlarggTest = BlarggTest {
 
 #[test]
 fn test_01_read_timing() {
-    let mut cpu = Cpu::post_boot_mgb();
-    let lines = run_blargg_test(&mut cpu, &READ_TIMING_01);
+    let lines = run_blargg_test(&READ_TIMING_01);
     assert!(lines[3].starts_with("Passed"));
 }
 
 #[test]
 fn test_02_read_timing() {
-    let mut cpu = Cpu::post_boot_mgb();
-    let lines = run_blargg_test(&mut cpu, &WRITE_TIMING_02);
+    let lines = run_blargg_test(&WRITE_TIMING_02);
     assert!(lines[3].starts_with("Passed"));
 }
 
 #[test]
 fn test_03_modify_timing() {
-    let mut cpu = Cpu::post_boot_mgb();
-    let lines = run_blargg_test(&mut cpu, &MODIFY_TIMING_03);
+    let lines = run_blargg_test(&MODIFY_TIMING_03);
     assert!(lines[3].starts_with("Passed"));
 }

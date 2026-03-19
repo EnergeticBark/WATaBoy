@@ -27,8 +27,8 @@ impl ClockSelect {
 #[bitfield(u8, order = Msb)]
 #[derive(Archive, Deserialize, Serialize)]
 pub(super) struct TimerControl {
-    #[bits(5)]
-    __: u8, // Padding
+    #[bits(5, default = 0xFF)]
+    __: u8, // Unused bits pulled high.
     #[bits(1)]
     pub(super) tima_enabled: bool,
     #[bits(2)]

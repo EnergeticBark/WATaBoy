@@ -225,7 +225,8 @@ impl Default for AddressBus {
     fn default() -> Self {
         Self {
             boot_rom: Some(*MGB_BOOT_ROM),
-            buffer: vec![0; MEM_MAP_SIZE].into_boxed_slice().try_into().unwrap(),
+			// TODO: Ughhh, make this all zeros again after I delegate SRAM reads to MBC. Has to be like this for Blargg's.
+            buffer: /*vec![0; MEM_MAP_SIZE].into_boxed_slice().try_into().unwrap()*/hw_constants::post_boot_hwio(),
             timers: Timers::default(),
             ppu: Ppu::default(),
             mbc: Mbc::default(),
