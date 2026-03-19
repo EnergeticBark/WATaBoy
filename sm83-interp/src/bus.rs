@@ -54,7 +54,7 @@ impl AddressBus {
             }
 
             // Delegate reads to the timers
-            DIV | TIMA | TAC => self.timers.read_byte(index),
+            DIV | TIMA | TMA | TAC => self.timers.read_byte(index),
 
             // TODO: Delegate MBC bank switches.
             _ => self.buffer[index as usize],
@@ -108,7 +108,7 @@ impl AddressBus {
             SC => self.buffer[index as usize] = value | 0b0111_1110,
 
             // Delegate writes to the timers.
-            DIV | TIMA | TAC => self.timers.write_byte(index, value, self.clock),
+            DIV | TIMA | TMA | TAC => self.timers.write_byte(index, value, self.clock),
 
             IF => self.buffer[index as usize] = value | 0b1110_0000,
 
@@ -172,8 +172,6 @@ impl AddressBus {
         }
         self.half_ticked = false;
 
-        self.timers.update_timer_modulo(self.buffer[TMA as usize]);
-
         self.timers.increment(1);
 
         if self.timers.process_interrupt() {
@@ -187,8 +185,6 @@ impl AddressBus {
             self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
             self.ppu_est_next_intr();
         }
-
-        self.timers.update_timer_modulo(self.buffer[TMA as usize]);
 
         self.timers.increment(m_cycles);
 
