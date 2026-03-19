@@ -249,7 +249,7 @@ impl eframe::App for PPUViewApp {
         ctx.input(|i| {
             if !i.raw.dropped_files.is_empty() {
                 let dropped_file = i.raw.dropped_files.first().unwrap().clone();
-                self.dmg_state = Cpu::post_boot_dmg();
+                self.dmg_state = Cpu::post_boot_mgb();
                 handle_dropped_rom(dropped_file, &mut self.dmg_state);
             }
 
