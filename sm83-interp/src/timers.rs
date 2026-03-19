@@ -2,7 +2,7 @@ mod registers;
 
 use hw_constants::{
     PostBoot,
-    io_regs::{DIV, TAC, TIMA},
+    io_regs::{DIV, TAC, TIMA, TMA},
 };
 use rkyv::{Archive, Deserialize, Serialize};
 
@@ -45,7 +45,7 @@ impl Timers {
         self.tima_overflow_state = None;
     }
 
-    pub fn update_timer_modulo(&mut self, tma: u8) {
+    fn update_timer_modulo(&mut self, tma: u8) {
         self.tma = tma;
     }
 
@@ -115,6 +115,7 @@ impl Addressable for Timers {
                 );
                 self.tima
             }
+            TMA => self.tma,
             // TODO: See if there's a way to just make these bits 1 using bitfield_struct.
             TAC => self.tac.into_bits() | 0b1111_1000,
             _ => unreachable!(),
@@ -130,6 +131,7 @@ impl Addressable for Timers {
                 self.try_ticking_tima();
             }
             TIMA => self.update_timer_counter(value),
+            TMA => self.update_timer_modulo(value),
             TAC => self.update_timer_control(value),
             _ => unreachable!(),
         }
