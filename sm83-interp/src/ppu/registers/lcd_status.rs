@@ -14,8 +14,8 @@ pub enum StatMode {
 
 #[bitfield(u8, order = Msb)]
 pub struct LcdStatus {
-    #[bits(1)]
-    __: bool, // Padding
+    #[bits(1, default = true)]
+    __: bool, // Unused bit pulled high.
     pub lyc_int_select: bool,
     pub mode2_int_select: bool,
     pub mode1_int_select: bool,

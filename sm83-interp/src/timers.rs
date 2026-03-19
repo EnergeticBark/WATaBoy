@@ -19,7 +19,7 @@ enum TimaOverflowState {
 // TODO: On monochrome consoles, disabling the timer if the currently selected bit is set, will send a “Timer tick” once.
 // See: https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html#relation-between-timer-and-divider-register
 // Is there a test ROM for this functionality?
-#[derive(Default, Archive, Deserialize, Serialize)]
+#[derive(Archive, Deserialize, Serialize)]
 pub struct Timers {
     // Clock register incremented every T-Cycle.
     // Upper 8-bits exposed as the DIV register in memory.
@@ -112,8 +112,7 @@ impl Addressable for Timers {
             DIV => self.div(),
             TIMA => self.tima,
             TMA => self.tma,
-            // TODO: See if there's a way to just make these bits 1 using bitfield_struct.
-            TAC => self.tac.into_bits() | 0b1111_1000,
+            TAC => self.tac.into_bits(),
             _ => unreachable!(),
         }
     }
@@ -139,6 +138,20 @@ impl PostBoot for Timers {
             // Lower byte (0xCC) is just the lowest value that managed to pass boot_div-dmgABCmgb.gb
             system_clock: 0xABCC,
             ..Self::default()
+        }
+    }
+}
+
+impl Default for Timers {
+    fn default() -> Self {
+        Self {
+            system_clock: 8,
+            tima: 0,
+            tma: 0,
+            tac: TimerControl::default(),
+            tima_edge: false,
+            tima_overflow_state: None,
+            interrupt_queued: false,
         }
     }
 }
