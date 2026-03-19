@@ -51,6 +51,7 @@ enum PpuMode {
     HBlank,
     HBlank2,
     HBlank3,
+    HBlank4,
     VBlank,
     VBlank2,
     VBlank3,
@@ -580,12 +581,19 @@ impl Ppu {
                     self.mode = PpuMode::HBlank2;
                 }
                 PpuMode::HBlank2 => {
-                    // Observable 4 dots into HBlank, or 256 with the shortest mode 3.
+                    // Most of the timing is based on upstream GameRoy, but here we mimic SameBoy by delaying update_stat_interrupt 1 T-Cycle.
                     self.oam_access = PpuMemAccess::ReadWrite;
                     self.vram_access = PpuMemAccess::ReadWrite;
 
                     self.update_stat_mode(StatMode::HBlank);
                     self.stat_mode_for_interrupt = 0;
+
+                    self.clock += 1;
+                    self.dots_this_line += 1;
+                    self.mode = PpuMode::HBlank3;
+                }
+                PpuMode::HBlank3 => {
+                    // Observable 4 dots into HBlank, or 256 with the shortest mode 3.
                     self.update_stat_interrupt(interrupt_flags);
 
                     let dots_remaining_in_scanline = DOTS_PER_SCANLINE - self.dots_this_line;
@@ -593,9 +601,9 @@ impl Ppu {
                     self.clock += u64::from(dots_remaining_in_scanline) - 1;
                     self.dots_this_line = 0;
                     self.line_number += 1;
-                    self.mode = PpuMode::HBlank3;
+                    self.mode = PpuMode::HBlank4;
                 }
-                PpuMode::HBlank3 => {
+                PpuMode::HBlank4 => {
                     if self.line_number == 144 {
                         self.transition_vblank();
                         self.update_ly_register();
@@ -873,10 +881,7 @@ impl Addressable for Ppu {
                 self.registers.stat = (stat | masked_value).into();
             }
             SCY => self.registers.scy = value,
-            SCX => {
-                self.registers.scx = value;
-                println!("Writing to SCX: {value}");
-            }
+            SCX => self.registers.scx = value,
             LYC => self.registers.lyc = value,
             BGP => self.registers.bgp = value.into(),
             OBP0 => self.registers.obp0 = value.into(),
@@ -1203,6 +1208,52 @@ mod tests {
                 ppu.read_byte(LY),
                 ppu.ly_to_compare_lyc.unwrap_or(0xFF),
                 ppu.read_byte(STAT) & 0b0000_0011,
+                matches!(
+                    ppu.oam_access,
+                    PpuMemAccess::Blocked | PpuMemAccess::WriteOnly
+                ),
+                matches!(ppu.oam_access, PpuMemAccess::Blocked),
+                matches!(
+                    ppu.vram_access,
+                    PpuMemAccess::Blocked | PpuMemAccess::WriteOnly
+                ),
+                matches!(ppu.vram_access, PpuMemAccess::Blocked),
+            );
+            if let Some((_, line_sans_dot)) = output_line.split_once(", ")
+                && line_sans_dot != previous_line_sans_dot
+            {
+                previous_line_sans_dot = line_sans_dot.into();
+                writeln!(&mut file, "{output_line}").unwrap();
+            }
+
+            let mut interrupt_flags = 0;
+            ppu.catch_up(dot + 1, &mut interrupt_flags);
+        }
+    }
+
+    #[test]
+    fn lcd_on_vars_scx1() {
+        let mut ppu = Ppu::default();
+        ppu.write_byte(LCDC, 0x81, 0); // Enable the LCD
+        ppu.write_byte(SCX, 0x01, 0); // SCX=1
+
+        let filename = "my_lcd_on_vars_scx1.csv";
+        let mut file = File::create(filename).unwrap();
+        writeln!(
+			&mut file,
+			"Dot, LY, LY for LYC, STAT Mode, STAT for I, OAM R Blocked, OAM W Blocked, VRAM R Blocked, VRAM W Blocked"
+		)
+		.unwrap();
+
+        // TWO FRAMES
+        let mut previous_line_sans_dot = String::new();
+        for dot in 0..u64::from(DOTS_PER_FRAME) * 2 {
+            let output_line = format!(
+                "{dot}, {}, {}, {}, {}, {}, {}, {}, {}",
+                ppu.read_byte(LY),
+                ppu.ly_to_compare_lyc.unwrap_or(0xFF),
+                ppu.read_byte(STAT) & 0b0000_0011,
+                ppu.stat_mode_for_interrupt,
                 matches!(
                     ppu.oam_access,
                     PpuMemAccess::Blocked | PpuMemAccess::WriteOnly

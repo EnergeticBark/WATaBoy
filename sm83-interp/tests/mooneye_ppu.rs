@@ -2,14 +2,13 @@ pub mod common;
 
 use common::mooneye::{FIBONACCI, run_mooneye_test};
 
-// TODO: Fix this test...
-/*#[test]
+#[test]
 fn test_hblank_ly_scx_timing_gs() {
     let bcdehl = run_mooneye_test(include_bytes!(
         "roms/mooneye/ppu/hblank_ly_scx_timing-GS.gb"
     ));
     assert_eq!(bcdehl, FIBONACCI);
-}*/
+}
 
 #[test]
 fn test_intr_1_2_timing_gs() {
