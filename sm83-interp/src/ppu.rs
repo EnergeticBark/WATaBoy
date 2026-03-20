@@ -690,7 +690,6 @@ impl Ppu {
         }
     }
 
-    #[must_use]
     pub fn predict_next_interrupt(&mut self, ie: InterruptBits) -> u64 {
         self.next_vblank_interrupt = if ie.vblank() {
             // VBlank always happens on this dot.
