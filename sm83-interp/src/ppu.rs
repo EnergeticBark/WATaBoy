@@ -706,7 +706,7 @@ impl Ppu {
         } else {
             u64::MAX
         };
-        self.next_lcd_interrupt = if ie.lcd() { self.clock } else { u64::MAX };
+        self.next_lcd_interrupt = if ie.lcd() { 0 } else { u64::MAX };
 
         self.next_vblank_interrupt.min(self.next_lcd_interrupt)
         // TODO: actual prediction...

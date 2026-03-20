@@ -131,8 +131,7 @@ impl AddressBus {
                 if self.timers.process_interrupt() {
                     self.buffer[IF as usize] |= 0b0000_0100;
                 }
-                self.timers
-                    .predict_next_interrupt(InterruptBits::from(self.buffer[IE as usize]));
+                self.timers_est_next_intr();
             }
 
             IF => self.buffer[index as usize] = value | 0b1110_0000,
@@ -177,54 +176,73 @@ impl AddressBus {
                 self.timers.catch_up(self.clock);
                 self.buffer[index as usize] = value;
                 self.ppu_est_next_intr();
-                self.timers
-                    .predict_next_interrupt(InterruptBits::from(self.buffer[IE as usize]));
+                self.timers_est_next_intr();
             }
             _ => self.buffer[index as usize] = value,
         }
     }
 
     fn ppu_est_next_intr(&mut self) {
-        self.next_interrupt = self
-            .ppu
+        self.ppu
             .predict_next_interrupt(InterruptBits::from(self.buffer[IE as usize]));
+        let next_ppu_interrupt =
+            u64::min(self.ppu.next_vblank_interrupt, self.ppu.next_lcd_interrupt);
+        self.next_interrupt = u64::min(self.timers.next_interrupt, next_ppu_interrupt);
+    }
+
+    fn timers_est_next_intr(&mut self) {
+        self.timers
+            .predict_next_interrupt(InterruptBits::from(self.buffer[IE as usize]));
+        let next_ppu_interrupt =
+            u64::min(self.ppu.next_vblank_interrupt, self.ppu.next_lcd_interrupt);
+        self.next_interrupt = u64::min(self.timers.next_interrupt, next_ppu_interrupt);
     }
 
     pub fn half_increment_timers(&mut self) {
         self.clock += 2;
         if self.next_interrupt <= self.clock {
-            self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
-            self.ppu_est_next_intr();
-        }
-
-        if self.timers.next_interrupt <= self.clock {
-            self.timers.catch_up(self.clock);
-
-            if self.timers.process_interrupt() {
-                self.buffer[IF as usize] |= 0b0000_0100;
+            if self
+                .ppu
+                .next_vblank_interrupt
+                .min(self.ppu.next_lcd_interrupt)
+                <= self.clock
+            {
+                self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
+                self.ppu_est_next_intr();
             }
 
-            self.timers
-                .predict_next_interrupt(InterruptBits::from(self.buffer[IE as usize]));
+            if self.timers.next_interrupt <= self.clock {
+                self.timers.catch_up(self.clock);
+
+                if self.timers.process_interrupt() {
+                    self.buffer[IF as usize] |= 0b0000_0100;
+                }
+                self.timers_est_next_intr();
+            }
         }
     }
 
     pub fn increment_timers(&mut self, m_cycles: u16) {
         self.clock += u64::from(m_cycles) * 4;
         if self.next_interrupt <= self.clock {
-            self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
-            self.ppu_est_next_intr();
-        }
-
-        if self.timers.next_interrupt <= self.clock {
-            self.timers.catch_up(self.clock);
-
-            if self.timers.process_interrupt() {
-                self.buffer[IF as usize] |= 0b0000_0100;
+            if self
+                .ppu
+                .next_vblank_interrupt
+                .min(self.ppu.next_lcd_interrupt)
+                <= self.clock
+            {
+                self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
+                self.ppu_est_next_intr();
             }
 
-            self.timers
-                .predict_next_interrupt(InterruptBits::from(self.buffer[IE as usize]));
+            if self.timers.next_interrupt <= self.clock {
+                self.timers.catch_up(self.clock);
+
+                if self.timers.process_interrupt() {
+                    self.buffer[IF as usize] |= 0b0000_0100;
+                }
+                self.timers_est_next_intr();
+            }
         }
     }
 
