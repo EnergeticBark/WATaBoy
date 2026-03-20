@@ -5,4 +5,4 @@ pub mod ppu;
 pub mod addressable;
 mod bus;
 mod mbc;
-mod timers;
+pub mod timers;

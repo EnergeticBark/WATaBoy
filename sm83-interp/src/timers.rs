@@ -27,15 +27,25 @@ pub struct Timers {
     tima: u8,
     // Timer modulo
     tma: u8,
-    tac: TimerControl,
+    pub tac: TimerControl,
     tima_edge: bool,
     // TMA being copied and the interrupt being fired are both delayed by 1 M-Cycles.
     // See: https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html#timer-overflow-behavior
     tima_overflow_state: Option<TimaOverflowState>,
     interrupt_queued: bool,
+    pub clock: u64,
+    pub next_interrupt: u64,
 }
 
 impl Timers {
+    pub fn catch_up(&mut self, cpu_clock: u64) {
+        let clock_delta = cpu_clock - self.clock;
+        let m_cycles = clock_delta / 4;
+
+        self.increment(m_cycles);
+        self.clock += m_cycles * 4;
+    }
+
     fn reset_divider_register(&mut self) {
         self.system_clock = 0;
         self.try_ticking_tima();
@@ -70,7 +80,7 @@ impl Timers {
         self.tima_edge = next_tima_edge;
     }
 
-    pub fn increment(&mut self, m_cycles: u16) {
+    fn increment(&mut self, m_cycles: u64) {
         for _ in 0..m_cycles {
             self.system_clock = self.system_clock.wrapping_add(4);
 
@@ -152,6 +162,8 @@ impl Default for Timers {
             tima_edge: false,
             tima_overflow_state: None,
             interrupt_queued: false,
+            clock: 0,
+            next_interrupt: 0,
         }
     }
 }
