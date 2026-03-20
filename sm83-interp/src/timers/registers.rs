@@ -5,7 +5,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 #[bitenum]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Archive, Deserialize, Serialize)]
 #[repr(u8)]
-pub(super) enum ClockSelect {
+pub enum ClockSelect {
     #[fallback]
     Ninth = 0,
     Third = 1,
@@ -26,11 +26,11 @@ impl ClockSelect {
 
 #[bitfield(u8, order = Msb)]
 #[derive(Archive, Deserialize, Serialize)]
-pub(super) struct TimerControl {
+pub struct TimerControl {
     #[bits(5, default = 0xFF)]
     __: u8, // Unused bits pulled high.
     #[bits(1)]
-    pub(super) tima_enabled: bool,
+    pub tima_enabled: bool,
     #[bits(2)]
-    pub(super) clock_select: ClockSelect,
+    pub clock_select: ClockSelect,
 }
