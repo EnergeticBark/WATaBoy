@@ -102,8 +102,8 @@ impl PPUViewApp {
     fn draw_menu_bar(&mut self, ui: &mut Ui) {
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
-                if ui.button("Load Bootrom (dmg.bin)").clicked() {
-                    self.dmg_state.load_boot_rom();
+                if ui.button("Load Boot ROM").clicked() {
+                    // self.dmg_state.load_boot_rom();
                 }
 
                 if ui.button("Load State").clicked() {
@@ -208,9 +208,7 @@ impl eframe::App for PPUViewApp {
             if ui.button("Step once").clicked() {
                 println!(
                     "{:?}",
-                    Opcode::decode(
-                        self.dmg_state.memory.buffer[self.dmg_state.registers.pc as usize]
-                    )
+                    Opcode::decode(self.dmg_state.memory.read_byte(self.dmg_state.registers.pc))
                 );
                 if let Err(message) = self.dmg_state.execute() {
                     error!("{message}");
@@ -249,7 +247,8 @@ impl eframe::App for PPUViewApp {
         ctx.input(|i| {
             if !i.raw.dropped_files.is_empty() {
                 let dropped_file = i.raw.dropped_files.first().unwrap().clone();
-                self.dmg_state = Cpu::post_boot_mgb();
+                self.dmg_state = Cpu::default();
+                //self.dmg_state = Cpu::post_boot_mgb();
                 handle_dropped_rom(dropped_file, &mut self.dmg_state);
             }
 

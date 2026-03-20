@@ -16,6 +16,7 @@ pub fn show(ui: &mut egui::Ui, dmg_state: &Cpu) {
         .striped(true)
         .column(Column::auto())
         .column(Column::auto())
+        .column(Column::auto())
         .column(Column::remainder())
         .header(ROW_HEIGHT, |mut header| {
             header.col(|ui| {
@@ -26,6 +27,9 @@ pub fn show(ui: &mut egui::Ui, dmg_state: &Cpu) {
             });
             header.col(|ui| {
                 ui.label("Flagged");
+            });
+            header.col(|ui| {
+                ui.label("Scheduled");
             });
         })
         .body(|body| {
@@ -52,23 +56,61 @@ pub fn show(ui: &mut egui::Ui, dmg_state: &Cpu) {
         .body(|mut body| {
             draw_stat_body(&mut body, dmg_state);
         });
+
+    ui.separator();
+
+    let name = "TAC";
+    ui.heading(name);
+    TableBuilder::new(ui)
+        .id_salt(name)
+        .striped(true)
+        .column(Column::auto())
+        .column(Column::remainder())
+        .header(ROW_HEIGHT, |mut header| {
+            header.col(|ui| {
+                ui.label("Status");
+            });
+            header.col(|ui| {
+                ui.label("Value");
+            });
+        })
+        .body(|mut body| {
+            draw_tac_body(&mut body, dmg_state);
+        });
 }
 
 fn draw_ie_and_if_body(body: TableBody<'_>, dmg_state: &Cpu) {
     let intr_enable = InterruptBits::from_bits(dmg_state.memory.buffer[IE as usize]);
     let intr_flag = InterruptBits::from_bits(dmg_state.memory.buffer[IF as usize]);
 
+    let next_vblank = if dmg_state.memory.ppu.next_vblank_interrupt < u64::MAX {
+        Some(dmg_state.memory.ppu.next_vblank_interrupt - dmg_state.memory.clock)
+    } else {
+        None
+    };
+
+    let next_lcd = if dmg_state.memory.ppu.next_lcd_interrupt < u64::MAX {
+        Some(dmg_state.memory.ppu.next_lcd_interrupt - dmg_state.memory.clock)
+    } else {
+        None
+    };
+
     let values = [
-        ("VBlank", intr_enable.vblank(), intr_flag.vblank()),
-        ("LCD", intr_enable.lcd(), intr_flag.lcd()),
-        ("Timer", intr_enable.timer(), intr_flag.timer()),
-        ("Serial", intr_enable.serial(), intr_flag.serial()),
-        ("Joypad", intr_enable.joypad(), intr_flag.joypad()),
+        (
+            "VBlank",
+            intr_enable.vblank(),
+            intr_flag.vblank(),
+            next_vblank,
+        ),
+        ("LCD", intr_enable.lcd(), intr_flag.lcd(), next_lcd),
+        ("Timer", intr_enable.timer(), intr_flag.timer(), None),
+        ("Serial", intr_enable.serial(), intr_flag.serial(), None),
+        ("Joypad", intr_enable.joypad(), intr_flag.joypad(), None),
     ];
 
     body.rows(ROW_HEIGHT, values.len(), |mut row| {
         let row_index = row.index();
-        let (interrupt, enabled, flagged) = values[row_index];
+        let (interrupt, enabled, flagged, scheduled) = values[row_index];
 
         row.col(|ui| {
             ui.label(interrupt);
@@ -82,6 +124,14 @@ fn draw_ie_and_if_body(body: TableBody<'_>, dmg_state: &Cpu) {
         row.col(|ui| {
             let mut flagged: bool = flagged;
             ui.add_enabled(false, Checkbox::new(&mut flagged, ""));
+        });
+
+        row.col(|ui| {
+            if let Some(cycles) = scheduled {
+                ui.monospace(cycles.to_string());
+            } else {
+                ui.label("N/A");
+            }
         });
     });
 }
@@ -122,4 +172,28 @@ fn draw_stat_body(body: &mut TableBody<'_>, dmg_state: &Cpu) {
     draw_checkbox_row(body, "Mode 1 Int Select", stat.mode1_int_select());
     draw_checkbox_row(body, "Mode 2 Int Select", stat.mode2_int_select());
     draw_checkbox_row(body, "LYC Int Select", stat.lyc_int_select());
+}
+
+fn draw_tac_body(body: &mut TableBody<'_>, dmg_state: &Cpu) {
+    let tac = dmg_state.memory.timers.tac;
+
+    body.row(ROW_HEIGHT, |mut row| {
+        row.col(|ui| {
+            ui.label("Clock select");
+        });
+        let clock_select_name = format!("{}", tac.clock_select().into_bits());
+        row.col(|ui| {
+            ui.label(clock_select_name);
+        });
+    });
+
+    body.row(ROW_HEIGHT, |mut row| {
+        row.col(|ui| {
+            ui.label("TIMA enabled");
+        });
+        row.col(|ui| {
+            let mut checked = tac.tima_enabled();
+            ui.add_enabled(false, Checkbox::new(&mut checked, ""));
+        });
+    });
 }
