@@ -165,7 +165,7 @@ impl AddressBus {
     fn ppu_est_next_intr(&mut self) {
         self.next_interrupt = self
             .ppu
-            .predict_next_interrupt(self.clock, InterruptBits::from(self.buffer[IE as usize]));
+            .predict_next_interrupt(InterruptBits::from(self.buffer[IE as usize]));
     }
 
     pub fn half_increment_timers(&mut self) {
