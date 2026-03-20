@@ -109,6 +109,14 @@ impl Cpu {
         self.memory.update_joypad(); // Is this the best place to put this?
 
         if self.halted {
+            let t_cycles_until_exit = self.memory.next_interrupt.saturating_sub(self.memory.clock);
+            let m_cycles_until_exit = t_cycles_until_exit / 4;
+
+            if m_cycles_until_exit > 0 {
+                self.memory
+                    .increment_timers((m_cycles_until_exit).try_into().unwrap());
+            }
+
             // DMG checks interrupt flags *between* M-Cycles in halt mode.
             self.memory.half_increment_timers();
         }
@@ -130,7 +138,7 @@ impl Cpu {
 
         if self.halted {
             #[cfg(feature = "cpu-logging")]
-            info!(target: "cpu_halt", "Leaving HALT halt on dot: {}", self.memory.ppu.dots_this_line());
+            info!(target: "cpu_halt", "Leaving HALT on clock: {}", self.memory.clock);
 
             self.halted = false;
         }
