@@ -39,7 +39,11 @@ pub struct Timers {
 
 impl Timers {
     pub fn predict_next_interrupt(&mut self, ie: InterruptBits) -> u64 {
-        self.next_interrupt = if ie.timer() { self.clock } else { u64::MAX };
+        self.next_interrupt = if ie.timer() && self.tac.tima_enabled() {
+            self.clock
+        } else {
+            u64::MAX
+        };
         self.next_interrupt
     }
 
