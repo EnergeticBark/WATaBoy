@@ -59,7 +59,19 @@ impl AddressBus {
             }
 
             // Delegate reads to the timers
-            DIV | TIMA | TMA | TAC => self.timers.read_byte(index),
+            DIV | TIMA | TMA | TAC => {
+                self.timers.catch_up(self.clock);
+                self.timers.read_byte(index)
+            }
+
+            IF => {
+                // TODO: I should probably catch up the PPU here too...
+                self.timers.catch_up(self.clock);
+                if self.timers.process_interrupt() {
+                    self.buffer[IF as usize] |= 0b0000_0100;
+                }
+                self.buffer[index as usize]
+            }
 
             // TODO: Delegate MBC bank switches.
             _ => self.buffer[index as usize],
@@ -113,7 +125,12 @@ impl AddressBus {
             SC => self.buffer[index as usize] = value | 0b0111_1110,
 
             // Delegate writes to the timers.
-            DIV | TIMA | TMA | TAC => self.timers.write_byte(index, value, self.clock),
+            DIV | TIMA | TMA | TAC => {
+                self.timers.catch_up(self.clock);
+                self.timers.write_byte(index, value, self.clock);
+                self.timers
+                    .predict_next_interrupt(InterruptBits::from(self.buffer[IE as usize]));
+            }
 
             IF => self.buffer[index as usize] = value | 0b1110_0000,
 
@@ -154,8 +171,11 @@ impl AddressBus {
             }
             IE => {
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
+                self.timers.catch_up(self.clock);
                 self.buffer[index as usize] = value;
                 self.ppu_est_next_intr();
+                self.timers
+                    .predict_next_interrupt(InterruptBits::from(self.buffer[IE as usize]));
             }
             _ => self.buffer[index as usize] = value,
         }
@@ -180,6 +200,9 @@ impl AddressBus {
             if self.timers.process_interrupt() {
                 self.buffer[IF as usize] |= 0b0000_0100;
             }
+
+            self.timers
+                .predict_next_interrupt(InterruptBits::from(self.buffer[IE as usize]));
         }
     }
 
@@ -196,6 +219,9 @@ impl AddressBus {
             if self.timers.process_interrupt() {
                 self.buffer[IF as usize] |= 0b0000_0100;
             }
+
+            self.timers
+                .predict_next_interrupt(InterruptBits::from(self.buffer[IE as usize]));
         }
     }
 

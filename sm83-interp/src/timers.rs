@@ -8,7 +8,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 use registers::TimerControl;
 
-use crate::addressable::Addressable;
+use crate::{addressable::Addressable, cpu::InterruptBits};
 
 #[derive(Archive, Deserialize, Serialize)]
 enum TimaOverflowState {
@@ -38,6 +38,11 @@ pub struct Timers {
 }
 
 impl Timers {
+    pub fn predict_next_interrupt(&mut self, ie: InterruptBits) -> u64 {
+        self.next_interrupt = if ie.timer() { self.clock } else { u64::MAX };
+        self.next_interrupt
+    }
+
     pub fn catch_up(&mut self, cpu_clock: u64) {
         let clock_delta = cpu_clock - self.clock;
         let m_cycles = clock_delta / 4;
