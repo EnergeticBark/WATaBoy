@@ -128,6 +128,9 @@ impl AddressBus {
             DIV | TIMA | TMA | TAC => {
                 self.timers.catch_up(self.clock);
                 self.timers.write_byte(index, value, self.clock);
+                if self.timers.process_interrupt() {
+                    self.buffer[IF as usize] |= 0b0000_0100;
+                }
                 self.timers
                     .predict_next_interrupt(InterruptBits::from(self.buffer[IE as usize]));
             }
