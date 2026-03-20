@@ -19,11 +19,10 @@ const MGB_BOOT_ROM: &[u8; 0x100] = include_bytes!("../mgb_boot.bin");
 pub struct AddressBus {
     boot_rom: Option<[u8; 0x100]>,
     pub buffer: Box<[u8; MEM_MAP_SIZE]>,
-    timers: Timers,
+    pub timers: Timers,
     #[rkyv(with = Skip)]
     pub ppu: Ppu,
     mbc: Mbc,
-    half_ticked: bool,
     #[rkyv(with = Skip)]
     pub buttons_held: ButtonsHeld,
     pub clock: u64,
@@ -175,16 +174,12 @@ impl AddressBus {
             self.ppu_est_next_intr();
         }
 
-        if !self.half_ticked {
-            self.half_ticked = true;
-            return;
-        }
-        self.half_ticked = false;
+        if self.timers.next_interrupt <= self.clock {
+            self.timers.catch_up(self.clock);
 
-        self.timers.increment(1);
-
-        if self.timers.process_interrupt() {
-            self.buffer[IF as usize] |= 0b0000_0100;
+            if self.timers.process_interrupt() {
+                self.buffer[IF as usize] |= 0b0000_0100;
+            }
         }
     }
 
@@ -195,10 +190,12 @@ impl AddressBus {
             self.ppu_est_next_intr();
         }
 
-        self.timers.increment(m_cycles);
+        if self.timers.next_interrupt <= self.clock {
+            self.timers.catch_up(self.clock);
 
-        if self.timers.process_interrupt() {
-            self.buffer[IF as usize] |= 0b0000_0100;
+            if self.timers.process_interrupt() {
+                self.buffer[IF as usize] |= 0b0000_0100;
+            }
         }
     }
 
@@ -230,7 +227,6 @@ impl Default for AddressBus {
             timers: Timers::default(),
             ppu: Ppu::default(),
             mbc: Mbc::default(),
-            half_ticked: false,
             buttons_held: ButtonsHeld::default(),
             clock: 0,
             next_interrupt: 0,
