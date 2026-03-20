@@ -39,11 +39,27 @@ pub struct Timers {
 
 impl Timers {
     pub fn predict_next_interrupt(&mut self, ie: InterruptBits) -> u64 {
-        self.next_interrupt = if ie.timer() && self.tac.tima_enabled() {
-            self.clock
-        } else {
-            u64::MAX
-        };
+        if !ie.timer() {
+            self.next_interrupt = u64::MAX;
+            return self.next_interrupt;
+        }
+
+        if matches!(
+            self.tima_overflow_state,
+            Some(TimaOverflowState::Cancelable)
+        ) {
+            // The interrupt from TIMA overflowing will occur even if TIMA was disabled.
+            self.next_interrupt = self.clock + 4;
+            return self.next_interrupt;
+        }
+
+        if !self.tac.tima_enabled() {
+            self.next_interrupt = u64::MAX;
+            return self.next_interrupt;
+        }
+
+        // TODO: Actually calculate this
+        self.next_interrupt = self.clock;
         self.next_interrupt
     }
 
