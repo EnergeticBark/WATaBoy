@@ -691,10 +691,9 @@ impl Ppu {
     }
 
     #[must_use]
-    pub fn predict_next_interrupt(&mut self, cpu_clock: u64, ie: InterruptBits) -> u64 {
+    pub fn predict_next_interrupt(&mut self, ie: InterruptBits) -> u64 {
         self.next_vblank_interrupt = if ie.vblank() {
             // VBlank always happens on this dot.
-            // TODO: This might need to be +3 actually, needs testing.
             let vblank_dot = 144 * i64::from(DOTS_PER_SCANLINE) + 4;
             let current_dot = i64::from(self.line_number) * i64::from(DOTS_PER_SCANLINE)
                 + i64::from(self.dots_this_line);
@@ -704,11 +703,11 @@ impl Ppu {
                 dots_from_vblank += i64::from(DOTS_PER_FRAME);
             }
 
-            cpu_clock + dots_from_vblank.cast_unsigned()
+            self.clock + dots_from_vblank.cast_unsigned()
         } else {
             u64::MAX
         };
-        self.next_lcd_interrupt = if ie.lcd() { cpu_clock } else { u64::MAX };
+        self.next_lcd_interrupt = if ie.lcd() { self.clock } else { u64::MAX };
 
         self.next_vblank_interrupt.min(self.next_lcd_interrupt)
         // TODO: actual prediction...
