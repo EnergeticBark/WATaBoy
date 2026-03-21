@@ -12,6 +12,8 @@ pub use registers::{LcdControl, LcdStatus, StatMode};
 use log::{info, trace};
 
 use std::collections::VecDeque;
+use std::ops::BitAnd;
+use std::simd::Simd;
 
 use hw_constants::io_regs::{BGP, LCDC, LY, LYC, OBP0, OBP1, SCX, SCY, STAT, WX, WY};
 use hw_constants::{
@@ -106,6 +108,7 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
 }
 
 impl Ppu {
+    #[inline(never)]
     fn coarse_scanline(&mut self) {
         let mut line_buffer = [Pixel::from_bits(0); SCREEN_WIDTH as usize + 8];
 
@@ -323,21 +326,38 @@ impl Ppu {
         let line_end = line_start + SCREEN_WIDTH as usize;
         let scanline = &mut self.lcd_buffer[line_start..line_end];
 
-        scanline
+        let palette_colors = Simd::from_array([
+            self.registers.bgp.id_0().into_bits(),
+            self.registers.bgp.id_1().into_bits(),
+            self.registers.bgp.id_2().into_bits(),
+            self.registers.bgp.id_3().into_bits(),
+            self.registers.obp0.id_0().into_bits(),
+            self.registers.obp0.id_1().into_bits(),
+            self.registers.obp0.id_2().into_bits(),
+            self.registers.obp0.id_3().into_bits(),
+            self.registers.obp1.id_0().into_bits(),
+            self.registers.obp1.id_1().into_bits(),
+            self.registers.obp1.id_2().into_bits(),
+            self.registers.obp1.id_3().into_bits(),
+            0,
+            0,
+            0,
+            0,
+        ]);
+
+        let (lcd_chunks, _) = scanline.as_chunks_mut();
+        let (scanline_chunks, _) = line_buffer[scrolled_left as usize..].as_chunks();
+
+        lcd_chunks
             .iter_mut()
-            .zip(line_buffer[scrolled_left as usize..].iter())
-            .for_each(|(lcd_byte, pixel)| {
-                let palette = match pixel.palette() {
-                    PaletteSelect::Bgp => self.registers.bgp,
-                    PaletteSelect::Obp0 => self.registers.obp0,
-                    PaletteSelect::Obp1 => self.registers.obp1,
-                };
-                // Bitshift by hand instead of calling map_to_color() because this actually auto vectorises.
-                let color =
-                    (palette.into_bits() >> (pixel.color_index().into_bits() * 2)) & 0b0000_0011;
+            .zip(scanline_chunks)
+            .for_each(|(lcd_chunk, scanline_chunk)| {
+                let colors = palette_colors.swizzle_dyn(
+                    Simd::from_array(scanline_chunk.map(Pixel::into_bits)) & Simd::splat(15),
+                );
 
                 // Get the colour's correct greyscale value.
-                *lcd_byte = 255 - color * 64;
+                *lcd_chunk = (Simd::splat(255) - colors * Simd::splat(64)).to_array();
             });
     }
 
