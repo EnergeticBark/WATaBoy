@@ -1,3 +1,6 @@
+#[cfg(feature = "woke-counters")]
+use std::collections::HashMap;
+
 use crate::addressable::Addressable;
 use crate::cpu::InterruptBits;
 use crate::joypad::{ButtonsHeld, Joyp};
@@ -27,6 +30,8 @@ pub struct AddressBus {
     pub buttons_held: ButtonsHeld,
     pub clock: u64,
     pub next_interrupt: u64,
+    #[cfg(feature = "woke-counters")]
+    pub woke_ppu: HashMap<u16, u64>,
 }
 
 impl AddressBus {
@@ -54,6 +59,13 @@ impl AddressBus {
             | OBP1
             | WY
             | WX => {
+                #[cfg(feature = "woke-counters")]
+                if let Some(woke_count) = self.woke_ppu.get_mut(&index) {
+                    *woke_count += 1;
+                } else {
+                    self.woke_ppu.insert(index, 1);
+                }
+
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.read_byte(index)
             }
@@ -277,6 +289,8 @@ impl Default for AddressBus {
             buttons_held: ButtonsHeld::default(),
             clock: 0,
             next_interrupt: 0,
+			#[cfg(feature = "woke-counters")]
+			woke_ppu: HashMap::new(),
         }
     }
 }
