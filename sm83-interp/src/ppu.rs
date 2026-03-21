@@ -345,6 +345,9 @@ impl Ppu {
             0,
         ]);
 
+        // Get the palette's colours into their correct greyscale values.
+        let greyscale_colors = Simd::splat(255) - palette_colors * Simd::splat(64);
+
         let (lcd_chunks, _) = scanline.as_chunks_mut();
         let (scanline_chunks, _) = line_buffer[scrolled_left as usize..].as_chunks();
 
@@ -352,12 +355,11 @@ impl Ppu {
             .iter_mut()
             .zip(scanline_chunks)
             .for_each(|(lcd_chunk, scanline_chunk)| {
-                let colors = palette_colors.swizzle_dyn(
-                    Simd::from_array(scanline_chunk.map(Pixel::into_bits)) & Simd::splat(15),
-                );
-
-                // Get the colour's correct greyscale value.
-                *lcd_chunk = (Simd::splat(255) - colors * Simd::splat(64)).to_array();
+                *lcd_chunk = greyscale_colors
+                    .swizzle_dyn(
+                        Simd::from_array(scanline_chunk.map(Pixel::into_bits)) & Simd::splat(15),
+                    )
+                    .to_array();
             });
     }
 
