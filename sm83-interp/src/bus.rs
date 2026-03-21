@@ -60,10 +60,18 @@ impl AddressBus {
             | WY
             | WX => {
                 #[cfg(feature = "woke-counters")]
-                if let Some(woke_count) = self.woke_ppu.get_mut(&index) {
-                    *woke_count += 1;
-                } else {
-                    self.woke_ppu.insert(index, 1);
+                {
+                    // Collapse VRAM and OAM read indexes into the start of VRAM or OAM.
+                    let key = match index {
+                        VRAM_START..VRAM_END => VRAM_START,
+                        OAM_START..OAM_END => OAM_START,
+                        _ => index,
+                    };
+                    if let Some(woke_count) = self.woke_ppu.get_mut(&key) {
+                        *woke_count += 1;
+                    } else {
+                        self.woke_ppu.insert(key, 1);
+                    }
                 }
 
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
