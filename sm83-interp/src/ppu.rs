@@ -416,7 +416,7 @@ impl Ppu {
                 }
                 PpuMode::JustEnabled6 => {
                     self.update_ly_register();
-                    self.transition_oam_scan();
+                    self.mode = PpuMode::OamScan;
                     // TEMP: needed for mixed tick and catch up so we don't instantly go to OAM.
                     self.clock += 1;
                 }
@@ -626,14 +626,12 @@ impl Ppu {
                     self.mode = PpuMode::HBlank4;
                 }
                 PpuMode::HBlank4 => {
+                    self.update_ly_register();
                     if self.line_number == 144 {
-                        self.transition_vblank();
-                        self.update_ly_register();
+                        self.mode = PpuMode::VBlank;
                         self.ly_to_compare_lyc = None;
                     } else {
-                        // Update LCD Y coordinate.
-                        self.update_ly_register();
-                        self.transition_oam_scan();
+                        self.mode = PpuMode::OamScan;
                     }
 
                     // TEMP: needed for mixed tick and catch up so we don't instantly go to OAM.
@@ -706,7 +704,7 @@ impl Ppu {
                     self.dots_this_line = 0;
                     self.line_number = 0;
                     self.window_y = 255;
-                    self.transition_oam_scan();
+                    self.mode = PpuMode::OamScan;
                 }
             }
         }
@@ -761,18 +759,6 @@ impl Ppu {
         // Reset each of the fetchers.
         self.bg_fetcher.reset();
         self.obj_fetcher.reset();
-    }
-
-    fn transition_vblank(&mut self) {
-        self.mode = PpuMode::VBlank;
-        // Update LCD Y coordinate.
-        self.update_ly_register();
-    }
-
-    fn transition_oam_scan(&mut self) {
-        self.mode = PpuMode::OamScan;
-        #[cfg(feature = "ppu-logging")]
-        trace!(target: "ppu_oamscan", "Set to Mode 2 on dot: {}", self.dots_this_line());
     }
 
     fn transition_drawing(&mut self) {
