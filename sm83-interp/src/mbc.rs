@@ -32,7 +32,7 @@ impl MbcKind {
 #[derive(Default, Archive, Deserialize, Serialize)]
 pub struct Mbc {
     ram_enabled: bool,
-    rom: Vec<u8>,
+    pub rom: Vec<u8>,
     ext_ram: Vec<u8>,
     current_ram_bank: u8,
     banking_mode: bool,

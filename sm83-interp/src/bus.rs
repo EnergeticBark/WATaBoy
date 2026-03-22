@@ -1,5 +1,6 @@
 #[cfg(feature = "woke-counters")]
 use std::collections::HashMap;
+use std::hint::cold_path;
 
 use crate::addressable::Addressable;
 use crate::cpu::InterruptBits;
@@ -20,7 +21,6 @@ const MGB_BOOT_ROM: &[u8; 0x100] = include_bytes!("../mgb_boot.bin");
 
 #[derive(Archive, Deserialize, Serialize)]
 pub struct AddressBus {
-    boot_rom: Option<[u8; 0x100]>,
     pub buffer: Box<[u8; MEM_MAP_SIZE]>,
     pub timers: Timers,
     #[rkyv(with = Skip)]
@@ -37,14 +37,13 @@ pub struct AddressBus {
 impl AddressBus {
     pub fn load_rom(&mut self, rom: &[u8]) {
         self.buffer[0..0x8000].copy_from_slice(&rom[0..0x8000]);
+        // Write the boot ROM over the first 0x100 bytes, we'll 'unmount' it later.
+        self.buffer[0..0x100].copy_from_slice(MGB_BOOT_ROM);
         self.mbc.load_rom(rom);
     }
 
-    pub fn read_byte(&mut self, index: u16) -> u8 {
+    fn read_special(&mut self, index: u16) -> u8 {
         match index {
-            // Delegate reads to the boot ROM.
-            0..0x100 if self.boot_rom.is_some() => self.boot_rom.unwrap()[index as usize],
-
             // Delegate reads to the PPU.
             VRAM_START..VRAM_END
             | OAM_START..OAM_END
@@ -81,17 +80,29 @@ impl AddressBus {
 
             // Delegate reads to the timers
             DIV | TIMA | TMA | TAC => {
-                self.timers.catch_up(self.clock);
+                self.timers
+                    .catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.timers.read_byte(index, self.clock)
             }
 
             IF => {
                 // TODO: I should probably catch up the PPU here too...
-                self.timers.catch_up(self.clock);
-                if self.timers.process_interrupt() {
-                    self.buffer[IF as usize] |= 0b0000_0100;
-                }
+                self.timers
+                    .catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.buffer[index as usize]
+            }
+            _ => self.buffer[index as usize],
+        }
+    }
+
+    // This is incredibly hacky, but it prevents any stack frames from being created when index < VRAM_START.
+    // Maybe see if there's a better way to do this? Keywords: "fast-mem" maybe?
+    pub fn read_byte(&mut self, index: u16) -> u8 {
+        match index {
+            // Delegate reads to the PPU.
+            VRAM_START.. => {
+                cold_path();
+                self.read_special(index)
             }
 
             // TODO: Delegate MBC bank switches.
@@ -147,11 +158,9 @@ impl AddressBus {
 
             // Delegate writes to the timers.
             DIV | TIMA | TMA | TAC => {
-                self.timers.catch_up(self.clock);
+                self.timers
+                    .catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.timers.write_byte(index, value, self.clock);
-                if self.timers.process_interrupt() {
-                    self.buffer[IF as usize] |= 0b0000_0100;
-                }
                 self.timers_est_next_intr();
             }
 
@@ -191,7 +200,10 @@ impl AddressBus {
             }
 
             // Unmount the boot ROM.
-            BANK => self.boot_rom = None,
+            BANK => {
+                // TODO: Do this in Mbc and stop making .rom public?
+                self.buffer[..0x100].copy_from_slice(&self.mbc.rom[..0x100]);
+            }
 
             // There is *nothing* at these addresses, so they don't have names.
             // Their bits are always pulled high.
@@ -200,7 +212,8 @@ impl AddressBus {
             }
             IE => {
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
-                self.timers.catch_up(self.clock);
+                self.timers
+                    .catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.buffer[index as usize] = value;
                 self.ppu_est_next_intr();
                 self.timers_est_next_intr();
@@ -239,11 +252,8 @@ impl AddressBus {
             }
 
             if self.timers.next_interrupt <= self.clock {
-                self.timers.catch_up(self.clock);
-
-                if self.timers.process_interrupt() {
-                    self.buffer[IF as usize] |= 0b0000_0100;
-                }
+                self.timers
+                    .catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.timers_est_next_intr();
             }
         }
@@ -263,11 +273,8 @@ impl AddressBus {
             }
 
             if self.timers.next_interrupt <= self.clock {
-                self.timers.catch_up(self.clock);
-
-                if self.timers.process_interrupt() {
-                    self.buffer[IF as usize] |= 0b0000_0100;
-                }
+                self.timers
+                    .catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.timers_est_next_intr();
             }
         }
@@ -295,7 +302,6 @@ impl AddressBus {
 impl Default for AddressBus {
     fn default() -> Self {
         Self {
-            boot_rom: Some(*MGB_BOOT_ROM),
 			// TODO: Ughhh, make this all zeros again after I delegate SRAM reads to MBC. Has to be like this for Blargg's.
             buffer: /*vec![0; MEM_MAP_SIZE].into_boxed_slice().try_into().unwrap()*/hw_constants::post_boot_hwio(),
             timers: Timers::default(),
@@ -313,7 +319,6 @@ impl Default for AddressBus {
 impl PostBoot for AddressBus {
     fn post_boot_mgb() -> Self {
         Self {
-            boot_rom: None,
             buffer: hw_constants::post_boot_hwio(),
             timers: Timers::post_boot_mgb(),
             ppu: Ppu::post_boot_mgb(),
