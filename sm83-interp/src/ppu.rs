@@ -12,7 +12,6 @@ pub use registers::{LcdControl, LcdStatus, StatMode};
 use log::{info, trace};
 
 use std::collections::VecDeque;
-use std::ops::BitAnd;
 use std::simd::Simd;
 
 use hw_constants::io_regs::{BGP, LCDC, LY, LYC, OBP0, OBP1, SCX, SCY, STAT, WX, WY};
@@ -109,6 +108,33 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
 
 impl Ppu {
     #[inline(never)]
+    fn compute_ly(&self, cpu_clock: u64) -> u8 {
+        if matches!(self.mode, PpuMode::Disabled) {
+            return 0;
+        }
+
+        let mut dots_since_catch_up = cpu_clock.saturating_sub(self.clock);
+
+        // TODO: CALCULATE FOR OTHER MODES TOO. Or just don't do this optimisation if it was just enabled.
+        if matches!(self.mode, PpuMode::JustEnabled) {
+            dots_since_catch_up += 7;
+        }
+
+        let would_be_dot_total = u64::from(self.dots_this_line) + dots_since_catch_up;
+
+        let would_be_line =
+            u64::from(self.line_number) + would_be_dot_total / u64::from(DOTS_PER_SCANLINE);
+        #[allow(clippy::cast_possible_truncation)]
+        let would_be_line = (would_be_line % u64::from(SCANLINES_PER_FRAME)) as u8;
+        let would_be_dots_this_line = would_be_dot_total % u64::from(DOTS_PER_SCANLINE);
+
+        if would_be_line == 153 && would_be_dots_this_line > 5 {
+            0
+        } else {
+            would_be_line
+        }
+    }
+
     fn coarse_scanline(&mut self) {
         let mut line_buffer = [Pixel::from_bits(0); SCREEN_WIDTH as usize + 8];
 
@@ -415,7 +441,6 @@ impl Ppu {
                     self.mode = PpuMode::JustEnabled6;
                 }
                 PpuMode::JustEnabled6 => {
-                    self.update_ly_register();
                     self.mode = PpuMode::OamScan;
                     // TEMP: needed for mixed tick and catch up so we don't instantly go to OAM.
                     self.clock += 1;
@@ -621,12 +646,12 @@ impl Ppu {
                     let dots_remaining_in_scanline = DOTS_PER_SCANLINE - self.dots_this_line;
 
                     self.clock += u64::from(dots_remaining_in_scanline) - 1;
-                    self.dots_this_line = 0;
-                    self.line_number += 1;
+                    self.dots_this_line += dots_remaining_in_scanline - 1;
                     self.mode = PpuMode::HBlank4;
                 }
                 PpuMode::HBlank4 => {
-                    self.update_ly_register();
+                    self.dots_this_line = 0;
+                    self.line_number += 1;
                     if self.line_number == 144 {
                         self.mode = PpuMode::VBlank;
                         self.ly_to_compare_lyc = None;
@@ -672,8 +697,6 @@ impl Ppu {
                     } else {
                         self.mode = PpuMode::VBlank;
                     }
-                    // Update LCD Y coordinate.
-                    self.update_ly_register();
                 }
                 PpuMode::LastLine => {
                     self.clock += 5;
@@ -682,8 +705,6 @@ impl Ppu {
                 }
                 PpuMode::LastLine2 => {
                     // Observable 6.
-                    // Force LY I/O register to 0 early.
-                    self.registers.ly = 0;
                     self.ly_to_compare_lyc = Some(153);
                     self.update_stat_interrupt(interrupt_flags);
 
@@ -772,10 +793,6 @@ impl Ppu {
         self.pixels_to_drop = (self.registers.scx & 7) + 8;
     }
 
-    fn update_ly_register(&mut self) {
-        self.registers.ly = self.line_number;
-    }
-
     fn update_stat_mode(&mut self, mode: StatMode) {
         self.registers.stat.set_mode(mode);
     }
@@ -825,13 +842,12 @@ impl Ppu {
             };
 
             self.registers.stat.set_mode(StatMode::HBlank);
-            self.update_ly_register();
         }
     }
 }
 
 impl Addressable for Ppu {
-    fn read_byte(&self, index: u16) -> u8 {
+    fn read_byte(&self, index: u16, cpu_clock: u64) -> u8 {
         match index {
             VRAM_START..VRAM_END => match self.vram_access {
                 PpuMemAccess::ReadWrite => self.vram[(index - VRAM_START) as usize],
@@ -845,7 +861,7 @@ impl Addressable for Ppu {
             STAT => self.registers.stat.into(),
             SCY => self.registers.scy,
             SCX => self.registers.scx,
-            LY => self.registers.ly,
+            LY => self.compute_ly(cpu_clock),
             LYC => self.registers.lyc,
             BGP => self.registers.bgp.into(),
             OBP0 => self.registers.obp0.into(),
@@ -1211,9 +1227,9 @@ mod tests {
         for dot in 0..u64::from(DOTS_PER_FRAME) * 2 {
             let output_line = format!(
                 "{dot}, {}, {}, {}, {}, {}, {}, {}",
-                ppu.read_byte(LY),
+                ppu.read_byte(LY, dot),
                 ppu.ly_to_compare_lyc.unwrap_or(0xFF),
-                ppu.read_byte(STAT) & 0b0000_0011,
+                ppu.read_byte(STAT, dot) & 0b0000_0011,
                 matches!(
                     ppu.oam_access,
                     PpuMemAccess::Blocked | PpuMemAccess::WriteOnly
@@ -1238,6 +1254,53 @@ mod tests {
     }
 
     #[test]
+    fn lcd_on_ly() {
+        let mut ppu = Ppu::default();
+        ppu.write_byte(LCDC, 0x81, 0); // Enable the LCD
+
+        let filename = "my_lcd_on_ly.csv";
+        let mut file = File::create(filename).unwrap();
+        writeln!(&mut file, "Dot, LY").unwrap();
+
+        // TWO FRAMES
+        let mut previous_line_sans_dot = String::new();
+        for dot in 0..u64::from(DOTS_PER_FRAME) * 2 {
+            let output_line = format!("{dot}, {}", ppu.read_byte(LY, dot));
+            if let Some((_, line_sans_dot)) = output_line.split_once(", ")
+                && line_sans_dot != previous_line_sans_dot
+            {
+                previous_line_sans_dot = line_sans_dot.into();
+                writeln!(&mut file, "{output_line}").unwrap();
+            }
+
+            let mut interrupt_flags = 0;
+            ppu.catch_up(dot + 1, &mut interrupt_flags);
+        }
+    }
+
+    #[test]
+    fn lcd_on_funny_ly() {
+        let mut ppu = Ppu::default();
+        ppu.write_byte(LCDC, 0x81, 0); // Enable the LCD
+
+        let filename = "my_lcd_on_funny_ly.csv";
+        let mut file = File::create(filename).unwrap();
+        writeln!(&mut file, "Dot, LY").unwrap();
+
+        // TWO FRAMES
+        let mut previous_line_sans_dot = String::new();
+        for dot in 0..u64::from(DOTS_PER_FRAME) * 2 {
+            let output_line = format!("{dot}, {}", ppu.compute_ly(dot));
+            if let Some((_, line_sans_dot)) = output_line.split_once(", ")
+                && line_sans_dot != previous_line_sans_dot
+            {
+                previous_line_sans_dot = line_sans_dot.into();
+                writeln!(&mut file, "{output_line}").unwrap();
+            }
+        }
+    }
+
+    #[test]
     fn lcd_on_vars_scx1() {
         let mut ppu = Ppu::default();
         ppu.write_byte(LCDC, 0x81, 0); // Enable the LCD
@@ -1256,9 +1319,9 @@ mod tests {
         for dot in 0..u64::from(DOTS_PER_FRAME) * 2 {
             let output_line = format!(
                 "{dot}, {}, {}, {}, {}, {}, {}, {}, {}",
-                ppu.read_byte(LY),
+                ppu.read_byte(LY, dot),
                 ppu.ly_to_compare_lyc.unwrap_or(0xFF),
-                ppu.read_byte(STAT) & 0b0000_0011,
+                ppu.read_byte(STAT, dot) & 0b0000_0011,
                 ppu.stat_mode_for_interrupt,
                 matches!(
                     ppu.oam_access,
@@ -1303,9 +1366,9 @@ mod tests {
         for dot in 0..u64::from(DOTS_PER_FRAME) * 2 {
             let output_line = format!(
                 "{dot}, {}, {}, {}, {}, {}, {}, {}",
-                ppu.read_byte(LY),
+                ppu.read_byte(LY, dot),
                 ppu.ly_to_compare_lyc.unwrap_or(0xFF),
-                ppu.read_byte(STAT) & 0b0000_0011,
+                ppu.read_byte(STAT, dot) & 0b0000_0011,
                 matches!(
                     ppu.oam_access,
                     PpuMemAccess::Blocked | PpuMemAccess::WriteOnly

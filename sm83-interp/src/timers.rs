@@ -142,7 +142,7 @@ impl Timers {
 }
 
 impl Addressable for Timers {
-    fn read_byte(&self, index: u16) -> u8 {
+    fn read_byte(&self, index: u16, _: u64) -> u8 {
         match index {
             DIV => self.div(),
             TIMA => self.tima,

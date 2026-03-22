@@ -10,13 +10,11 @@ use super::palette::Palette;
 
 #[derive(Clone, Copy, Default)]
 pub(super) struct IoRegisters {
+    // R/w
     pub(super) lcdc: LcdControl,
     pub(super) stat: LcdStatus,
     pub(super) scy: u8,
     pub(super) scx: u8,
-    // Read-only from the CPU's perspective.
-    pub(super) ly: u8,
-    // R/w
     pub(super) lyc: u8,
     pub(super) bgp: Palette,
     pub(super) obp0: Palette,
