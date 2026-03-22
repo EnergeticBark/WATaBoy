@@ -52,7 +52,6 @@ impl AddressBus {
             | STAT
             | SCY
             | SCX
-            | LY
             | LYC
             | BGP
             | OBP0
@@ -75,13 +74,15 @@ impl AddressBus {
                 }
 
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
-                self.ppu.read_byte(index)
+                self.ppu.read_byte(index, self.clock)
             }
+
+            LY => self.ppu.read_byte(index, self.clock),
 
             // Delegate reads to the timers
             DIV | TIMA | TMA | TAC => {
                 self.timers.catch_up(self.clock);
-                self.timers.read_byte(index)
+                self.timers.read_byte(index, self.clock)
             }
 
             IF => {
@@ -154,7 +155,13 @@ impl AddressBus {
                 self.timers_est_next_intr();
             }
 
-            IF => self.buffer[index as usize] = value | 0b1110_0000,
+            IF => {
+                // If we don't catch up the components now, the value we're writing may get overwritten by a stale flag when we catch up later.
+                // TODO: I should probably catch up the timers here too...
+                self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
+                self.buffer[index as usize] = value | 0b1110_0000;
+                self.ppu_est_next_intr();
+            }
 
             NR10 => self.buffer[index as usize] = value | 0b1000_0000,
             NR30 => self.buffer[index as usize] = value | 0b0111_1111,
