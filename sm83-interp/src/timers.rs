@@ -32,7 +32,6 @@ pub struct Timers {
     // TMA being copied and the interrupt being fired are both delayed by 1 M-Cycles.
     // See: https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html#timer-overflow-behavior
     tima_overflow_state: Option<TimaOverflowState>,
-    interrupt_queued: bool,
     pub clock: u64,
     pub next_interrupt: u64,
 }
@@ -63,11 +62,11 @@ impl Timers {
         self.next_interrupt
     }
 
-    pub fn catch_up(&mut self, cpu_clock: u64) {
+    pub fn catch_up(&mut self, cpu_clock: u64, interrupt_flags: &mut u8) {
         let clock_delta = cpu_clock - self.clock;
         let m_cycles = clock_delta / 4;
 
-        self.increment(m_cycles);
+        self.increment(m_cycles, interrupt_flags);
         self.clock += m_cycles * 4;
     }
 
@@ -105,14 +104,14 @@ impl Timers {
         self.tima_edge = next_tima_edge;
     }
 
-    fn increment(&mut self, m_cycles: u64) {
+    fn increment(&mut self, m_cycles: u64, interrupt_flags: &mut u8) {
         for _ in 0..m_cycles {
             self.system_clock = self.system_clock.wrapping_add(4);
 
             self.tima_overflow_state = match self.tima_overflow_state {
                 Some(TimaOverflowState::Cancelable) => {
                     self.tima = self.tma;
-                    self.interrupt_queued = true;
+                    *interrupt_flags |= 0b0000_0100;
                     Some(TimaOverflowState::IgnoringWrites)
                 }
                 Some(TimaOverflowState::IgnoringWrites) => {
@@ -130,14 +129,6 @@ impl Timers {
 
     fn div(&self) -> u8 {
         (self.system_clock >> 8) as u8
-    }
-
-    pub fn process_interrupt(&mut self) -> bool {
-        if self.interrupt_queued {
-            self.interrupt_queued = false;
-            return true;
-        }
-        false
     }
 }
 
@@ -186,7 +177,6 @@ impl Default for Timers {
             tac: TimerControl::default(),
             tima_edge: false,
             tima_overflow_state: None,
-            interrupt_queued: false,
             clock: 0,
             next_interrupt: 0,
         }
