@@ -12,7 +12,7 @@ pub struct BlarggTest {
 
 fn read_ascii_from_tile_map(cpu: &Cpu) -> Vec<String> {
     let lines_buffer: Vec<u8> = (0x9800..0x9C00)
-        .map(|i| cpu.memory.ppu.read_byte(i))
+        .map(|i| cpu.memory.ppu.read_byte(i, 0))
         .collect();
     lines_buffer
         .chunks_exact(32)

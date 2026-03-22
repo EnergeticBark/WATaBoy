@@ -7,8 +7,10 @@ pub use interrupt_bits::InterruptBits;
 use std::error::Error;
 
 use hw_constants::{PostBoot, io_regs};
-use log::info;
 use rkyv::{Archive, Deserialize, Serialize};
+
+#[cfg(feature = "cpu-logging")]
+use log::info;
 
 use crate::bus::AddressBus;
 use opcodes::cycles::m_cycles;
@@ -151,7 +153,8 @@ impl Cpu {
             // 0: VBlank, 1: LCD, 2: Timer, 3: Serial, and 4: Joypad.
             let nth_interrupt = to_service.trailing_zeros();
 
-            info!(target: "cpu_interrupt", "Serving interrupt: {nth_interrupt}");
+            #[cfg(feature = "cpu-logging")]
+            info!(target: "cpu_interrupt", "Serving interrupt {nth_interrupt} on clock {}", self.memory.clock);
 
             // Clear the flag bit of the interrupt we're servicing.
             let flag_mask = !(0b0000_0001 << nth_interrupt);
@@ -1056,8 +1059,9 @@ impl Cpu {
                 // See: https://rgbds.gbdev.io/docs/v0.9.4/gbz80.7#EI
                 #[cfg(feature = "cpu-logging")]
                 {
-                    info!(target: "cpu_ei", "Enabling interrupts on dot: {}", self.memory.ppu.dots_this_line());
+                    info!(target: "cpu_ei", "Enabling interrupts at: {}", self.memory.clock);
                     info!("FLAGS {:b}", self.memory.buffer[io_regs::IF as usize]);
+                    info!("ENABLED {:b}", self.memory.buffer[io_regs::IE as usize]);
                 }
 
                 self.ime = true;
