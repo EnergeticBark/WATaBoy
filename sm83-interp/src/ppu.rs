@@ -83,8 +83,8 @@ pub struct Ppu {
     obj_buffer: VecDeque<Obj>,
     obj_fetcher: ObjectFetcher,
     // Only public for debugging reasons.
-    pub vram: [u8; VRAM_SIZE as usize],
-    pub oam: [u8; OAM_SIZE as usize],
+    pub vram: Box<[u8; VRAM_SIZE as usize]>,
+    pub oam: Box<[u8; OAM_SIZE as usize]>,
     registers: IoRegisters,
     stat_interrupt_line: bool,
     stat_mode_for_interrupt: u8,
@@ -135,134 +135,127 @@ impl Ppu {
         }
     }
 
-    fn coarse_scanline(&mut self) {
-        let mut line_buffer = [Pixel::from_bits(0); SCREEN_WIDTH as usize + 8];
+    #[inline(never)]
+    // Draw background tiles.
+    fn coarse_background(&self, line_buffer: &mut [Pixel; SCREEN_WIDTH as usize + 8]) {
+        let ly = self.line_number.wrapping_add(self.registers.scy);
+        let tile_map_y = ly / 8;
+        let tile_line = ly & 7;
+        let tile_scrolled_left = self.registers.scx / 8;
 
-        // Draw background tiles.
-        {
-            let ly = self.line_number.wrapping_add(self.registers.scy);
-            let tile_y_idx = ly / 8;
-            let tile_line = ly & 7;
-            let tile_scrolled_left = self.registers.scx / 8;
+        let tile_map = if self.registers.lcdc.bg_tile_map() {
+            tiles::tile_map_1(&self.vram)
+        } else {
+            tiles::tile_map_0(&self.vram)
+        };
 
-            let tile_map = if self.registers.lcdc.bg_tile_map() {
+        // TODO: Maybe don't draw tiles that will be covered by the window?
+        let tile_ids = (0..21).map(|tile_x| {
+            let tile_map_x = (tile_scrolled_left as usize + tile_x) & 0x1F;
+            tile_map[tile_map_y as usize * 32 + tile_map_x]
+        });
+
+        // Choose either the $8000 or $8800 method, see: https://gbdev.io/pandocs/Tile_Data.html#vram-tile-data
+        let (tile_data_base, tile_id_signed_offset) = if self.registers.lcdc.bg_and_window_tiles() {
+            (0x000, 0_u8)
+        } else {
+            (0x800, 128_u8)
+        };
+
+        // TODO: This is still very pointer-chase-y since tile_map[tile_xy] -> tile_data[tile_id] is happening in sequence for each tile.
+        let mut interleaved_tile_bytes = [0xf_u8; 42];
+        let (chunks, _) = interleaved_tile_bytes.as_chunks_mut();
+        std::iter::zip(
+            chunks,
+            tile_ids
+                .map(|tile_id| {
+                    tile_data_base + (tile_id_signed_offset.wrapping_add(tile_id) as usize * 16)
+                })
+                .map(|tile_start_addr| {
+                    [
+                        self.vram[tile_start_addr + tile_line as usize * 2].reverse_bits(),
+                        self.vram[tile_start_addr + tile_line as usize * 2 + 1].reverse_bits(),
+                    ]
+                }),
+        )
+        .for_each(|(chunk, tile_data_low_high)| *chunk = tile_data_low_high);
+
+        // Ahh, the things we do for auto vectorisation... :3
+        let (chunks, _): (&[[u8; 2]], _) = interleaved_tile_bytes.as_chunks();
+        chunks
+            .iter()
+            .enumerate()
+            .for_each(|(nth_tile, [low, high])| {
+                (0..8).for_each(|nth_pixel| {
+                    #[allow(clippy::cast_possible_truncation)]
+                    // Create the background pixels directly from the low and high bits.
+                    // The upper 6 bits of each Pixel will be left as zero, meaning they'll use the background palette.
+                    let pixel = Pixel::from_bits(
+                        ((low >> nth_pixel) & 0b0000_0001)
+                            | (high.rotate_left(1).rotate_right(nth_pixel as u32) & 0b0000_0010),
+                    );
+
+                    line_buffer[nth_tile * 8 + nth_pixel] = pixel;
+                });
+            });
+    }
+
+    // Draw window tiles.
+    #[inline(never)]
+    fn coarse_window(&mut self, line_buffer: &mut [Pixel; SCREEN_WIDTH as usize + 8]) {
+        let scrolled_left = self.registers.scx & 7;
+
+        if self.registers.lcdc.window_enabled() && self.line_number >= self.registers.wy {
+            self.window_y = self.window_y.wrapping_add(1);
+            let tile_y_idx = self.window_y / 8;
+            let tile_line = self.window_y & 7;
+
+            let window_tile_map = if self.registers.lcdc.window_tile_map() {
                 tiles::tile_map_1(&self.vram)
             } else {
                 tiles::tile_map_0(&self.vram)
             };
 
-            // TODO: Maybe don't draw tiles that will be covered by the window?
-            let tile_ids = (0..21).map(|tile_x| {
-                let tile_x_idx = (tile_scrolled_left as usize + tile_x) & 0x1F;
-                tile_map[tile_y_idx as usize * 32 + tile_x_idx]
-            });
+            let mut tile_x = 0;
+            while tile_x * 8 < SCREEN_WIDTH as usize + 8 {
+                let tile_id = window_tile_map[tile_y_idx as usize * 32 + tile_x];
 
-            let mut interleaved_tile_bytes = [0_u8; 42];
-            if self.registers.lcdc.bg_and_window_tiles() {
-                let (chunks, _) = interleaved_tile_bytes.as_chunks_mut();
-                std::iter::zip(
-                    chunks,
-                    tile_ids
-                        .map(|tile_id| tiles::unsigned_nth_tile(&self.vram, tile_id as usize))
-                        .map(|tile_data| {
-                            [
-                                tile_data[tile_line as usize * 2].reverse_bits(),
-                                tile_data[tile_line as usize * 2 + 1].reverse_bits(),
-                            ]
-                        }),
-                )
-                .for_each(|(chunk, tile_data_low_high)| *chunk = tile_data_low_high);
-            } else {
-                let (chunks, _) = interleaved_tile_bytes.as_chunks_mut();
-                std::iter::zip(
-                    chunks,
-                    tile_ids
-                        .map(|tile_id| {
-                            tiles::signed_nth_tile(&self.vram, tile_id.cast_signed() as isize)
-                        })
-                        .map(|tile_data| {
-                            [
-                                tile_data[tile_line as usize * 2].reverse_bits(),
-                                tile_data[tile_line as usize * 2 + 1].reverse_bits(),
-                            ]
-                        }),
-                )
-                .for_each(|(chunk, tile_data_low_high)| *chunk = tile_data_low_high);
-            }
-
-            // Ahh, the things we do for auto vectorisation... :3
-            let (chunks, _): (&[[u8; 2]], _) = interleaved_tile_bytes.as_chunks();
-            chunks
-                .iter()
-                .enumerate()
-                .for_each(|(nth_tile, [low, high])| {
-                    (0..8).for_each(|nth_pixel| {
-                        #[allow(clippy::cast_possible_truncation)]
-                        // Create the background pixels directly from the low and high bits.
-                        // The upper 6 bits of each Pixel will be left as zero, meaning they'll use the background palette.
-                        let pixel = Pixel::from_bits(
-                            ((low >> nth_pixel) & 0b0000_0001)
-                                | (high.rotate_left(1).rotate_right(nth_pixel as u32)
-                                    & 0b0000_0010),
-                        );
-
-                        line_buffer[nth_tile * 8 + nth_pixel] = pixel;
-                    });
-                });
-        }
-
-        let scrolled_left = self.registers.scx & 7;
-
-        // Draw window tiles.
-        {
-            if self.registers.lcdc.window_enabled() && self.line_number >= self.registers.wy {
-                self.window_y = self.window_y.wrapping_add(1);
-                let tile_y_idx = self.window_y / 8;
-                let tile_line = self.window_y & 7;
-
-                let window_tile_map = if self.registers.lcdc.window_tile_map() {
-                    tiles::tile_map_1(&self.vram)
+                let tile_data = if self.registers.lcdc.bg_and_window_tiles() {
+                    tiles::unsigned_nth_tile(&self.vram, tile_id as usize)
                 } else {
-                    tiles::tile_map_0(&self.vram)
+                    tiles::signed_nth_tile(&self.vram, tile_id.cast_signed() as isize)
                 };
 
-                let mut tile_x = 0;
-                while tile_x * 8 < SCREEN_WIDTH as usize + 8 {
-                    let tile_id = window_tile_map[tile_y_idx as usize * 32 + tile_x];
+                let tile_data_low = tile_data[tile_line as usize * 2];
+                let tile_data_high = tile_data[tile_line as usize * 2 + 1];
 
-                    let tile_data = if self.registers.lcdc.bg_and_window_tiles() {
-                        tiles::unsigned_nth_tile(&self.vram, tile_id as usize)
-                    } else {
-                        tiles::signed_nth_tile(&self.vram, tile_id.cast_signed() as isize)
-                    };
+                // Push
+                for nth_bit in 0..8 {
+                    let color_index = ColorIndex::new()
+                        .with_low((tile_data_low >> nth_bit) & 1 == 1)
+                        .with_high((tile_data_high >> nth_bit) & 1 == 1);
+                    let pixel = Pixel::new()
+                        .with_color_index(color_index)
+                        .with_palette(PaletteSelect::Bgp)
+                        .with_priority(false);
 
-                    let tile_data_low = tile_data[tile_line as usize * 2];
-                    let tile_data_high = tile_data[tile_line as usize * 2 + 1];
-
-                    // Push
-                    for nth_bit in 0..8 {
-                        let color_index = ColorIndex::new()
-                            .with_low((tile_data_low >> nth_bit) & 1 == 1)
-                            .with_high((tile_data_high >> nth_bit) & 1 == 1);
-                        let pixel = Pixel::new()
-                            .with_color_index(color_index)
-                            .with_palette(PaletteSelect::Bgp)
-                            .with_priority(false);
-
-                        let pixel_index = ((self.registers.wx as usize
-                            + (tile_x * 8 + (7 - nth_bit)))
-                            + (scrolled_left as usize))
-                            .saturating_sub(7);
-                        if pixel_index < SCREEN_WIDTH as usize + 8 {
-                            line_buffer[pixel_index] = pixel;
-                        }
+                    let pixel_index = ((self.registers.wx as usize + (tile_x * 8 + (7 - nth_bit)))
+                        + (scrolled_left as usize))
+                        .saturating_sub(7);
+                    if pixel_index < SCREEN_WIDTH as usize + 8 {
+                        line_buffer[pixel_index] = pixel;
                     }
-
-                    tile_x += 1;
                 }
+
+                tile_x += 1;
             }
         }
+    }
 
+    // Draw object tiles.
+    #[inline(never)]
+    fn coarse_objects(&self, line_buffer: &mut [Pixel; SCREEN_WIDTH as usize + 8]) {
+        let scrolled_left = self.registers.scx & 7;
         // Draw object tiles.
         for obj in &self.obj_buffer {
             let obj_line = {
@@ -347,6 +340,17 @@ impl Ppu {
                     }
                 });
         }
+    }
+
+    // Quickly draw a scanline in one go without manually emulating the tile fetchers or pixel FIFOs.
+    // Can be used after we've determined that the CPU didn't modify VRAM, OAM, or PPU registers for the duration of a scanline.
+    #[inline(never)]
+    fn coarse_scanline(&mut self) {
+        let mut line_buffer = [Pixel::from_bits(0); SCREEN_WIDTH as usize + 8];
+
+        self.coarse_background(&mut line_buffer);
+        self.coarse_window(&mut line_buffer);
+        self.coarse_objects(&mut line_buffer);
 
         let line_start = self.line_number as usize * SCREEN_WIDTH as usize;
         let line_end = line_start + SCREEN_WIDTH as usize;
@@ -375,6 +379,7 @@ impl Ppu {
         let greyscale_colors = Simd::splat(255) - palette_colors * Simd::splat(64);
 
         let (lcd_chunks, _) = scanline.as_chunks_mut();
+        let scrolled_left = self.registers.scx & 7;
         let (scanline_chunks, _) = line_buffer[scrolled_left as usize..].as_chunks();
 
         lcd_chunks
@@ -831,8 +836,8 @@ impl Ppu {
 
             // Reset the PPU state, preserving only some of its state.
             *self = Ppu {
-                vram: self.vram,
-                oam: self.oam,
+                vram: self.vram.clone(),
+                oam: self.oam.clone(),
                 registers: self.registers,
                 stat_interrupt_line: self.stat_interrupt_line,
                 clock: self.clock,
@@ -927,8 +932,14 @@ impl Default for Ppu {
             bg_fetcher: BackgroundFetcher::default(),
             obj_buffer: VecDeque::with_capacity(10),
             obj_fetcher: ObjectFetcher::default(),
-            vram: [0; VRAM_SIZE as usize],
-            oam: [0; OAM_SIZE as usize],
+            vram: vec![0; VRAM_SIZE as usize]
+                .into_boxed_slice()
+                .try_into()
+                .unwrap(),
+            oam: vec![0; OAM_SIZE as usize]
+                .into_boxed_slice()
+                .try_into()
+                .unwrap(),
             registers: IoRegisters::default(),
             stat_interrupt_line: false,
             stat_mode_for_interrupt: 0xFF,
