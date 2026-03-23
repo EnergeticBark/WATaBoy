@@ -150,10 +150,6 @@ impl Ppu {
         };
 
         // TODO: Maybe don't draw tiles that will be covered by the window?
-        let tile_ids = (0..21).map(|tile_x| {
-            let tile_map_x = (tile_scrolled_left as usize + tile_x) & 0x1F;
-            tile_map[tile_map_y as usize * 32 + tile_map_x]
-        });
 
         // Choose either the $8000 or $8800 method, see: https://gbdev.io/pandocs/Tile_Data.html#vram-tile-data
         let (tile_data_base, tile_id_signed_offset) = if self.registers.lcdc.bg_and_window_tiles() {
@@ -162,37 +158,42 @@ impl Ppu {
             (0x800, 128_u8)
         };
 
-        // TODO: This is still very pointer-chase-y since tile_map[tile_xy] -> tile_data[tile_id] is happening in sequence for each tile.
-        let mut interleaved_tile_bytes = [0xf_u8; 42];
-        let (chunks, _) = interleaved_tile_bytes.as_chunks_mut();
-        std::iter::zip(
-            chunks,
-            tile_ids
-                .map(|tile_id| {
-                    tile_data_base + (tile_id_signed_offset.wrapping_add(tile_id) as usize * 16)
-                })
-                .map(|tile_start_addr| {
-                    [
-                        self.vram[tile_start_addr + tile_line as usize * 2].reverse_bits(),
-                        self.vram[tile_start_addr + tile_line as usize * 2 + 1].reverse_bits(),
-                    ]
-                }),
-        )
-        .for_each(|(chunk, tile_data_low_high)| *chunk = tile_data_low_high);
+        let mut tile_data = [0_u16; 21];
+        (0..21)
+            .map(|tile_x| {
+                let tile_map_x = (tile_scrolled_left as usize + tile_x) & 0x1F;
+                tile_map[tile_map_y as usize * 32 + tile_map_x]
+            })
+            .map(|tile_id| {
+                tile_data_base + (u16::from(tile_id_signed_offset.wrapping_add(tile_id)) * 16)
+            })
+            .map(|tile_start_addr| tile_start_addr + u16::from(tile_line) * 2)
+            .zip(tile_data.iter_mut())
+            .for_each(|(value, tile_data_index)| {
+                *tile_data_index = value;
+            });
 
-        // Ahh, the things we do for auto vectorisation... :3
-        let (chunks, _): (&[[u8; 2]], _) = interleaved_tile_bytes.as_chunks();
-        chunks
+        // Replace each index with the tile data that was at that index.
+        for tile_data_index in &mut tile_data {
+            *tile_data_index = u16::from_le_bytes([
+                unsafe { *self.vram.get_unchecked(*tile_data_index as usize) },
+                unsafe { *self.vram.get_unchecked(*tile_data_index as usize + 1) },
+            ]);
+        }
+
+        // Rewrite this using SIMD intrinsics.
+        tile_data
             .iter()
             .enumerate()
-            .for_each(|(nth_tile, [low, high])| {
+            .for_each(|(nth_tile, low_high)| {
                 (0..8).for_each(|nth_pixel| {
+                    let [low, high] = low_high.to_le_bytes();
                     #[allow(clippy::cast_possible_truncation)]
                     // Create the background pixels directly from the low and high bits.
                     // The upper 6 bits of each Pixel will be left as zero, meaning they'll use the background palette.
                     let pixel = Pixel::from_bits(
-                        ((low >> nth_pixel) & 0b0000_0001)
-                            | (high.rotate_left(1).rotate_right(nth_pixel as u32) & 0b0000_0010),
+                        (low.rotate_left(1 + nth_pixel as u32) & 0b0000_0001)
+                            | (high.rotate_left(2 + nth_pixel as u32) & 0b0000_0010),
                     );
 
                     line_buffer[nth_tile * 8 + nth_pixel] = pixel;
