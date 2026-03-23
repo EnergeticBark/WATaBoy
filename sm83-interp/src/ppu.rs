@@ -239,9 +239,9 @@ impl Ppu {
                         .with_palette(PaletteSelect::Bgp)
                         .with_priority(false);
 
-                    let pixel_index = ((self.registers.wx as usize + (tile_x * 8 + (7 - nth_bit)))
-                        + (scrolled_left as usize))
-                        .saturating_sub(7);
+                    let pixel_index = (self.registers.wx.saturating_sub(7) as usize
+                        + (tile_x * 8 + (7 - nth_bit)))
+                        + scrolled_left as usize;
                     if pixel_index < SCREEN_WIDTH as usize + 8 {
                         line_buffer[pixel_index] = pixel;
                     }
