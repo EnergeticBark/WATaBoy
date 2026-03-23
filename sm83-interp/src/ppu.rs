@@ -765,7 +765,7 @@ impl Ppu {
 
     fn drawing_window(&self) -> bool {
         self.registers.lcdc.window_enabled()
-            && self.x + 7 == self.registers.wx
+            && self.x == self.registers.wx.saturating_sub(7)
             && self.line_number >= self.registers.wy
     }
 
