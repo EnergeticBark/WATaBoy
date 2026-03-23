@@ -1297,6 +1297,7 @@ mod tests {
     #[test]
     fn first_bootrom_instruction() {
         let mut cpu = Cpu::default();
+        cpu.memory.load_rom(&vec![0; 0x8000]);
         cpu.execute().unwrap();
         assert_eq!(cpu.registers.sp, 0xFFFE);
     }
