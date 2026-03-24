@@ -12,8 +12,8 @@ pub use registers::{LcdControl, LcdStatus, StatMode};
 use log::{info, trace};
 
 use std::collections::VecDeque;
-use std::simd::cmp::{SimdPartialEq, SimdPartialOrd};
-use std::simd::{Mask, Select, Simd, i8x8, mask8x8, u8x8};
+use std::simd::cmp::SimdPartialEq;
+use std::simd::{Select, Simd, u8x16};
 
 use hw_constants::io_regs::{BGP, LCDC, LY, LYC, OBP0, OBP1, SCX, SCY, STAT, WX, WY};
 use hw_constants::{
@@ -138,7 +138,7 @@ impl Ppu {
 
     #[inline(never)]
     // Draw background tiles.
-    fn coarse_background(&self, line_buffer: &mut [Pixel; SCREEN_WIDTH as usize + 8]) {
+    fn coarse_background(&self, line_buffer: &mut [Pixel; SCREEN_WIDTH as usize + 16]) {
         let ly = self.line_number.wrapping_add(self.registers.scy);
         let tile_map_y = ly / 8;
         let tile_line = ly & 7;
@@ -159,7 +159,7 @@ impl Ppu {
             (0x800, 128_u8)
         };
 
-        let tile_data_indexes = (0..21)
+        let tile_data_indexes = (0..22)
             .map(|tile_x| {
                 let tile_map_x = (tile_scrolled_left as usize + tile_x) & 0x1F;
                 tile_map[tile_map_y as usize * 32 + tile_map_x]
@@ -169,7 +169,6 @@ impl Ppu {
             })
             .map(|tile_start_addr| tile_start_addr + u16::from(tile_line) * 2);
 
-        // Replace each index with the tile data that was at that index.
         let tile_data = tile_data_indexes.map(|tile_data_index| {
             u16::from_le_bytes([
                 unsafe { *self.vram.get_unchecked(tile_data_index as usize) },
@@ -178,9 +177,17 @@ impl Ppu {
         });
 
         let (line_chunks, _) = line_buffer.as_chunks_mut();
-        let low_ones = u8x8::splat(0b0000_0001);
-        let high_ones = u8x8::splat(0b0000_0010);
-        let ones = u8x8::from_array([
+        let low_ones = u8x16::splat(0b0000_0001);
+        let high_ones = u8x16::splat(0b0000_0010);
+        let ones = u8x16::from_array([
+            0b1000_0000,
+            0b0100_0000,
+            0b0010_0000,
+            0b0001_0000,
+            0b0000_1000,
+            0b0000_0100,
+            0b0000_0010,
+            0b0000_0001,
             0b1000_0000,
             0b0100_0000,
             0b0010_0000,
@@ -191,28 +198,30 @@ impl Ppu {
             0b0000_0001,
         ]);
 
-        tile_data
-            .zip(line_chunks.iter_mut())
-            .for_each(|(low_high, line_chunk)| {
+        let tile_data_chunks = tile_data.array_chunks();
+        tile_data_chunks.zip(line_chunks.iter_mut()).for_each(
+            |([low_high, low_high2], line_chunk)| {
                 let [low, high] = low_high.to_le_bytes();
+                let [low2, high2] = low_high2.to_le_bytes();
 
-                let low_bits = u8x8::splat(low) & ones;
-                let low_mask = low_bits.simd_ne(u8x8::splat(0));
-                let low_bits_as_bytes = low_mask.select(low_ones, u8x8::splat(0));
+                let low_bits = u8x16::splat(low).shift_elements_left::<8>(low2) & ones;
+                let low_mask = low_bits.simd_ne(u8x16::splat(0));
+                let low_bits_as_bytes = low_mask.select(low_ones, u8x16::splat(0));
 
-                let high_bits = u8x8::splat(high) & ones;
-                let high_mask = high_bits.simd_ne(u8x8::splat(0));
-                let high_bits_as_bytes = high_mask.select(high_ones, u8x8::splat(0));
+                let high_bits = u8x16::splat(high).shift_elements_left::<8>(high2) & ones;
+                let high_mask = high_bits.simd_ne(u8x16::splat(0));
+                let high_bits_as_bytes = high_mask.select(high_ones, u8x16::splat(0));
 
                 let tile_data = low_bits_as_bytes | high_bits_as_bytes;
 
                 *line_chunk = tile_data.to_array().map(Pixel::from_bits);
-            });
+            },
+        );
     }
 
     // Draw window tiles.
     #[inline(never)]
-    fn coarse_window(&mut self, line_buffer: &mut [Pixel; SCREEN_WIDTH as usize + 8]) {
+    fn coarse_window(&mut self, line_buffer: &mut [Pixel; SCREEN_WIDTH as usize + 16]) {
         let scrolled_left = self.registers.scx & 7;
 
         if self.registers.lcdc.window_enabled() && self.line_number >= self.registers.wy {
@@ -264,7 +273,7 @@ impl Ppu {
 
     // Draw object tiles.
     #[inline(never)]
-    fn coarse_objects(&self, line_buffer: &mut [Pixel; SCREEN_WIDTH as usize + 8]) {
+    fn coarse_objects(&self, line_buffer: &mut [Pixel; SCREEN_WIDTH as usize + 16]) {
         let scrolled_left = self.registers.scx & 7;
         // Draw object tiles.
         for obj in &self.obj_buffer {
@@ -356,7 +365,8 @@ impl Ppu {
     // Can be used after we've determined that the CPU didn't modify VRAM, OAM, or PPU registers for the duration of a scanline.
     #[inline(never)]
     fn coarse_scanline(&mut self) {
-        let mut line_buffer = [Pixel::from_bits(0); SCREEN_WIDTH as usize + 8];
+        // 8 extra pixels for scrolling, plus another 8 so the number tiles is even for SIMD.
+        let mut line_buffer = [Pixel::from_bits(0); SCREEN_WIDTH as usize + 16];
 
         self.coarse_background(&mut line_buffer);
         self.coarse_window(&mut line_buffer);
