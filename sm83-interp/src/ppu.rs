@@ -12,7 +12,8 @@ pub use registers::{LcdControl, LcdStatus, StatMode};
 use log::{info, trace};
 
 use std::collections::VecDeque;
-use std::simd::Simd;
+use std::simd::cmp::{SimdPartialEq, SimdPartialOrd};
+use std::simd::{Mask, Select, Simd, i8x8, mask8x8, u8x8};
 
 use hw_constants::io_regs::{BGP, LCDC, LY, LYC, OBP0, OBP1, SCX, SCY, STAT, WX, WY};
 use hw_constants::{
@@ -158,8 +159,7 @@ impl Ppu {
             (0x800, 128_u8)
         };
 
-        let mut tile_data = [0_u16; 21];
-        (0..21)
+        let tile_data_indexes = (0..21)
             .map(|tile_x| {
                 let tile_map_x = (tile_scrolled_left as usize + tile_x) & 0x1F;
                 tile_map[tile_map_y as usize * 32 + tile_map_x]
@@ -167,37 +167,46 @@ impl Ppu {
             .map(|tile_id| {
                 tile_data_base + (u16::from(tile_id_signed_offset.wrapping_add(tile_id)) * 16)
             })
-            .map(|tile_start_addr| tile_start_addr + u16::from(tile_line) * 2)
-            .zip(tile_data.iter_mut())
-            .for_each(|(value, tile_data_index)| {
-                *tile_data_index = value;
-            });
+            .map(|tile_start_addr| tile_start_addr + u16::from(tile_line) * 2);
 
         // Replace each index with the tile data that was at that index.
-        for tile_data_index in &mut tile_data {
-            *tile_data_index = u16::from_le_bytes([
-                unsafe { *self.vram.get_unchecked(*tile_data_index as usize) },
-                unsafe { *self.vram.get_unchecked(*tile_data_index as usize + 1) },
-            ]);
-        }
+        let tile_data = tile_data_indexes.map(|tile_data_index| {
+            u16::from_le_bytes([
+                unsafe { *self.vram.get_unchecked(tile_data_index as usize) },
+                unsafe { *self.vram.get_unchecked(tile_data_index as usize + 1) },
+            ])
+        });
 
-        // Rewrite this using SIMD intrinsics.
+        let (line_chunks, _) = line_buffer.as_chunks_mut();
+        let low_ones = u8x8::splat(0b0000_0001);
+        let high_ones = u8x8::splat(0b0000_0010);
+        let ones = u8x8::from_array([
+            0b1000_0000,
+            0b0100_0000,
+            0b0010_0000,
+            0b0001_0000,
+            0b0000_1000,
+            0b0000_0100,
+            0b0000_0010,
+            0b0000_0001,
+        ]);
+
         tile_data
-            .iter()
-            .enumerate()
-            .for_each(|(nth_tile, low_high)| {
-                (0..8).for_each(|nth_pixel| {
-                    let [low, high] = low_high.to_le_bytes();
-                    #[allow(clippy::cast_possible_truncation)]
-                    // Create the background pixels directly from the low and high bits.
-                    // The upper 6 bits of each Pixel will be left as zero, meaning they'll use the background palette.
-                    let pixel = Pixel::from_bits(
-                        (low.rotate_left(1 + nth_pixel as u32) & 0b0000_0001)
-                            | (high.rotate_left(2 + nth_pixel as u32) & 0b0000_0010),
-                    );
+            .zip(line_chunks.iter_mut())
+            .for_each(|(low_high, line_chunk)| {
+                let [low, high] = low_high.to_le_bytes();
 
-                    line_buffer[nth_tile * 8 + nth_pixel] = pixel;
-                });
+                let low_bits = u8x8::splat(low) & ones;
+                let low_mask = low_bits.simd_ne(u8x8::splat(0));
+                let low_bits_as_bytes = low_mask.select(low_ones, u8x8::splat(0));
+
+                let high_bits = u8x8::splat(high) & ones;
+                let high_mask = high_bits.simd_ne(u8x8::splat(0));
+                let high_bits_as_bytes = high_mask.select(high_ones, u8x8::splat(0));
+
+                let tile_data = low_bits_as_bytes | high_bits_as_bytes;
+
+                *line_chunk = tile_data.to_array().map(Pixel::from_bits);
             });
     }
 
