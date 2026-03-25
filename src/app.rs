@@ -1,14 +1,14 @@
 use crate::dnd_rom::handle_dropped_rom;
-use crate::interrupts;
 use crate::memory::draw_memory_table;
 use crate::oam::draw_oam_table;
 use crate::registers::draw_register_table;
 use crate::tile_map::{draw_tile_map_0, draw_tile_map_1};
 use crate::tiles::draw_tile_table;
+use crate::{interrupts, woke_ppu};
 use eframe::epaint::textures::TextureOptions;
 use eframe::epaint::{Color32, ColorImage};
 use egui::{Key, Slider, TextureHandle, Ui};
-use hw_constants::{PostBoot, SCREEN_HEIGHT, SCREEN_WIDTH, TILE_MAP_SIZE, TILE_SIZE};
+use hw_constants::{SCREEN_HEIGHT, SCREEN_WIDTH, TILE_MAP_SIZE, TILE_SIZE};
 use log::error;
 use rkyv::deserialize;
 use rkyv::rancor::Error;
@@ -29,10 +29,12 @@ pub struct PPUViewApp {
     step_by_cycles: u32,
     step_by_frames: u32,
     speed: f32,
+    penalty: u64,
     play: bool,
     buttons_held: ButtonsHeld,
     logger_open: bool,
     interrupts_open: bool,
+    woke_ppu_open: bool,
 }
 
 impl PPUViewApp {
@@ -92,10 +94,12 @@ impl PPUViewApp {
             step_by_cycles: 10000,
             step_by_frames: 1,
             speed: 0.0,
+            penalty: 0,
             play: false,
             buttons_held: ButtonsHeld::default(),
             logger_open: false,
             interrupts_open: false,
+            woke_ppu_open: false,
         }
     }
 
@@ -128,6 +132,7 @@ impl PPUViewApp {
             ui.menu_button("Tools", |ui| {
                 self.logger_open |= ui.button("Show Logger").clicked();
                 self.interrupts_open |= ui.button("Show Interrupts").clicked();
+                self.woke_ppu_open |= ui.button("Show Woke PPU").clicked();
             });
         });
     }
@@ -165,6 +170,11 @@ impl eframe::App for PPUViewApp {
             .open(&mut self.interrupts_open)
             .show(ctx, |ui| {
                 interrupts::show(ui, &self.dmg_state);
+            });
+        egui::Window::new("Woke PPU")
+            .open(&mut self.woke_ppu_open)
+            .show(ctx, |ui| {
+                woke_ppu::show(ui, &self.dmg_state);
             });
 
         egui::Window::new("PPU Output").show(ctx, |ui| {
@@ -270,10 +280,13 @@ impl eframe::App for PPUViewApp {
                     i.unstable_dt * dmg_clock_speed * (10.0_f32.powf(self.speed));
                 #[allow(clippy::cast_possible_truncation)]
                 #[allow(clippy::cast_sign_loss)]
-                let target_cycle = self.dmg_state.memory.clock + cycles_to_execute as u64;
+                let target_cycle =
+                    (self.dmg_state.memory.clock + cycles_to_execute as u64) - self.penalty;
+                self.penalty = 0;
                 while self.dmg_state.memory.clock < target_cycle {
                     step_once(&mut self.dmg_state, self.buttons_held);
                 }
+                self.penalty += self.dmg_state.memory.clock - target_cycle;
             }
         });
 

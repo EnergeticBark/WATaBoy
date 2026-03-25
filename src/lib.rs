@@ -6,5 +6,6 @@ mod oam;
 mod registers;
 mod tile_map;
 mod tiles;
+mod woke_ppu;
 
 pub use app::PPUViewApp;

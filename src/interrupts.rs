@@ -88,9 +88,13 @@ fn draw_ie_and_if_body(body: TableBody<'_>, dmg_state: &Cpu) {
     } else {
         None
     };
-
     let next_lcd = if dmg_state.memory.ppu.next_lcd_interrupt < u64::MAX {
         Some(dmg_state.memory.ppu.next_lcd_interrupt - dmg_state.memory.clock)
+    } else {
+        None
+    };
+    let next_timers = if dmg_state.memory.timers.next_interrupt < u64::MAX {
+        Some(dmg_state.memory.timers.next_interrupt - dmg_state.memory.clock)
     } else {
         None
     };
@@ -103,7 +107,7 @@ fn draw_ie_and_if_body(body: TableBody<'_>, dmg_state: &Cpu) {
             next_vblank,
         ),
         ("LCD", intr_enable.lcd(), intr_flag.lcd(), next_lcd),
-        ("Timer", intr_enable.timer(), intr_flag.timer(), None),
+        ("Timer", intr_enable.timer(), intr_flag.timer(), next_timers),
         ("Serial", intr_enable.serial(), intr_flag.serial(), None),
         ("Joypad", intr_enable.joypad(), intr_flag.joypad(), None),
     ];

@@ -122,4 +122,19 @@ fn draw_flags_body(body: &mut TableBody<'_>, dmg_state: &Cpu) {
         let formatted = format!("{}", dmg_state.memory.ppu.next_lcd_interrupt);
         row.col(|ui| _ = ui.label(formatted));
     });
+    body.row(ROW_HEIGHT, |mut row| {
+        row.col(|ui| _ = ui.label("Timers Clock"));
+        let formatted = format!("{}", dmg_state.memory.timers.clock);
+        row.col(|ui| _ = ui.label(formatted));
+    });
+    body.row(ROW_HEIGHT, |mut row| {
+        row.col(|ui| _ = ui.label("Next Timer"));
+        let formatted = format!("{}", dmg_state.memory.timers.next_interrupt);
+        row.col(|ui| _ = ui.label(formatted));
+    });
+    body.row(ROW_HEIGHT, |mut row| {
+        row.col(|ui| _ = ui.label("Next Inter"));
+        let formatted = format!("{}", dmg_state.memory.next_interrupt);
+        row.col(|ui| _ = ui.label(formatted));
+    });
 }
