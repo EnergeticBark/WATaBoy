@@ -1,5 +1,7 @@
+mod woke_counters;
 #[cfg(feature = "woke-counters")]
-use std::collections::HashMap;
+use woke_counters::WokeCounter;
+
 use std::hint::cold_path;
 
 use crate::addressable::Addressable;
@@ -32,7 +34,9 @@ pub struct AddressBus {
     pub clock: u64,
     pub next_interrupt: u64,
     #[cfg(feature = "woke-counters")]
-    pub woke_ppu: HashMap<u16, u64>,
+    pub woke_ppu_reads: WokeCounter,
+    #[cfg(feature = "woke-counters")]
+    pub woke_ppu_writes: WokeCounter,
 }
 
 impl AddressBus {
@@ -59,19 +63,7 @@ impl AddressBus {
             | WY
             | WX => {
                 #[cfg(feature = "woke-counters")]
-                {
-                    // Collapse VRAM and OAM read indexes into the start of VRAM or OAM.
-                    let key = match index {
-                        VRAM_START..VRAM_END => VRAM_START,
-                        OAM_START..OAM_END => OAM_START,
-                        _ => index,
-                    };
-                    if let Some(woke_count) = self.woke_ppu.get_mut(&key) {
-                        *woke_count += 1;
-                    } else {
-                        self.woke_ppu.insert(key, 1);
-                    }
-                }
+                self.woke_ppu_reads.ppu_access(index);
 
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.read_byte(index, self.clock)
@@ -123,6 +115,9 @@ impl AddressBus {
 
             // Delegate writes to VRAM and OAM to the PPU.
             VRAM_START..VRAM_END | OAM_START..OAM_END => {
+                #[cfg(feature = "woke-counters")]
+                self.woke_ppu_writes.ppu_access(index);
+
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.write_byte(index, value, self.clock);
                 self.ppu_est_next_intr();
@@ -185,7 +180,13 @@ impl AddressBus {
             // Delegate PPU registers to the PPU.
             LY => (),
             // Still needed until I can update interrupts without passing in all memory :(.
+            // TODO: HEY!!! Optimization idea: if we're writing a value that's identical to the current value,
+            // we don't actually need to catch up the component, because nothing has changed.
+            // Pokemon Blue updates the value of SCX, SCY, and WY on the title screen what seems several times per frame.
             STAT | LYC => {
+                #[cfg(feature = "woke-counters")]
+                self.woke_ppu_writes.ppu_access(index);
+
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.write_byte(index, value, self.clock);
 
@@ -197,6 +198,9 @@ impl AddressBus {
                 self.ppu_est_next_intr();
             }
             LCDC | SCY | SCX | BGP | OBP0 | OBP1 | WY | WX => {
+                #[cfg(feature = "woke-counters")]
+                self.woke_ppu_writes.ppu_access(index);
+
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.write_byte(index, value, self.clock);
                 self.ppu_est_next_intr();
@@ -315,7 +319,9 @@ impl Default for AddressBus {
             clock: 0,
             next_interrupt: 0,
 			#[cfg(feature = "woke-counters")]
-			woke_ppu: HashMap::new(),
+			woke_ppu_reads: WokeCounter::default(),
+			#[cfg(feature = "woke-counters")]
+			woke_ppu_writes: WokeCounter::default(),
         }
     }
 }
