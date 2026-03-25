@@ -1,10 +1,10 @@
+#[cfg(feature = "mbc-logging")]
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize};
 
 use hw_constants::MEM_MAP_SIZE;
 
 const MBC_TYPE_ADDR: usize = 0x0147;
-const ROM_SIZE_ADDR: usize = 0x0148;
 const RAM_SIZE_ADDR: usize = 0x0149;
 
 const RAM_BANK_SIZE: usize = 0x2000;
@@ -29,18 +29,42 @@ impl MbcKind {
     }
 }
 
-#[derive(Default, Archive, Deserialize, Serialize)]
+#[derive(Archive, Deserialize, Serialize)]
 pub struct Mbc {
     ram_enabled: bool,
     pub rom: Vec<u8>,
     ext_ram: Vec<u8>,
+    current_rom_bank: u8,
     current_ram_bank: u8,
     banking_mode: bool,
 }
 
 impl Mbc {
-    fn rom_size(&self) -> u8 {
-        self.rom[ROM_SIZE_ADDR]
+    pub fn from_rom(rom: &[u8]) -> Self {
+        #[cfg(feature = "mbc-logging")]
+        {
+            const ROM_SIZE_ADDR: usize = 0x0148;
+
+            info!(target: "mbc_events", "MBC Type: {}", self.rom[MBC_TYPE_ADDR]);
+            info!(target: "mbc_events",
+                "ROM size: {}, Banks: {}",
+                self.rom[ROM_SIZE_ADDR],
+                2 << self.rom[ROM_SIZE_ADDR]
+            );
+            info!(target: "mbc_events", "SRAM size: {}", self.ram_size());
+        }
+
+        let ext_ram = match rom[RAM_SIZE_ADDR] {
+            2 => vec![0; RAM_BANK_SIZE],
+            3 => vec![0; RAM_BANK_SIZE * 4],
+            _ => vec![],
+        };
+
+        Self {
+            rom: rom.to_vec(),
+            ext_ram,
+            ..Default::default()
+        }
     }
 
     fn ram_size(&self) -> u8 {
@@ -51,7 +75,7 @@ impl Mbc {
         MbcKind::from_bits(self.rom[MBC_TYPE_ADDR])
     }
 
-    fn nth_rom_bank(&self, bank_number: u8) -> &[u8; 0x4000] {
+    fn update_rom_bank(&mut self, bank_number: u8) {
         let mask = match self.kind() {
             MbcKind::Mbc1 => 0b0001_1111,
             // For Mbc3, all 7 bits are written directly.
@@ -63,19 +87,20 @@ impl Mbc {
         if bank_number == 0 {
             bank_number = 1;
         }
+        #[cfg(feature = "mbc-logging")]
         info!(target: "mbc_events", "Switching to ROM bank #{bank_number}");
 
-        let start_addr = 0x4000 * bank_number as usize;
-        let end_addr = start_addr + 0x4000;
-        self.rom[start_addr..end_addr].try_into().unwrap()
+        self.current_rom_bank = bank_number;
     }
 
     fn nth_ram_bank(&mut self, bank_number: u8) -> &[u8; RAM_BANK_SIZE] {
         let mut bank_number = bank_number & 0b0000_0011;
+        #[cfg(feature = "mbc-logging")]
         info!(target: "mbc_events", "Switching to SRAM bank #{bank_number}");
 
         if self.ram_size() == 2 {
             bank_number = 0;
+            #[cfg(feature = "mbc-logging")]
             info!(target: "mbc_events", "Only 1 SRAM bank, constraining to 0...");
         }
 
@@ -94,26 +119,16 @@ impl Mbc {
 
     fn set_banking_mode(&mut self, banking_mode: u8) {
         let banking_mode = banking_mode & 1 == 1;
+        #[cfg(feature = "mbc-logging")]
         info!(target: "mbc_events", "Switching to banking mode {banking_mode}");
 
         self.banking_mode = banking_mode;
     }
 
-    pub fn load_rom(&mut self, rom: &[u8]) {
-        self.rom = rom.to_vec();
-        info!(target: "mbc_events", "MBC Type: {}", self.rom[MBC_TYPE_ADDR]);
-        info!(target: "mbc_events",
-            "ROM size: {}, Banks: {}",
-            self.rom_size(),
-            2 << self.rom_size()
-        );
-        info!(target: "mbc_events", "SRAM size: {}", self.ram_size());
-
-        match self.ram_size() {
-            2 => self.ext_ram = vec![0; RAM_BANK_SIZE],
-            3 => self.ext_ram = vec![0; RAM_BANK_SIZE * 4],
-            _ => (),
-        }
+    pub fn read_byte(&self, index: u16) -> u8 {
+        let bank_index = index as usize - 0x4000;
+        let start_addr = 0x4000 * self.current_rom_bank as usize;
+        self.rom[start_addr + bank_index]
     }
 
     pub fn write_byte(&mut self, memory: &mut [u8; MEM_MAP_SIZE], index: u16, value: u8) {
@@ -123,24 +138,31 @@ impl Mbc {
                 if value & 0x0F == 0xA && !self.ram_enabled {
                     let bank = self.nth_ram_bank(self.current_ram_bank);
                     memory[0xA000..0xC000].clone_from_slice(bank);
+
+                    #[cfg(feature = "mbc-logging")]
                     info!(target: "mbc_events", "Enabling SRAM...");
                     self.ram_enabled = true;
                 } else if value & 0x0F != 0xA && self.ram_enabled {
                     self.write_ram_bank(&memory[0xA000..0xC000].try_into().unwrap());
                     memory[0xA000..0xC000].fill(0xFF);
+
+                    #[cfg(feature = "mbc-logging")]
                     info!(target: "mbc_events", "Disabling SRAM...");
                     self.ram_enabled = false;
                 }
             }
             // MBC1: ROM Bank Number
             0x2000..0x4000 => {
+                #[cfg(feature = "mbc-logging")]
                 info!(target: "mbc_events", "Switching ROM bank using value: {value}");
-                let bank = self.nth_rom_bank(value);
-                memory[0x4000..0x8000].clone_from_slice(bank);
+
+                self.update_rom_bank(value);
             }
             // MBC1: RAM Bank Number or Upper Bits of ROM bank number
             0x4000..0x6000 => {
+                #[cfg(feature = "mbc-logging")]
                 info!(target: "mbc_events", "Switching SRAM bank using value: {value}");
+
                 if self.banking_mode {
                     // Backup old bank... Ew, I know I can do better than this.
                     self.write_ram_bank(&memory[0xA000..0xC000].try_into().unwrap());
@@ -148,6 +170,7 @@ impl Mbc {
                     let bank = self.nth_ram_bank(value);
                     memory[0xA000..0xC000].clone_from_slice(bank);
                 } else {
+                    #[cfg(feature = "mbc-logging")]
                     info!(target: "mbc_events", "Actually no, we're in simple mode!");
                 }
             }
@@ -162,6 +185,19 @@ impl Mbc {
                 }
             }
             _ => unreachable!(),
+        }
+    }
+}
+
+impl Default for Mbc {
+    fn default() -> Self {
+        Self {
+            ram_enabled: false,
+            rom: Vec::new(),
+            ext_ram: Vec::new(),
+            current_rom_bank: 1,
+            current_ram_bank: 0,
+            banking_mode: false,
         }
     }
 }
