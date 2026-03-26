@@ -7,7 +7,7 @@ use hw_constants::{OAM_END, OAM_START, VRAM_END, VRAM_START};
 pub struct WokeCounter(pub HashMap<u16, u64>);
 
 impl WokeCounter {
-    pub fn ppu_access(&mut self, index: u16) {
+    pub fn log_access(&mut self, index: u16) {
         // Collapse VRAM and OAM read indexes into the start of VRAM or OAM.
         let key = match index {
             VRAM_START..VRAM_END => VRAM_START,
