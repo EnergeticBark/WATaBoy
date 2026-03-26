@@ -37,6 +37,10 @@ pub struct AddressBus {
     pub woke_ppu_reads: WokeCounter,
     #[cfg(feature = "woke-counters")]
     pub woke_ppu_writes: WokeCounter,
+    #[cfg(feature = "woke-counters")]
+    pub woke_timers_reads: WokeCounter,
+    #[cfg(feature = "woke-counters")]
+    pub woke_timers_writes: WokeCounter,
 }
 
 impl AddressBus {
@@ -63,7 +67,7 @@ impl AddressBus {
             | WY
             | WX => {
                 #[cfg(feature = "woke-counters")]
-                self.woke_ppu_reads.ppu_access(index);
+                self.woke_ppu_reads.log_access(index);
 
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.read_byte(index, self.clock)
@@ -73,13 +77,20 @@ impl AddressBus {
 
             // Delegate reads to the timers
             DIV | TIMA | TMA | TAC => {
+                #[cfg(feature = "woke-counters")]
+                self.woke_timers_reads.log_access(index);
+
                 self.timers
                     .catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.timers.read_byte(index, self.clock)
             }
 
             IF => {
+                #[cfg(feature = "woke-counters")]
+                self.woke_timers_reads.log_access(index);
+
                 // TODO: I should probably catch up the PPU here too...
+                // 3/25/25 update: Actually, I could *selectively* update components here based on which bits will actually change. >:3
                 self.timers
                     .catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.buffer[index as usize]
@@ -97,7 +108,7 @@ impl AddressBus {
             0x0000..0x4000 => self.rom_bank_0[index as usize],
             0x4000..0x8000 => self.mbc.read_byte(index),
 
-            // Delegate reads to the PPU.
+            // Delegate reads to the PPU/timers.
             VRAM_START.. => {
                 cold_path();
                 self.read_special(index)
@@ -116,7 +127,7 @@ impl AddressBus {
             // Delegate writes to VRAM and OAM to the PPU.
             VRAM_START..VRAM_END | OAM_START..OAM_END => {
                 #[cfg(feature = "woke-counters")]
-                self.woke_ppu_writes.ppu_access(index);
+                self.woke_ppu_writes.log_access(index);
 
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.write_byte(index, value, self.clock);
@@ -156,6 +167,9 @@ impl AddressBus {
 
             // Delegate writes to the timers.
             DIV | TIMA | TMA | TAC => {
+                #[cfg(feature = "woke-counters")]
+                self.woke_timers_writes.log_access(index);
+
                 self.timers
                     .catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.timers.write_byte(index, value, self.clock);
@@ -163,6 +177,9 @@ impl AddressBus {
             }
 
             IF => {
+                #[cfg(feature = "woke-counters")]
+                self.woke_ppu_writes.log_access(index);
+
                 // If we don't catch up the components now, the value we're writing may get overwritten by a stale flag when we catch up later.
                 // TODO: I should probably catch up the timers here too...
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
@@ -185,7 +202,7 @@ impl AddressBus {
             // Pokemon Blue updates the value of SCX, SCY, and WY on the title screen what seems several times per frame.
             STAT | LYC => {
                 #[cfg(feature = "woke-counters")]
-                self.woke_ppu_writes.ppu_access(index);
+                self.woke_ppu_writes.log_access(index);
 
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.write_byte(index, value, self.clock);
@@ -199,7 +216,7 @@ impl AddressBus {
             }
             LCDC | SCY | SCX | BGP | OBP0 | OBP1 | WY | WX => {
                 #[cfg(feature = "woke-counters")]
-                self.woke_ppu_writes.ppu_access(index);
+                self.woke_ppu_writes.log_access(index);
 
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.write_byte(index, value, self.clock);
@@ -218,6 +235,11 @@ impl AddressBus {
                 self.buffer[index as usize] = value | 0b1111_1111;
             }
             IE => {
+                #[cfg(feature = "woke-counters")]
+                self.woke_ppu_writes.log_access(index);
+                #[cfg(feature = "woke-counters")]
+                self.woke_timers_writes.log_access(index);
+
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.timers
                     .catch_up(self.clock, &mut self.buffer[IF as usize]);
@@ -322,6 +344,10 @@ impl Default for AddressBus {
 			woke_ppu_reads: WokeCounter::default(),
 			#[cfg(feature = "woke-counters")]
 			woke_ppu_writes: WokeCounter::default(),
+			#[cfg(feature = "woke-counters")]
+			woke_timers_reads: WokeCounter::default(),
+			#[cfg(feature = "woke-counters")]
+			woke_timers_writes: WokeCounter::default(),
         }
     }
 }
