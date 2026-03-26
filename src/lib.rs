@@ -7,5 +7,6 @@ mod registers;
 mod tile_map;
 mod tiles;
 mod woke_ppu;
+mod woke_timers;
 
 pub use app::PPUViewApp;

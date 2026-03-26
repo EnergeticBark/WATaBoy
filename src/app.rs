@@ -4,7 +4,7 @@ use crate::oam::draw_oam_table;
 use crate::registers::draw_register_table;
 use crate::tile_map::{draw_tile_map_0, draw_tile_map_1};
 use crate::tiles::draw_tile_table;
-use crate::{interrupts, woke_ppu};
+use crate::{interrupts, woke_ppu, woke_timers};
 use eframe::epaint::textures::TextureOptions;
 use eframe::epaint::{Color32, ColorImage};
 use egui::{Key, Slider, TextureHandle, Ui};
@@ -35,6 +35,7 @@ pub struct PPUViewApp {
     logger_open: bool,
     interrupts_open: bool,
     woke_ppu_open: bool,
+    woke_timers_open: bool,
 }
 
 impl PPUViewApp {
@@ -100,6 +101,7 @@ impl PPUViewApp {
             logger_open: false,
             interrupts_open: false,
             woke_ppu_open: false,
+            woke_timers_open: false,
         }
     }
 
@@ -133,6 +135,7 @@ impl PPUViewApp {
                 self.logger_open |= ui.button("Show Logger").clicked();
                 self.interrupts_open |= ui.button("Show Interrupts").clicked();
                 self.woke_ppu_open |= ui.button("Show Woke PPU").clicked();
+                self.woke_timers_open |= ui.button("Show Woke Timers").clicked();
             });
         });
     }
@@ -175,6 +178,11 @@ impl eframe::App for PPUViewApp {
             .open(&mut self.woke_ppu_open)
             .show(ctx, |ui| {
                 woke_ppu::show(ui, &self.dmg_state);
+            });
+        egui::Window::new("Woke Timers")
+            .open(&mut self.woke_timers_open)
+            .show(ctx, |ui| {
+                woke_timers::show(ui, &self.dmg_state);
             });
 
         egui::Window::new("PPU Output").show(ctx, |ui| {
