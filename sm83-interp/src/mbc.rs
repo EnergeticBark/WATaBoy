@@ -2,12 +2,14 @@
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize};
 
-use hw_constants::MEM_MAP_SIZE;
+use hw_constants::{MEM_MAP_SIZE, io_regs::BANK};
 
 const MBC_TYPE_ADDR: usize = 0x0147;
 const RAM_SIZE_ADDR: usize = 0x0149;
 
 const RAM_BANK_SIZE: usize = 0x2000;
+
+const MGB_BOOT_ROM: &[u8; 0x100] = include_bytes!("../mgb_boot.bin");
 
 // TODO: Add the other MBC types.
 #[derive(Default)]
@@ -31,10 +33,11 @@ impl MbcKind {
 
 #[derive(Archive, Deserialize, Serialize)]
 pub struct Mbc {
+    under_boot_rom: Box<[u8; 0x100]>,
     ram_enabled: bool,
-    pub rom: Vec<u8>,
+    rom: Vec<u8>,
     ext_ram: Vec<u8>,
-    current_rom_bank: u8,
+    current_rom_bank_start: usize,
     current_ram_bank: u8,
     banking_mode: bool,
 }
@@ -60,11 +63,16 @@ impl Mbc {
             _ => vec![],
         };
 
-        Self {
+        let mut mbc = Self {
             rom: rom.to_vec(),
             ext_ram,
             ..Default::default()
-        }
+        };
+
+        // Backup the first 0x100 bytes and mount the boot ROM.
+        mbc.under_boot_rom.copy_from_slice(&mbc.rom[..0x100]);
+        mbc.rom[..0x100].copy_from_slice(MGB_BOOT_ROM);
+        mbc
     }
 
     fn ram_size(&self) -> u8 {
@@ -90,7 +98,7 @@ impl Mbc {
         #[cfg(feature = "mbc-logging")]
         info!(target: "mbc_events", "Switching to ROM bank #{bank_number}");
 
-        self.current_rom_bank = bank_number;
+        self.current_rom_bank_start = 0x4000 * (bank_number as usize - 1);
     }
 
     fn nth_ram_bank(&mut self, bank_number: u8) -> &[u8; RAM_BANK_SIZE] {
@@ -126,9 +134,12 @@ impl Mbc {
     }
 
     pub fn read_byte(&self, index: u16) -> u8 {
-        let bank_index = index as usize - 0x4000;
-        let start_addr = 0x4000 * self.current_rom_bank as usize;
-        self.rom[start_addr + bank_index]
+        let translated = match index {
+            ..0x4000 => index as usize,
+            0x4000.. => self.current_rom_bank_start + index as usize,
+        };
+
+        unsafe { *self.rom.get_unchecked(translated) }
     }
 
     pub fn write_byte(&mut self, memory: &mut [u8; MEM_MAP_SIZE], index: u16, value: u8) {
@@ -184,6 +195,10 @@ impl Mbc {
                     memory[index as usize] = value;
                 }
             }
+            // Unmount the boot ROM.
+            BANK => {
+                self.rom[..0x100].copy_from_slice(&self.under_boot_rom[..0x100]);
+            }
             _ => unreachable!(),
         }
     }
@@ -192,10 +207,11 @@ impl Mbc {
 impl Default for Mbc {
     fn default() -> Self {
         Self {
+            under_boot_rom: vec![0; 0x100].into_boxed_slice().try_into().unwrap(),
             ram_enabled: false,
             rom: Vec::new(),
             ext_ram: Vec::new(),
-            current_rom_bank: 1,
+            current_rom_bank_start: 0x4000,
             current_ram_bank: 0,
             banking_mode: false,
         }
