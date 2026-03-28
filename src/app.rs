@@ -162,30 +162,30 @@ fn step_vblank(dmg_state: &mut Cpu, buttons_held: ButtonsHeld) {
 
 impl eframe::App for PPUViewApp {
     /// Called each time the UI needs repainting, which may be many times per second.
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         egui::Window::new("Log")
             .open(&mut self.logger_open)
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 // Draws the logger UI.
                 egui_logger::logger_ui().show(ui);
             });
         egui::Window::new("Interrupts")
             .open(&mut self.interrupts_open)
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 interrupts::show(ui, &self.dmg_state);
             });
         egui::Window::new("Woke PPU")
             .open(&mut self.woke_ppu_open)
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 woke_ppu::show(ui, &self.dmg_state);
             });
         egui::Window::new("Woke Timers")
             .open(&mut self.woke_timers_open)
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 woke_timers::show(ui, &self.dmg_state);
             });
 
-        egui::Window::new("PPU Output").show(ctx, |ui| {
+        egui::Window::new("PPU Output").show(ui, |ui| {
             self.screen.set(
                 ColorImage::from_gray(
                     [SCREEN_WIDTH as usize, SCREEN_HEIGHT as usize],
@@ -197,13 +197,13 @@ impl eframe::App for PPUViewApp {
             ui.add(egui::Image::from_texture(&self.screen).fit_to_original_size(2.0));
         });
 
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+        egui::Panel::top("top_panel").show_inside(ui, |ui| {
             self.draw_menu_bar(ui);
         });
 
-        egui::SidePanel::right("Registers")
-            .min_width(300.0)
-            .show(ctx, |ui| {
+        egui::Panel::right("Registers")
+            .min_size(300.0)
+            .show_inside(ui, |ui| {
                 draw_register_table(ui, &self.dmg_state);
 
                 ui.separator();
@@ -211,13 +211,13 @@ impl eframe::App for PPUViewApp {
                 draw_memory_table(ui, &self.dmg_state);
             });
 
-        egui::SidePanel::left("Tiles")
-            .min_width(300.0)
-            .show(ctx, |ui| {
+        egui::Panel::left("Tiles")
+            .min_size(300.0)
+            .show_inside(ui, |ui| {
                 draw_tile_table(ui, &mut self.tiles, &self.dmg_state);
             });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show_inside(ui, |ui| {
             ui.horizontal(|ui| {
                 draw_tile_map_0(ui, &mut self.tile_map_0, &self.dmg_state.memory.ppu);
                 draw_tile_map_1(ui, &mut self.tile_map_1, &self.dmg_state.memory.ppu);
@@ -262,7 +262,7 @@ impl eframe::App for PPUViewApp {
             draw_oam_table(ui, &mut self.tiles, &self.dmg_state);
         });
 
-        ctx.input(|i| {
+        ui.input(|i| {
             if !i.raw.dropped_files.is_empty() {
                 let dropped_file = i.raw.dropped_files.first().unwrap().clone();
                 self.dmg_state = Cpu::default();
@@ -298,6 +298,6 @@ impl eframe::App for PPUViewApp {
             }
         });
 
-        ctx.request_repaint();
+        ui.request_repaint();
     }
 }
