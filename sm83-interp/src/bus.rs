@@ -19,11 +19,8 @@ use hw_constants::{IE, MEM_MAP_SIZE, OAM_END, OAM_START, PostBoot, VRAM_END, VRA
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize, with::Skip};
 
-const MGB_BOOT_ROM: &[u8; 0x100] = include_bytes!("../mgb_boot.bin");
-
 #[derive(Archive, Deserialize, Serialize)]
 pub struct AddressBus {
-    pub rom_bank_0: Box<[u8; 0x4000]>,
     pub buffer: Box<[u8; MEM_MAP_SIZE]>,
     pub timers: Timers,
     #[rkyv(with = Skip)]
@@ -45,9 +42,6 @@ pub struct AddressBus {
 
 impl AddressBus {
     pub fn load_rom(&mut self, rom: &[u8]) {
-        self.rom_bank_0[0..0x4000].copy_from_slice(&rom[0..0x4000]);
-        // Write the boot ROM over the first 0x100 bytes, we'll 'unmount' it later.
-        self.rom_bank_0[0..0x100].copy_from_slice(MGB_BOOT_ROM);
         self.mbc = Mbc::from_rom(rom);
     }
 
@@ -103,23 +97,20 @@ impl AddressBus {
     // Maybe see if there's a better way to do this? Keywords: "fast-mem" maybe?
     #[inline(never)]
     pub fn read_byte(&mut self, index: u16) -> u8 {
-        match index {
+        if index < VRAM_START {
             // Delegate reads to the MBC.
-            0x0000..0x4000 => self.rom_bank_0[index as usize],
-            0x4000..0x8000 => self.mbc.read_byte(index),
-
+            self.mbc.read_byte(index)
+        } else {
             // Delegate reads to the PPU/timers.
-            VRAM_START.. => {
-                cold_path();
-                self.read_special(index)
-            }
+            cold_path();
+            self.read_special(index)
         }
     }
 
     pub fn write_byte(&mut self, index: u16, value: u8) {
         match index {
             // Delegate write in the ROM range and the SRAM range to the MBC.
-            0x0000..0x8000 | 0xA000..0xC000 => {
+            0x0000..0x8000 | 0xA000..0xC000 | BANK => {
                 self.mbc
                     .write_byte(self.buffer.as_mut_array().unwrap(), index, value);
             }
@@ -221,12 +212,6 @@ impl AddressBus {
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.write_byte(index, value, self.clock);
                 self.ppu_est_next_intr();
-            }
-
-            // Unmount the boot ROM.
-            BANK => {
-                // TODO: Do this in Mbc and stop making .rom public?
-                self.rom_bank_0[..0x100].copy_from_slice(&self.mbc.rom[..0x100]);
             }
 
             // There is *nothing* at these addresses, so they don't have names.
@@ -331,7 +316,6 @@ impl AddressBus {
 impl Default for AddressBus {
     fn default() -> Self {
         Self {
-			rom_bank_0: vec![0; 0x4000].into_boxed_slice().try_into().unwrap(),
 			// TODO: Ughhh, make this all zeros again after I delegate SRAM reads to MBC. Has to be like this for Blargg's.
             buffer: /*vec![0; MEM_MAP_SIZE].into_boxed_slice().try_into().unwrap()*/hw_constants::post_boot_hwio(),
             timers: Timers::default(),
