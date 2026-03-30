@@ -17,7 +17,7 @@ fn read_bcdehl(cpu: &Cpu) -> [u8; 6] {
 
 fn execute_until_ld_b_b(cpu: &mut Cpu) {
     loop {
-        let next_byte = cpu.memory.buffer[cpu.registers.pc as usize];
+        let next_byte = cpu.memory.read_byte(cpu.registers.pc);
         if let Ok(Opcode::LdRR { x: R8::B, y: R8::B }) = Opcode::decode(next_byte) {
             break;
         }
