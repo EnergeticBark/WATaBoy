@@ -211,7 +211,7 @@ impl Default for Mbc {
             ram_enabled: false,
             rom: Vec::new(),
             ext_ram: Vec::new(),
-            current_rom_bank_start: 0x4000,
+            current_rom_bank_start: 0,
             current_ram_bank: 0,
             banking_mode: false,
         }

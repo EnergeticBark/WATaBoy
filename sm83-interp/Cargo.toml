@@ -17,4 +17,5 @@ pedantic = { level = "warn", priority = -1 }
 [features]
 ppu-logging = []
 cpu-logging = []
+mbc-logging = []
 woke-counters = []

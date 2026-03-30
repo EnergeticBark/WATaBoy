@@ -22,6 +22,16 @@ impl ClockSelect {
             ClockSelect::Seventh => 7,
         }
     }
+
+    // See: https://gbdev.io/pandocs/Timer_and_Divider_Registers.html
+    pub(super) fn period(self) -> u16 {
+        match self {
+            ClockSelect::Ninth => 256,
+            ClockSelect::Third => 4,
+            ClockSelect::Fifth => 16,
+            ClockSelect::Seventh => 64,
+        }
+    }
 }
 
 #[bitfield(u8, order = Msb)]

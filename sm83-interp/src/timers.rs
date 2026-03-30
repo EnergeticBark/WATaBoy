@@ -62,12 +62,90 @@ impl Timers {
         self.next_interrupt
     }
 
-    pub fn catch_up(&mut self, cpu_clock: u64, interrupt_flags: &mut u8) {
+    // TODO: This implementation needs more unit testing, but it passes the test ROMs.
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn catch_up_coarse(&mut self, cpu_clock: u64, interrupt_flags: &mut u8) {
         let clock_delta = cpu_clock - self.clock;
+        let delta_m_cycles = clock_delta / 4;
+
+        if delta_m_cycles == 0 {
+            return;
+        }
+
+        let skip_m_cycles = delta_m_cycles.saturating_sub(1);
+        if skip_m_cycles > 0 {
+            self.tima_overflow_state = match self.tima_overflow_state {
+                Some(TimaOverflowState::Cancelable) => {
+                    self.tima = self.tma;
+                    *interrupt_flags |= 0b0000_0100;
+
+                    if skip_m_cycles == 1 {
+                        Some(TimaOverflowState::IgnoringWrites)
+                    } else {
+                        None
+                    }
+                }
+                Some(TimaOverflowState::IgnoringWrites) => {
+                    // The timer modulo's value is constantly being copied until tima_overflow_state is None.
+                    // See: https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html#timer-overflow-behavior
+                    self.tima = self.tma;
+                    None
+                }
+                None => None,
+            };
+
+            if self.tac.tima_enabled() {
+                let tima_phase =
+                    u64::from((self.system_clock / 4) % self.tac.clock_select().period());
+                // TODO: Shrink this from u64 to the actual minimum it can be.
+                let delta_tima =
+                    (tima_phase + skip_m_cycles) / u64::from(self.tac.clock_select().period());
+                let tima_rem_m_cycles =
+                    (tima_phase + skip_m_cycles) % u64::from(self.tac.clock_select().period());
+
+                let (next_tima, carry) = self.tima.overflowing_add(delta_tima as u8);
+                self.tima = next_tima;
+                if carry {
+                    if self.tma > 0 {
+                        self.tima = self.tma + (next_tima % 0_u8.wrapping_sub(self.tma));
+                    }
+
+                    match tima_rem_m_cycles {
+                        0 => {
+                            // Overflow just happened this M-Cycle
+                            self.tima_overflow_state = Some(TimaOverflowState::Cancelable);
+                        }
+                        1 => {
+                            *interrupt_flags |= 0b0000_0100;
+                            self.tima_overflow_state = Some(TimaOverflowState::IgnoringWrites);
+                        }
+                        _ => {
+                            *interrupt_flags |= 0b0000_0100;
+                            self.tima_overflow_state = None;
+                        }
+                    }
+                }
+            }
+
+            self.system_clock =
+                (self.system_clock).wrapping_add((skip_m_cycles as u16).wrapping_mul(4));
+
+            let mask = self.tac.clock_select().mask();
+            self.tima_edge = self.tac.tima_enabled() && self.system_clock & mask == mask;
+        }
+
+        self.increment(1, interrupt_flags);
+
+        self.clock += delta_m_cycles * 4;
+    }
+
+    pub fn catch_up(&mut self, cpu_clock: u64, interrupt_flags: &mut u8) {
+        /*let clock_delta = cpu_clock - self.clock;
         let m_cycles = clock_delta / 4;
 
         self.increment(m_cycles, interrupt_flags);
-        self.clock += m_cycles * 4;
+        self.clock += m_cycles * 4;*/
+        self.catch_up_coarse(cpu_clock, interrupt_flags);
     }
 
     fn reset_divider_register(&mut self) {
