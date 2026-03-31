@@ -22,6 +22,7 @@ unsafe extern "C" {
 pub struct JitRuntime {
     dmg_state: Cpu,
     block_cache: HashMap<u16, CompiledBlock>,
+    next_vblank: u64,
 }
 
 impl JitRuntime {
@@ -90,11 +91,12 @@ impl Default for JitRuntime {
     fn default() -> Self {
         Self {
             dmg_state: {
-                let mut cpu = Cpu::post_boot_dmg();
+                let mut cpu = Cpu::default();
                 cpu.memory.load_rom(TEST_ROM);
                 cpu
             },
             block_cache: Default::default(),
+            next_vblank: 0,
         }
     }
 }
@@ -108,12 +110,9 @@ pub extern "C" fn make_runtime() -> *const JitRuntime {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn step_vblank(runtime: &mut JitRuntime) {
-    loop {
-        let ly_before_vblank = runtime.dmg_state.memory.ppu.ly() == 143;
+    runtime.next_vblank += 70224;
+    while runtime.dmg_state.memory.clock < runtime.next_vblank {
         runtime.execute();
-        if ly_before_vblank && runtime.dmg_state.memory.ppu.ly() == 144 {
-            return;
-        }
     }
 }
 
