@@ -2,7 +2,7 @@ import { buttonsHeld } from "./keyboard.js";
 import { frametimeCounter } from "./frametime.js"
 
 const utf8decoder = new TextDecoder();
-export const console_log_glue = (stringPtr, stringLen) => {
+const console_log_glue = (stringPtr, stringLen) => {
 	const messageBytes = new Uint8Array(instance.exports.memory.buffer, stringPtr, stringLen);
 	const message = utf8decoder.decode(messageBytes);
 	console.log(message);
@@ -22,7 +22,7 @@ const ctx = lcdCanvas.getContext("2d", { alpha: false });
 let lowestSafeFuncIdx = 5000;
 const instantiate_and_link_module = (bufferPtr, bufferLen) => {
 	console.log("Instantiate and link called...");
-				
+	
 	const bytecode = new Uint8Array(instance.exports.memory.buffer, bufferPtr, bufferLen);
 	
 	const anotherMod = new WebAssembly.Module(bytecode);
@@ -46,7 +46,17 @@ const {instance} = await WebAssembly.instantiateStreaming(source, importObj);
 
 const jitRuntime = instance.exports.make_runtime();
 
-const update_lcd = () => {
+// Load the ROM file.
+const loadRom = async (path) => {
+	const rom = await (await fetch(path)).bytes()
+	const romBufferPtr = instance.exports.realloc_rom_buffer(jitRuntime, rom.length);
+	const romBuffer = new Uint8Array(instance.exports.memory.buffer, romBufferPtr, rom.length);
+	romBuffer.set(rom);
+	instance.exports.load_rom_from_buffer(jitRuntime);
+}
+await loadRom("../Pokemon - Blue Version (USA, Europe) (SGB Enhanced).sgb");
+
+const updateLcd = () => {
 	const lcdBufferPtr = instance.exports.get_lcd_buffer(jitRuntime);
 	const greyscalePixels = new Uint8Array(instance.exports.memory.buffer, lcdBufferPtr, LCD_WIDTH * LCD_HEIGHT);
 	
@@ -65,7 +75,7 @@ const renderLoop = () => {
 		instance.exports.step_vblank(jitRuntime);
 	}
 	frametimeCounter.end();
-	update_lcd();
+	updateLcd();
 	instance.exports.update_joypad(
 		jitRuntime,
 		buttonsHeld.start,

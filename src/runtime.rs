@@ -3,14 +3,9 @@ use std::collections::HashMap;
 use crate::cache::CompiledBlock;
 use crate::{call_indirect, codegen, console_log};
 
-use hw_constants::PostBoot;
 use sm83_interp::cpu::Cpu;
 use sm83_interp::cpu::registers::Flags;
 use sm83_interp::joypad::ButtonsHeld;
-
-//const TEST_ROM: &[u8; 32768] = include_bytes!("../09-op r,r.gb");
-const TEST_ROM: &[u8; 1048576] =
-    include_bytes!("../Pokemon - Blue Version (USA, Europe) (SGB Enhanced).sgb");
 
 unsafe extern "C" {
     // Compiles and instantiates a Wasm module using the bytecode in `buffer`, then adds its function to table 1 of *this* module.
@@ -19,9 +14,12 @@ unsafe extern "C" {
     fn instantiate_and_link_module(buffer: *const u8, len: u32) -> i32;
 }
 
+// TODO: Should probably implement PostBoot too/instead...
+#[derive(Default)]
 pub struct JitRuntime {
     dmg_state: Cpu,
     block_cache: HashMap<u16, CompiledBlock>,
+    rom_buffer: Vec<u8>,
     next_vblank: u64,
 }
 
@@ -86,18 +84,54 @@ impl JitRuntime {
     }
 }
 
-// TODO: Should probably implement PostBoot too/instead...
-impl Default for JitRuntime {
-    fn default() -> Self {
-        Self {
-            dmg_state: {
-                let mut cpu = Cpu::default();
-                cpu.memory.load_rom(TEST_ROM);
-                cpu
-            },
-            block_cache: Default::default(),
-            next_vblank: 0,
+impl JitRuntime {
+    #[unsafe(no_mangle)]
+    pub extern "C" fn realloc_rom_buffer(&mut self, rom_length: usize) -> *mut u8 {
+        self.rom_buffer = vec![0; rom_length];
+        self.rom_buffer.as_mut_ptr()
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn load_rom_from_buffer(&mut self) {
+        self.dmg_state.memory.load_rom(&self.rom_buffer);
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn step_vblank(&mut self) {
+        self.next_vblank += 70224;
+        while self.dmg_state.memory.clock < self.next_vblank {
+            self.execute();
         }
+    }
+
+    // TODO: Figure out a nice way to pass C structs across runtime boundaries without resorting to wasm-bindgen.
+    #[unsafe(no_mangle)]
+    pub extern "C" fn update_joypad(
+        runtime: &mut JitRuntime,
+        start: bool,
+        select: bool,
+        b: bool,
+        a: bool,
+        down: bool,
+        up: bool,
+        left: bool,
+        right: bool,
+    ) {
+        runtime.dmg_state.memory.buttons_held = ButtonsHeld {
+            start,
+            select,
+            b,
+            a,
+            down,
+            up,
+            left,
+            right,
+        };
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn get_lcd_buffer(runtime: &mut JitRuntime) -> *const u8 {
+        runtime.dmg_state.memory.ppu.lcd_buffer.as_ptr()
     }
 }
 
@@ -106,42 +140,4 @@ pub extern "C" fn make_runtime() -> *const JitRuntime {
     let runtime = Box::new(JitRuntime::default());
     // Leak the JitRuntime and return its pointer to the embedder.
     Box::into_raw(runtime)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn step_vblank(runtime: &mut JitRuntime) {
-    runtime.next_vblank += 70224;
-    while runtime.dmg_state.memory.clock < runtime.next_vblank {
-        runtime.execute();
-    }
-}
-
-// TODO: Figure out a nice way to pass C structs across runtime boundaries without resorting to wasm-bindgen.
-#[unsafe(no_mangle)]
-pub extern "C" fn update_joypad(
-    runtime: &mut JitRuntime,
-    start: bool,
-    select: bool,
-    b: bool,
-    a: bool,
-    down: bool,
-    up: bool,
-    left: bool,
-    right: bool,
-) {
-    runtime.dmg_state.memory.buttons_held = ButtonsHeld {
-        start,
-        select,
-        b,
-        a,
-        down,
-        up,
-        left,
-        right,
-    };
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn get_lcd_buffer(runtime: &mut JitRuntime) -> *const u8 {
-    runtime.dmg_state.memory.ppu.lcd_buffer.as_ptr()
 }
