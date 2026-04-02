@@ -110,7 +110,7 @@ impl JitRuntime {
     // TODO: Figure out a nice way to pass C structs across runtime boundaries without resorting to wasm-bindgen.
     #[unsafe(no_mangle)]
     pub extern "C" fn update_joypad(
-        runtime: &mut JitRuntime,
+        &mut self,
         start: bool,
         select: bool,
         b: bool,
@@ -120,7 +120,7 @@ impl JitRuntime {
         left: bool,
         right: bool,
     ) {
-        runtime.dmg_state.memory.buttons_held = ButtonsHeld {
+        self.dmg_state.memory.buttons_held = ButtonsHeld {
             start,
             select,
             b,

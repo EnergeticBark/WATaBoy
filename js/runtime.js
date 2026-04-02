@@ -75,7 +75,7 @@ export const Runtime = class {
 	
 	updateJoypad = (buttonsHeld) => {
 		this.instance.exports.update_joypad(
-			this.jitRuntime,
+			this.jitRuntimePtr,
 			buttonsHeld.start,
 			buttonsHeld.select,
 			buttonsHeld.b,
