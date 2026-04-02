@@ -38,6 +38,12 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
         return None;
     }
 
+    // DON'T CACHE THE BOOT ROM!
+    #[cfg(feature = "caching")]
+    if pc < 0x100 {
+        return None;
+    }
+
     #[cfg(feature = "jit-trace")]
     let mut sm83_disassembly = String::new();
 
@@ -47,7 +53,7 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
 
     let mut pc_delta = 0;
     loop {
-        let bytecode = dmg_state.memory.buffer[pc as usize + pc_delta as usize];
+        let bytecode = dmg_state.memory.read_byte(pc + pc_delta);
         let opcode = Opcode::decode(bytecode).unwrap();
 
         match opcode {

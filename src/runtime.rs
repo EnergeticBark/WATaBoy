@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use crate::cache::CompiledBlock;
 use crate::{call_indirect, codegen, console_log};
 
+use sm83_interp::addressable::Addressable;
 use sm83_interp::cpu::Cpu;
+use sm83_interp::cpu::opcodes::Opcode;
+use sm83_interp::cpu::opcodes::parameters::R8;
 use sm83_interp::cpu::registers::Flags;
 use sm83_interp::joypad::ButtonsHeld;
 
@@ -140,4 +143,60 @@ pub extern "C" fn make_runtime() -> *const JitRuntime {
     let runtime = Box::new(JitRuntime::default());
     // Leak the JitRuntime and return its pointer to the embedder.
     Box::into_raw(runtime)
+}
+
+// Functions for executing Blargg's test ROMs from JavaScript.
+fn read_ascii_from_tile_map(runtime: &JitRuntime) -> Vec<String> {
+    let lines_buffer: Vec<u8> = (0x9800..0x9C00)
+        .map(|i| runtime.dmg_state.memory.ppu.read_byte(i, 0))
+        .collect();
+    lines_buffer
+        .chunks_exact(32)
+        .map(str::from_utf8)
+        .map(|result| result.unwrap().to_owned())
+        .collect()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn run_blargg_test(runtime: &mut JitRuntime, passed_line: usize) -> bool {
+    for _ in 0..1000000 {
+        runtime.execute();
+    }
+    let lines = read_ascii_from_tile_map(runtime);
+
+    lines[passed_line].starts_with("Passed")
+}
+
+// Functions for executing Mooneye test ROMs from JavaScript.
+fn read_bcdehl(runtime: &JitRuntime) -> [u8; 6] {
+    let regs = &runtime.dmg_state.registers;
+    [
+        regs.bc.b(),
+        regs.bc.c(),
+        regs.de.d(),
+        regs.de.e(),
+        regs.hl.h(),
+        regs.hl.l(),
+    ]
+}
+
+fn execute_until_ld_b_b(runtime: &mut JitRuntime) {
+    loop {
+        let next_byte = runtime
+            .dmg_state
+            .memory
+            .read_byte(runtime.dmg_state.registers.pc);
+        if let Ok(Opcode::LdRR { x: R8::B, y: R8::B }) = Opcode::decode(next_byte) {
+            break;
+        }
+
+        runtime.execute();
+    }
+}
+
+const FIBONACCI: [u8; 6] = [3, 5, 8, 13, 21, 34];
+#[unsafe(no_mangle)]
+pub extern "C" fn run_mooneye_test(runtime: &mut JitRuntime) -> bool {
+    execute_until_ld_b_b(runtime);
+    read_bcdehl(runtime) == FIBONACCI
 }
