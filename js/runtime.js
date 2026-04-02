@@ -87,5 +87,5 @@ export const Runtime = class {
 		);
 	}
 	
-	runBlarggTest = (final_pc, passed_line) => this.instance.exports.run_blargg_test(this.jitRuntimePtr, final_pc, passed_line);
+	runBlarggTest = passed_line => this.instance.exports.run_blargg_test(this.jitRuntimePtr, passed_line);
 }

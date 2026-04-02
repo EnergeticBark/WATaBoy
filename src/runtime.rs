@@ -159,7 +159,8 @@ fn read_ascii_from_tile_map(runtime: &JitRuntime) -> Vec<String> {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn run_blargg_test(runtime: &mut JitRuntime, passed_line: usize) -> bool {
-    for _ in 0..1000000 {
+    // This is a totally arbitrary number of execute calls, all that matters is it's enough for the test to finish.
+    for _ in 0..10000000 {
         runtime.execute();
     }
     let lines = read_ascii_from_tile_map(runtime);

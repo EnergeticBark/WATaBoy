@@ -17,7 +17,7 @@ pub fn console_log(message: &str) {
     }
 }
 
-// I might clean this up later, I still haven't determined whether its faster passing the registers in raw or not.
+// I might clean this up later, I still haven't determined whether it's faster passing the registers in raw or not.
 #[allow(clippy::too_many_arguments)]
 fn call_indirect(
     index: i32,

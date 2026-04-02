@@ -1,15 +1,16 @@
 export const frametimeCounter = new class {
+	frameStartTimestamp;
+	
     constructor() {
 		this.frametimes = document.querySelector("#frametimes");
 		this.frames = [];
-		this.frameStartTimestamp;
     }
   
-    start() {
+    start = () => {
 	    this.frameStartTimestamp = performance.now();
     }
 
-    end() {
+    end = () => {
 		const now = performance.now();
 		const delta = now - this.frameStartTimestamp;
 		
