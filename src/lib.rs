@@ -5,6 +5,7 @@ use std::arch::asm;
 mod cache;
 mod codegen;
 pub mod runtime;
+pub mod test_roms;
 
 unsafe extern "C" {
     fn console_log_glue(buffer: *const u8, len: u32);

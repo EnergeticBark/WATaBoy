@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use crate::cache::CompiledBlock;
 use crate::{call_indirect, codegen, console_log};
 
-use sm83_interp::addressable::Addressable;
 use sm83_interp::cpu::Cpu;
 use sm83_interp::cpu::registers::Flags;
 use sm83_interp::joypad::ButtonsHeld;
@@ -18,7 +17,7 @@ unsafe extern "C" {
 // TODO: Should probably implement PostBoot too/instead...
 #[derive(Default)]
 pub struct JitRuntime {
-    dmg_state: Cpu,
+    pub(crate) dmg_state: Cpu,
     block_cache: HashMap<u16, CompiledBlock>,
     rom_buffer: Vec<u8>,
     next_vblank: u64,
@@ -54,7 +53,7 @@ impl JitRuntime {
     // TODO: Checks whether the PC points to the start of a cached, JIT-compiled block.
     // If so, it executes it. Otherwise, it calls recompile(&Cpu) to JIT and cache a block.
     // If neither of these are possible for some reason, it will just call the interpreter’s execute function.
-    fn execute(&mut self) {
+    pub(crate) fn execute(&mut self) {
         let pc = self.dmg_state.registers.pc;
 
         if let Some(&compiled_block) = self.block_cache.get(&pc) {
@@ -141,50 +140,4 @@ pub extern "C" fn make_runtime() -> *const JitRuntime {
     let runtime = Box::new(JitRuntime::default());
     // Leak the JitRuntime and return its pointer to the embedder.
     Box::into_raw(runtime)
-}
-
-// Functions for executing Blargg's test ROMs from JavaScript.
-fn read_ascii_from_tile_map(runtime: &JitRuntime) -> Vec<String> {
-    let lines_buffer: Vec<u8> = (0x9800..0x9C00)
-        .map(|i| runtime.dmg_state.memory.ppu.read_byte(i, 0))
-        .collect();
-    lines_buffer
-        .chunks_exact(32)
-        .map(str::from_utf8)
-        .map(|result| result.unwrap().to_owned())
-        .collect()
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn run_blargg_test(runtime: &mut JitRuntime, passed_line: usize) -> bool {
-    // This is a totally arbitrary number of execute calls, all that matters is it's enough for the test to finish.
-    for _ in 0..10000000 {
-        runtime.execute();
-    }
-    let lines = read_ascii_from_tile_map(runtime);
-
-    lines[passed_line].starts_with("Passed")
-}
-
-// Functions for executing Mooneye test ROMs from JavaScript.
-fn read_bcdehl(runtime: &JitRuntime) -> [u8; 6] {
-    let regs = &runtime.dmg_state.registers;
-    [
-        regs.bc.b(),
-        regs.bc.c(),
-        regs.de.d(),
-        regs.de.e(),
-        regs.hl.h(),
-        regs.hl.l(),
-    ]
-}
-
-const FIBONACCI: [u8; 6] = [3, 5, 8, 13, 21, 34];
-#[unsafe(no_mangle)]
-pub extern "C" fn run_mooneye_test(runtime: &mut JitRuntime) -> bool {
-    for _ in 0..10000000 {
-        runtime.execute();
-    }
-
-    read_bcdehl(runtime) == FIBONACCI
 }
