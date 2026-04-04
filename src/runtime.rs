@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::panic;
 
 use crate::cache::CompiledBlock;
 use crate::{call_indirect, codegen, console_log};
@@ -60,7 +61,7 @@ impl JitRuntime {
             self.execute_compiled_block(compiled_block);
         }
 
-        if false && let Some(jit_block) = codegen::recompile(&mut self.dmg_state) {
+        if let Some(jit_block) = codegen::recompile(&mut self.dmg_state) {
             #[cfg(feature = "jit-trace")]
             console_log(&wasmprinter::print_bytes(&jit_block.buffer).unwrap());
 
@@ -137,6 +138,11 @@ impl JitRuntime {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn make_runtime() -> *const JitRuntime {
+    // Log panic messages to the JavaScript console.
+    panic::set_hook(Box::new(|panic_info| {
+        console_log(&format!("panic occurred: {panic_info}"));
+    }));
+
     let runtime = Box::new(JitRuntime::default());
     // Leak the JitRuntime and return its pointer to the embedder.
     Box::into_raw(runtime)
