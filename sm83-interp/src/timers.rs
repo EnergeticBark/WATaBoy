@@ -62,7 +62,9 @@ impl Timers {
         self.next_interrupt
     }
 
+    // Skip (delta_m_cycles - 1) in one big chunk, then increment the timer once.
     // TODO: This implementation needs more unit testing, but it passes the test ROMs.
+    // Is there any way that the wrong IF might be read if TIMA overflowed multiple times?
     #[allow(clippy::cast_possible_truncation)]
     pub fn catch_up_coarse(&mut self, cpu_clock: u64, interrupt_flags: &mut u8) {
         let clock_delta = cpu_clock - self.clock;
