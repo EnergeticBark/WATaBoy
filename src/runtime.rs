@@ -54,17 +54,12 @@ impl JitRuntime {
             .increment_timers(compiled_block.delta_m_cycles);
     }
 
-    // TODO: Checks whether the PC points to the start of a cached, JIT-compiled block.
-    // If so, it executes it. Otherwise, it calls recompile(&Cpu) to JIT and cache a block.
-    // If neither of these are possible for some reason, it will just call the interpreter’s execute function.
-    pub(crate) fn execute(&mut self) {
-        let pc = self.dmg_state.registers.pc;
-
+    // Get the next CompiledBlock at PC, either from the cache or by compiling a new block.
+    fn get_compiled_block(&mut self, pc: u16) -> Option<CompiledBlock> {
         if let Some(&compiled_block) = self.block_cache.get(&pc) {
-            self.execute_compiled_block(compiled_block);
-        }
-
-        if let Some(jit_block) = codegen::recompile(&mut self.dmg_state) {
+            Some(compiled_block)
+        } else {
+            let jit_block = codegen::recompile(&mut self.dmg_state)?;
             #[cfg(feature = "jit-trace")]
             console_log(&wasmprinter::print_bytes(&jit_block.buffer).unwrap());
 
@@ -80,7 +75,20 @@ impl JitRuntime {
             // Add the block we just compiled to the cache.
             #[cfg(feature = "caching")]
             self.block_cache.insert(pc, compiled_block);
+            Some(compiled_block)
+        }
+    }
 
+    fn wont_be_interrupted(&self, compiled_block: CompiledBlock) -> bool {
+        self.dmg_state.memory.clock + compiled_block.delta_m_cycles as u64 * 4
+            < self.dmg_state.memory.next_interrupt
+    }
+
+    // If possible, execute the next JIT-compiled block.
+    pub(crate) fn execute(&mut self) {
+        if let Some(compiled_block) = self.get_compiled_block(self.dmg_state.registers.pc)
+            && self.wont_be_interrupted(compiled_block)
+        {
             self.execute_compiled_block(compiled_block);
         } else {
             // Fallback to interpreter.
