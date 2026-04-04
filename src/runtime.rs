@@ -47,8 +47,9 @@ impl JitRuntime {
         self.dmg_state.registers.hl.set_h(h as u8);
         self.dmg_state.registers.hl.set_l(l as u8);
 
-        // Update the program counter.
+        // Update the program counter and clock.
         self.dmg_state.registers.pc += compiled_block.pc_delta;
+        self.dmg_state.memory.clock += compiled_block.clock_delta;
     }
 
     // TODO: Checks whether the PC points to the start of a cached, JIT-compiled block.
@@ -71,6 +72,7 @@ impl JitRuntime {
             let compiled_block = CompiledBlock {
                 func_idx,
                 pc_delta: jit_block.pc_delta,
+                clock_delta: jit_block.clock_delta,
             };
 
             // Add the block we just compiled to the cache.

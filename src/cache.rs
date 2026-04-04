@@ -5,7 +5,8 @@
 pub struct CompiledBlock {
     // Func index for the runtime's Wasm table.
     pub func_idx: i32,
-    // In theory, I could update the PC value in the generated Wasm...
+    // In theory, I could update the PC value and clock in the generated Wasm...
     // Maybe do that if it's cleaner.
     pub pc_delta: u16,
+    pub clock_delta: u64,
 }
