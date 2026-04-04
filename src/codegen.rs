@@ -25,8 +25,8 @@ pub struct WasmBlock {
     // Wasm bytecode.
     pub buffer: Vec<u8>,
     pub pc_delta: u16,
-    // The total number of T-Cycles this block of instructions takes to execute.
-    pub clock_delta: u64,
+    // The total number of M-Cycles this block of instructions takes to execute.
+    pub delta_m_cycles: u16,
 }
 
 // Try to produce a WasmBlock starting at dmg_state's current program counter.
@@ -53,7 +53,7 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
     let mut instruction_sink = LazyCell::new(|| function.instructions());
 
     let mut pc_delta = 0;
-    let mut clock_delta = 0;
+    let mut delta_m_cycles = 0;
     loop {
         let bytecode = dmg_state.memory.read_byte(pc + pc_delta);
         let opcode = Opcode::decode(bytecode).unwrap();
@@ -146,9 +146,9 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
             _ => break,
         }
 
-        // Add the number of cycles this instruction took to the clock_delta.
+        // Add the number of cycles this instruction took to delta_m_cycles.
         // TODO: Remember to handle any context dependent instructions separately!!
-        clock_delta += 4 * opcodes::cycles::m_cycles(opcode) as u64;
+        delta_m_cycles += opcodes::cycles::m_cycles(opcode);
 
         #[cfg(feature = "jit-trace")]
         sm83_disassembly.push_str(&format!("{:?}\n", opcode))
@@ -173,6 +173,6 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
     Some(WasmBlock {
         buffer: module.finish(),
         pc_delta,
-        clock_delta,
+        delta_m_cycles,
     })
 }

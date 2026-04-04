@@ -8,5 +8,5 @@ pub struct CompiledBlock {
     // In theory, I could update the PC value and clock in the generated Wasm...
     // Maybe do that if it's cleaner.
     pub pc_delta: u16,
-    pub clock_delta: u64,
+    pub delta_m_cycles: u16,
 }
