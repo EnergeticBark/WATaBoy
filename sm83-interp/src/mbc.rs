@@ -33,6 +33,7 @@ impl MbcKind {
 
 #[derive(Archive, Deserialize, Serialize)]
 pub struct Mbc {
+    pub boot_rom_mounted: bool,
     under_boot_rom: Box<[u8; 0x100]>,
     ram_enabled: bool,
     rom: Vec<u8>,
@@ -198,6 +199,7 @@ impl Mbc {
             // Unmount the boot ROM.
             BANK => {
                 self.rom[..0x100].copy_from_slice(&self.under_boot_rom[..0x100]);
+                self.boot_rom_mounted = false;
             }
             _ => unreachable!(),
         }
@@ -207,6 +209,7 @@ impl Mbc {
 impl Default for Mbc {
     fn default() -> Self {
         Self {
+            boot_rom_mounted: true,
             under_boot_rom: vec![0; 0x100].into_boxed_slice().try_into().unwrap(),
             ram_enabled: false,
             rom: Vec::new(),

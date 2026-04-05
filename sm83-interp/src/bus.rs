@@ -311,6 +311,10 @@ impl AddressBus {
         // TODO: Fire the joypad interrupt on a high-to-low change
         self.buffer[JOYP as usize] = joypad.into_bits();
     }
+
+    pub fn boot_rom_mounted(&self) -> bool {
+        self.mbc.boot_rom_mounted
+    }
 }
 
 impl Default for AddressBus {
