@@ -33,15 +33,13 @@ pub struct WasmBlock {
 // TODO: Read one opcode at a time until a branching statement is reached. -> Codegen Wasm for each instruction.
 pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
     let pc = dmg_state.registers.pc;
-    // Only cache from ROM bank 00 for now.
-    #[cfg(feature = "caching")]
-    if pc >= 0x4000 {
-        return None;
-    }
 
-    // DON'T CACHE THE BOOT ROM!
     #[cfg(feature = "caching")]
-    if pc < 0x100 {
+    // Don't cache below 0x100 if the boot ROM is mounted!
+    if dmg_state.memory.boot_rom_mounted() && pc < 0x100 
+    // Only cache from ROM bank 00 for now.
+    || pc >= 0x4000
+    {
         return None;
     }
 
