@@ -10,7 +10,18 @@ pub(crate) fn empty_jit_block_module() -> Module {
     // Return those same registers, but modified.
     let results = vec![ValType::I32; 8];
     types.ty().function(params, results);
+
+    // Parameters: 16-bit index into memory, 8-bit value to write.
+    let params = vec![ValType::I32; 2];
+    let results = vec![];
+    types.ty().function(params, results);
     module.section(&types);
+
+    let mut imports = ImportSection::new();
+    // write_byte uses index 1 in the types section.
+    imports.import("env", "write_byte", EntityType::Function(1));
+
+    module.section(&imports);
 
     // Encode the function section.
     let mut functions = FunctionSection::new();
@@ -20,7 +31,7 @@ pub(crate) fn empty_jit_block_module() -> Module {
 
     // Encode the export section
     let mut exports = ExportSection::new();
-    exports.export("execute_block", ExportKind::Func, 0);
+    exports.export("execute_block", ExportKind::Func, 1);
     module.section(&exports);
 
     module

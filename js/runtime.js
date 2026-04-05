@@ -37,9 +37,13 @@ export const Runtime = class {
 		console.log("Instantiate and link called...");
 		
 		const bytecode = new Uint8Array(this.instance.exports.memory.buffer, bufferPtr, bufferLen);
-		
 		const anotherMod = new WebAssembly.Module(bytecode);
-		const anotherInstance = new WebAssembly.Instance(anotherMod, {});
+		
+		const importObj = {env: {
+			// TODO: actually link in a write_byte function from the main module.
+			write_byte: (addr, value) => 0,
+		}};
+		const anotherInstance = new WebAssembly.Instance(anotherMod, importObj);
 		
 		// This used to call the grow method, but that's busted in WebKit.
 		// See: https://bugs.webkit.org/show_bug.cgi?id=290681

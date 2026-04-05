@@ -21,6 +21,7 @@ pub(crate) trait Sm83Macros {
     fn set_flag(&mut self, flag_bit: FlagBit) -> &mut Self;
     fn check_flag(&mut self, flag_bit: FlagBit) -> &mut Self;
     fn return_regs(&mut self) -> &mut Self;
+    fn write_byte(&mut self) -> &mut Self;
 }
 
 impl Sm83Macros for InstructionSink<'_> {
@@ -119,5 +120,14 @@ impl Sm83Macros for InstructionSink<'_> {
             .local_get(E)
             .local_get(H)
             .local_get(L)
+    }
+
+    /// Write a byte to the specified address in the Game Boy's memory.
+    /// # Signature
+    /// ```
+    /// (addr: i32, value: i32) -> ()
+    /// ```
+    fn write_byte(&mut self) -> &mut Self {
+        self.call(0)
     }
 }
