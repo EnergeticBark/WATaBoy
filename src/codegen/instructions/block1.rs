@@ -1,4 +1,4 @@
-use sm83_interp::cpu::opcodes::parameters::R8;
+use sm83_interp::cpu::opcodes::parameters::{R8, R16};
 
 use crate::codegen::{macros::Sm83Macros, registers::r8_to_reg_param};
 
@@ -13,11 +13,7 @@ pub trait Block1 {
 
 impl Block1 for InstructionSink<'_> {
     fn ld_hl_r(&mut self, r8_src: R8, delta_m_cycles: u16) -> &mut Self {
-        self.local_get(r8_to_reg_param(R8::H))
-            .i32_const(8)
-            .i32_shl()
-            .local_get(r8_to_reg_param(R8::L))
-            .i32_or()
+        self.get_r16(R16::Hl)
             .local_get(r8_to_reg_param(r8_src))
             .i32_const(delta_m_cycles as i32)
             .call_write_byte()

@@ -75,7 +75,7 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
             }
 
             // Block 1
-            // Ignore LD (HL), y and LD x, (HL) for now...
+            // Ignore LD x, (HL) for now...
             Opcode::LdRR {
                 y: R8::IndirectHL, ..
             } => break,
@@ -85,6 +85,7 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
             } => {
                 // Account for the m_cycle already spent fetching this instruction.
                 delta_m_cycles += 1;
+                total_m_cycles += 1;
                 instruction_sink.ld_hl_r(y, delta_m_cycles);
                 // Reset delta_m_cycles, because the system clock just caught up.
                 delta_m_cycles = 0;

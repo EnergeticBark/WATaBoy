@@ -1,6 +1,7 @@
+use sm83_interp::cpu::opcodes::parameters::{R8, R16};
 use wasm_encoder::InstructionSink;
 
-use crate::codegen::registers::{A, B, C, D, E, F, H, L};
+use crate::codegen::registers::{A, B, C, D, E, F, H, L, r8_to_reg_param};
 
 pub(crate) enum FlagBit {
     Zero = 7,
@@ -10,6 +11,7 @@ pub(crate) enum FlagBit {
 }
 
 pub(crate) trait Sm83Macros {
+    fn get_r16(&mut self, r16: R16) -> &mut Self;
     fn clear_flags(&mut self) -> &mut Self;
     fn assign_flags(
         &mut self,
@@ -25,6 +27,26 @@ pub(crate) trait Sm83Macros {
 }
 
 impl Sm83Macros for InstructionSink<'_> {
+    /// Get the value of the specified 16-bit register.
+    /// # Signature
+    /// ```
+    /// () -> (r16: i32)
+    /// ```
+    fn get_r16(&mut self, r16: R16) -> &mut Self {
+        let (high_reg, low_reg) = match r16 {
+            R16::Bc => (R8::B, R8::C),
+            R16::De => (R8::D, R8::E),
+            R16::Hl => (R8::H, R8::L),
+            R16::Sp => unimplemented!("SP isn't in the JIT prelude/epilogue yet."),
+        };
+
+        self.local_get(r8_to_reg_param(high_reg))
+            .i32_const(8)
+            .i32_shl()
+            .local_get(r8_to_reg_param(low_reg))
+            .i32_or()
+    }
+
     /// Clear all bits in the flag register.
     /// # Signature
     /// ```
