@@ -25,8 +25,10 @@ pub struct WasmBlock {
     // Wasm bytecode.
     pub buffer: Vec<u8>,
     pub pc_delta: u16,
-    // The total number of M-Cycles this block of instructions takes to execute.
+    // The number of M-Cycles since the system clock has been updated.
     pub delta_m_cycles: u16,
+    // The total number of M-Cycles this block of instructions takes to execute.
+    pub total_m_cycles: u16,
 }
 
 // Try to produce a WasmBlock starting at dmg_state's current program counter.
@@ -52,6 +54,7 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
 
     let mut pc_delta = 0;
     let mut delta_m_cycles = 0;
+    let mut total_m_cycles = 0;
     loop {
         let bytecode = dmg_state.memory.read_byte(pc + pc_delta);
         let opcode = Opcode::decode(bytecode).unwrap();
@@ -74,11 +77,19 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
             // Block 1
             // Ignore LD (HL), y and LD x, (HL) for now...
             Opcode::LdRR {
-                x: R8::IndirectHL, ..
-            }
-            | Opcode::LdRR {
                 y: R8::IndirectHL, ..
             } => break,
+            
+            Opcode::LdRR {
+                x: R8::IndirectHL, y
+            } => {
+                // Account for the m_cycle already spent fetching this instruction.
+                delta_m_cycles += 1;
+                instruction_sink.ld_hl_r(y, delta_m_cycles);
+                // Reset delta_m_cycles, because the system clock just caught up.
+                delta_m_cycles = 0;
+                pc_delta += 1;
+            }
             Opcode::LdRR { x, y } => {
                 instruction_sink.ld_r_r(x, y);
                 pc_delta += 1;
@@ -144,9 +155,10 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
             _ => break,
         }
 
-        // Add the number of cycles this instruction took to delta_m_cycles.
+        // Add the number of cycles this instruction took to delta_m_cycles and total_m_cycles.
         // TODO: Remember to handle any context dependent instructions separately!!
         delta_m_cycles += opcodes::cycles::m_cycles(opcode);
+        total_m_cycles += opcodes::cycles::m_cycles(opcode);
 
         #[cfg(feature = "jit-trace")]
         sm83_disassembly.push_str(&format!("{:?}\n", opcode))
@@ -172,5 +184,6 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
         buffer: module.finish(),
         pc_delta,
         delta_m_cycles,
+        total_m_cycles,
     })
 }

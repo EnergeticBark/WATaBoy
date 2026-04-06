@@ -70,6 +70,7 @@ impl JitRuntime {
                 func_idx,
                 pc_delta: jit_block.pc_delta,
                 delta_m_cycles: jit_block.delta_m_cycles,
+                total_m_cycles: jit_block.total_m_cycles,
             };
 
             // Add the block we just compiled to the cache.
@@ -80,7 +81,7 @@ impl JitRuntime {
     }
 
     fn wont_be_interrupted(&self, compiled_block: CompiledBlock) -> bool {
-        self.dmg_state.memory.clock + compiled_block.delta_m_cycles as u64 * 4
+        self.dmg_state.memory.clock + compiled_block.total_m_cycles as u64 * 4
             < self.dmg_state.memory.next_interrupt
     }
 
@@ -98,6 +99,12 @@ impl JitRuntime {
 }
 
 impl JitRuntime {
+    #[unsafe(no_mangle)]
+    pub extern "C" fn write_byte_mem(&mut self, address: u16, value: u8, delta_m_cycles: u16) {
+        self.dmg_state.memory.increment_timers(delta_m_cycles);
+        self.dmg_state.memory.write_byte(address, value);
+    }
+
     #[unsafe(no_mangle)]
     pub extern "C" fn realloc_rom_buffer(&mut self, rom_length: usize) -> *mut u8 {
         self.rom_buffer = vec![0; rom_length];

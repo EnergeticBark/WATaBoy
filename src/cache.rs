@@ -9,4 +9,5 @@ pub struct CompiledBlock {
     // Maybe do that if it's cleaner.
     pub pc_delta: u16,
     pub delta_m_cycles: u16,
+    pub total_m_cycles: u16,
 }
