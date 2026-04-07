@@ -11,6 +11,7 @@ pub trait Block3 {
     fn add_n(&mut self, imm: i32) -> &mut Self;
     fn cp_n(&mut self, imm: i32) -> &mut Self;
     fn ldh_a_n(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self;
+    fn ld_a_nn(&mut self, ctx: &mut CodegenCtx, imm: u16) -> &mut Self;
 }
 
 impl Block3 for InstructionSink<'_> {
@@ -95,6 +96,20 @@ impl Block3 for InstructionSink<'_> {
         let address = u16::from_le_bytes([imm, 0xFF]);
         let sink = self
             .i32_const(address as i32)
+            .i32_const(ctx.delta_m_cycles as i32)
+            .call_read_byte()
+            .set_r8(ctx, R8::A);
+        // Reset delta_m_cycles, because the system clock just caught up.
+        ctx.delta_m_cycles = 0;
+        ctx.delta_m_cycles += 1;
+        ctx.total_m_cycles += 1;
+        sink
+    }
+    fn ld_a_nn(&mut self, ctx: &mut CodegenCtx, imm: u16) -> &mut Self {
+        ctx.delta_m_cycles += 3;
+        ctx.total_m_cycles += 3;
+        let sink = self
+            .i32_const(imm as i32)
             .i32_const(ctx.delta_m_cycles as i32)
             .call_read_byte()
             .set_r8(ctx, R8::A);
