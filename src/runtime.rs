@@ -100,7 +100,13 @@ impl JitRuntime {
 
 impl JitRuntime {
     #[unsafe(no_mangle)]
-    pub extern "C" fn write_byte_mem(&mut self, address: u16, value: u8, delta_m_cycles: u16) {
+    pub extern "C" fn read_byte_mem(&mut self, address: u16, delta_m_cycles: u16) -> u8 {
+        self.dmg_state.memory.increment_timers(delta_m_cycles);
+        self.dmg_state.memory.read_byte(address)
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn write_byte_mem(&mut self, value: u8, address: u16, delta_m_cycles: u16) {
         self.dmg_state.memory.increment_timers(delta_m_cycles);
         self.dmg_state.memory.write_byte(address, value);
     }

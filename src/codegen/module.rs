@@ -11,15 +11,25 @@ pub(crate) fn empty_jit_block_module() -> Module {
     let results = vec![ValType::I32; 8];
     types.ty().function(params, results);
 
-    // Parameters: 16-bit index into memory, 8-bit value to write, current system clock.
+    // Type for the read_byte function.
+    // Parameters: 16-bit index into memory, current system clock.
+    // Returns: 8-bit value at the specified index.
+    let params = vec![ValType::I32; 2];
+    let results = vec![ValType::I32];
+    types.ty().function(params, results);
+
+    // Type for the write_byte function.
+    // Parameters: 8-bit value to write, 16-bit index into memory, current system clock.
     let params = vec![ValType::I32; 3];
     let results = vec![];
     types.ty().function(params, results);
     module.section(&types);
 
     let mut imports = ImportSection::new();
-    // The write_byte function uses index 1 in the types section.
-    imports.import("env", "write_byte", EntityType::Function(1));
+    // The read_byte function uses index 1 in the types section.
+    imports.import("env", "read_byte", EntityType::Function(1));
+    // The write_byte function uses index 2 in the types section.
+    imports.import("env", "write_byte", EntityType::Function(2));
 
     module.section(&imports);
 
@@ -31,7 +41,7 @@ pub(crate) fn empty_jit_block_module() -> Module {
 
     // Encode the export section
     let mut exports = ExportSection::new();
-    exports.export("execute_block", ExportKind::Func, 1);
+    exports.export("execute_block", ExportKind::Func, 2);
     module.section(&exports);
 
     module

@@ -14,6 +14,7 @@ pub(crate) enum FlagBit {
 }
 
 pub(crate) trait Sm83Macros {
+    fn get_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn set_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn get_r16(&mut self, r16: R16) -> &mut Self;
     fn clear_flags(&mut self) -> &mut Self;
@@ -28,9 +29,34 @@ pub(crate) trait Sm83Macros {
     fn check_flag(&mut self, flag_bit: FlagBit) -> &mut Self;
     fn return_regs(&mut self) -> &mut Self;
     fn call_write_byte(&mut self) -> &mut Self;
+    fn call_read_byte(&mut self) -> &mut Self;
 }
 
 impl Sm83Macros for InstructionSink<'_> {
+    /// Get the value of the specified 8-bit register.
+    /// If R8 is [HL], delta_m_cycles will reset to 0 and total_m_cycles will increase by 1.
+    /// # Signature
+    /// ```
+    /// () -> (value: i32)
+    /// ```
+    fn get_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
+        match r8 {
+            R8::IndirectHL => {
+                // Account for the m_cycle already spent fetching this instruction.
+                ctx.delta_m_cycles += 1;
+                ctx.total_m_cycles += 1;
+                let sink = self
+                    .get_r16(R16::Hl)
+                    .i32_const(ctx.delta_m_cycles as i32)
+                    .call_read_byte();
+                // Reset delta_m_cycles, because the system clock just caught up.
+                ctx.delta_m_cycles = 0;
+                sink
+            }
+            _ => self.local_get(r8_to_reg_param(r8)),
+        }
+    }
+
     /// Set the value of the specified 8-bit register.
     /// If R8 is [HL], delta_m_cycles will reset to 0 and total_m_cycles will increase by 1.
     /// # Signature
@@ -172,12 +198,21 @@ impl Sm83Macros for InstructionSink<'_> {
             .local_get(L)
     }
 
+    /// Read a byte from the specified address in the Game Boy's memory.
+    /// # Signature
+    /// ```
+    /// (addr: i32, delta_m_cycles: i32) -> (value: i32)
+    /// ```
+    fn call_read_byte(&mut self) -> &mut Self {
+        self.call(0)
+    }
+
     /// Write a byte to the specified address in the Game Boy's memory.
     /// # Signature
     /// ```
     /// (value: i32, addr: i32, delta_m_cycles: i32) -> ()
     /// ```
     fn call_write_byte(&mut self) -> &mut Self {
-        self.call(0)
+        self.call(1)
     }
 }

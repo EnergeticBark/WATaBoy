@@ -40,7 +40,8 @@ export const Runtime = class {
 		const anotherMod = new WebAssembly.Module(bytecode);
 		
 		const importObj = {env: {
-			write_byte: (address, value, clock) => this.instance.exports.write_byte_mem(this.jitRuntimePtr, address, value, clock),
+			read_byte: (address, clock) => this.instance.exports.read_byte_mem(this.jitRuntimePtr, address, clock),
+			write_byte: (value, address, clock) => this.instance.exports.write_byte_mem(this.jitRuntimePtr, value, address, clock),
 		}};
 		const anotherInstance = new WebAssembly.Instance(anotherMod, importObj);
 		

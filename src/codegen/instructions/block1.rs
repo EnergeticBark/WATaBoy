@@ -1,6 +1,6 @@
 use sm83_interp::cpu::opcodes::parameters::R8;
 
-use crate::codegen::{CodegenCtx, macros::Sm83Macros, registers::r8_to_reg_param};
+use crate::codegen::{CodegenCtx, macros::Sm83Macros};
 
 use wasm_encoder::*;
 
@@ -12,6 +12,6 @@ pub trait Block1 {
 
 impl Block1 for InstructionSink<'_> {
     fn ld_r_r(&mut self, ctx: &mut CodegenCtx, r8_dst: R8, r8_src: R8) -> &mut Self {
-        self.local_get(r8_to_reg_param(r8_src)).set_r8(ctx, r8_dst)
+        self.get_r8(ctx, r8_src).set_r8(ctx, r8_dst)
     }
 }
