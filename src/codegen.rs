@@ -1,5 +1,4 @@
 use sm83_interp::cpu::opcodes::Opcode;
-use sm83_interp::cpu::opcodes::parameters::R8;
 use sm83_interp::cpu::{Cpu, opcodes};
 
 mod instructions;
@@ -70,7 +69,6 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 <InstructionSink as Block0>::nop(&mut instruction_sink);
                 pc_delta += 1;
             }
-
             Opcode::IncR { x } => {
                 instruction_sink.inc_r(&mut ctx, x);
                 pc_delta += 1;
@@ -83,49 +81,36 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
             }
 
             // Block 2
-            // Ignore ADD (HL) for now...
-            Opcode::AddR { x: R8::IndirectHL } => break,
             Opcode::AddR { x } => {
-                instruction_sink.add_r(x);
+                instruction_sink.add_r(&mut ctx, x);
                 pc_delta += 1;
             }
-            // Ignore ADC (HL) for now...
-            Opcode::AdcR { x: R8::IndirectHL } => break,
             Opcode::AdcR { x } => {
-                instruction_sink.adc_r(x);
+                instruction_sink.adc_r(&mut ctx, x);
                 pc_delta += 1;
             }
-            // Ignore SUB (HL) for now...
-            Opcode::SubR { x: R8::IndirectHL } => break,
             Opcode::SubR { x } => {
-                instruction_sink.sub_r(x);
+                instruction_sink.sub_r(&mut ctx, x);
                 pc_delta += 1;
             }
-            // Ignore SBC (HL) for now...
-            Opcode::SbcR { x: R8::IndirectHL } => break,
             Opcode::SbcR { x } => {
-                instruction_sink.sbc_r(x);
+                instruction_sink.sbc_r(&mut ctx, x);
                 pc_delta += 1;
             }
-            // Ignore AND (HL) for now...
-            Opcode::AndR { x: R8::IndirectHL } => break,
             Opcode::AndR { x } => {
-                instruction_sink.and_r(x);
+                instruction_sink.and_r(&mut ctx, x);
                 pc_delta += 1;
             }
-            // Ignore XOR (HL) for now...
-            Opcode::XorR { x: R8::IndirectHL } => break,
             Opcode::XorR { x } => {
-                instruction_sink.xor_r(x);
+                instruction_sink.xor_r(&mut ctx, x);
                 pc_delta += 1;
             }
             Opcode::OrR { x } => {
                 instruction_sink.or_r(&mut ctx, x);
                 pc_delta += 1;
             }
-            Opcode::CpR { x: R8::IndirectHL } => break,
             Opcode::CpR { x } => {
-                instruction_sink.cp_r(x);
+                instruction_sink.cp_r(&mut ctx, x);
                 pc_delta += 1;
             }
 
