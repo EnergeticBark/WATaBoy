@@ -18,6 +18,14 @@ use wasm_encoder::*;
 #[cfg(feature = "jit-trace")]
 use crate::console_log;
 
+#[derive(Default)]
+pub struct CodegenCtx {
+    // The number of M-Cycles since the system clock has been updated.
+    pub delta_m_cycles: u16,
+    // The total number of M-Cycles this block of instructions takes to execute.
+    pub total_m_cycles: u16,
+}
+
 // Stores the raw Wasm bytecode dynamically recompiled from a
 // block of SM83 instructions and the metadata needed to execute
 // it, e.g. how many M-cycles it takes to execute.
@@ -25,10 +33,7 @@ pub struct WasmBlock {
     // Wasm bytecode.
     pub buffer: Vec<u8>,
     pub pc_delta: u16,
-    // The number of M-Cycles since the system clock has been updated.
-    pub delta_m_cycles: u16,
-    // The total number of M-Cycles this block of instructions takes to execute.
-    pub total_m_cycles: u16,
+    pub ctx: CodegenCtx,
 }
 
 // Try to produce a WasmBlock starting at dmg_state's current program counter.
@@ -53,8 +58,7 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
     let mut instruction_sink = LazyCell::new(|| function.instructions());
 
     let mut pc_delta = 0;
-    let mut delta_m_cycles = 0;
-    let mut total_m_cycles = 0;
+    let mut ctx = CodegenCtx::default();
     loop {
         let bytecode = dmg_state.memory.read_byte(pc + pc_delta);
         let opcode = Opcode::decode(bytecode).unwrap();
@@ -80,19 +84,8 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 y: R8::IndirectHL, ..
             } => break,
             
-            Opcode::LdRR {
-                x: R8::IndirectHL, y
-            } => {
-                // Account for the m_cycle already spent fetching this instruction.
-                delta_m_cycles += 1;
-                total_m_cycles += 1;
-                instruction_sink.ld_hl_r(y, delta_m_cycles);
-                // Reset delta_m_cycles, because the system clock just caught up.
-                delta_m_cycles = 0;
-                pc_delta += 1;
-            }
             Opcode::LdRR { x, y } => {
-                instruction_sink.ld_r_r(x, y);
+                instruction_sink.ld_r_r(&mut ctx, x, y);
                 pc_delta += 1;
             }
 
@@ -158,8 +151,8 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
 
         // Add the number of cycles this instruction took to delta_m_cycles and total_m_cycles.
         // TODO: Remember to handle any context dependent instructions separately!!
-        delta_m_cycles += opcodes::cycles::m_cycles(opcode);
-        total_m_cycles += opcodes::cycles::m_cycles(opcode);
+        ctx.delta_m_cycles += opcodes::cycles::m_cycles(opcode);
+        ctx.total_m_cycles += opcodes::cycles::m_cycles(opcode);
 
         #[cfg(feature = "jit-trace")]
         sm83_disassembly.push_str(&format!("{:?}\n", opcode))
@@ -184,7 +177,6 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
     Some(WasmBlock {
         buffer: module.finish(),
         pc_delta,
-        delta_m_cycles,
-        total_m_cycles,
+        ctx,
     })
 }

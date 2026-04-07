@@ -1,7 +1,10 @@
 use sm83_interp::cpu::opcodes::parameters::{R8, R16};
 use wasm_encoder::InstructionSink;
 
-use crate::codegen::registers::{A, B, C, D, E, F, H, L, r8_to_reg_param};
+use crate::codegen::{
+    CodegenCtx,
+    registers::{A, B, C, D, E, F, H, L, r8_to_reg_param},
+};
 
 pub(crate) enum FlagBit {
     Zero = 7,
@@ -11,6 +14,7 @@ pub(crate) enum FlagBit {
 }
 
 pub(crate) trait Sm83Macros {
+    fn set_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn get_r16(&mut self, r16: R16) -> &mut Self;
     fn clear_flags(&mut self) -> &mut Self;
     fn assign_flags(
@@ -27,6 +31,30 @@ pub(crate) trait Sm83Macros {
 }
 
 impl Sm83Macros for InstructionSink<'_> {
+    /// Set the value of the specified 8-bit register.
+    /// If R8 is [HL], delta_m_cycles will reset to 0 and total_m_cycles will increase by 1.
+    /// # Signature
+    /// ```
+    /// (value: i32) -> ()
+    /// ```
+    fn set_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
+        match r8 {
+            R8::IndirectHL => {
+                // Account for the m_cycle already spent fetching this instruction.
+                ctx.delta_m_cycles += 1;
+                ctx.total_m_cycles += 1;
+                let sink = self
+                    .get_r16(R16::Hl)
+                    .i32_const(ctx.delta_m_cycles as i32)
+                    .call_write_byte();
+                // Reset delta_m_cycles, because the system clock just caught up.
+                ctx.delta_m_cycles = 0;
+                sink
+            }
+            _ => self.local_set(r8_to_reg_param(r8)),
+        }
+    }
+
     /// Get the value of the specified 16-bit register.
     /// # Signature
     /// ```
@@ -147,7 +175,7 @@ impl Sm83Macros for InstructionSink<'_> {
     /// Write a byte to the specified address in the Game Boy's memory.
     /// # Signature
     /// ```
-    /// (addr: i32, value: i32, delta_m_cycles: i32) -> ()
+    /// (value: i32, addr: i32, delta_m_cycles: i32) -> ()
     /// ```
     fn call_write_byte(&mut self) -> &mut Self {
         self.call(0)

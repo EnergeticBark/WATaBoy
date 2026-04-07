@@ -69,8 +69,8 @@ impl JitRuntime {
             let compiled_block = CompiledBlock {
                 func_idx,
                 pc_delta: jit_block.pc_delta,
-                delta_m_cycles: jit_block.delta_m_cycles,
-                total_m_cycles: jit_block.total_m_cycles,
+                delta_m_cycles: jit_block.ctx.delta_m_cycles,
+                total_m_cycles: jit_block.ctx.total_m_cycles,
             };
 
             // Add the block we just compiled to the cache.
