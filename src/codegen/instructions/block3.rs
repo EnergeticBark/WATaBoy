@@ -7,10 +7,10 @@ use wasm_encoder::*;
 // See: https://gbdev.io/pandocs/CPU_Instruction_Set.html#block-1-8-bit-register-to-register-loads
 pub trait Block3 {
     fn add_n(&mut self, imm: i32) -> &mut Self;
+    fn cp_n(&mut self, imm: i32) -> &mut Self;
 }
 
 impl Block3 for InstructionSink<'_> {
-    // Block 3
     fn add_n(&mut self, imm: i32) -> &mut Self {
         // TODO: Ensure immediate values in separate ROM banks aren't cached.
         // E.g. 0x3FFF: AddN, 0x4000: 64. A bank switch could invalidate this immediate value.
@@ -53,5 +53,39 @@ impl Block3 for InstructionSink<'_> {
             .i32_const(0x0f)
             .i32_gt_u()
             .set_flag(FlagBit::HalfCarry)
+    }
+
+    // Block 3
+    fn cp_n(&mut self, imm: i32) -> &mut Self {
+        // TODO: Ensure immediate values in separate ROM banks aren't cached.
+        // E.g. 0x3FFF: AddN, 0x4000: 64. A bank switch could invalidate this immediate value.
+        self.assign_flags(false, true, false, false) // Always set subtraction to 1.
+            /* Calculate Half-Carry Flag:
+             * (A & 0x0f) < (R8 & 0x0f)
+             */
+            .local_get(A)
+            .i32_const(0x0f)
+            .i32_and() // (A & 0x0f)
+            .i32_const(imm & 0x0f)
+            .i32_lt_u()
+            .set_flag(FlagBit::HalfCarry)
+            /* Calculate Carry Flag:
+             * A < R8
+             */
+            .local_get(A)
+            .i32_const(imm)
+            .i32_lt_u() // If A < R8 (underflow), then 1, otherwise 0.
+            .set_flag(FlagBit::Carry)
+            /* Perform the SUB:
+             * (A - R8) & 0xff
+             */
+            .local_get(A)
+            .i32_const(imm)
+            .i32_sub()
+            .i32_const(0xff)
+            .i32_and()
+            // *** Calculate Zero Flag. ***
+            .i32_eqz() // If the result is zero, then 1, otherwise 0.
+            .set_flag(FlagBit::Zero)
     }
 }

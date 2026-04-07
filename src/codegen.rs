@@ -122,6 +122,13 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 instruction_sink.add_n(imm as i32);
                 pc_delta += 1;
             }
+            Opcode::CpN => {
+                pc_delta += 1;
+                let current_pc = dmg_state.registers.pc + pc_delta;
+                let imm = dmg_state.memory.read_byte(current_pc);
+                instruction_sink.cp_n(imm as i32);
+                pc_delta += 1;
+            }
             _ => break,
         }
 
