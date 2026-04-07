@@ -1,5 +1,6 @@
 use sm83_interp::cpu::opcodes::parameters::R8;
 
+use crate::codegen::CodegenCtx;
 use crate::codegen::macros::{FlagBit, Sm83Macros};
 use crate::codegen::registers::{A, r8_to_reg_param};
 
@@ -14,7 +15,7 @@ pub trait Block2 {
     fn sbc_r(&mut self, r8: R8) -> &mut Self;
     fn and_r(&mut self, r8: R8) -> &mut Self;
     fn xor_r(&mut self, r8: R8) -> &mut Self;
-    fn or_r(&mut self, r8: R8) -> &mut Self;
+    fn or_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn cp_r(&mut self, r8: R8) -> &mut Self;
 }
 
@@ -213,10 +214,10 @@ impl Block2 for InstructionSink<'_> {
             .set_flag(FlagBit::Zero)
     }
 
-    fn or_r(&mut self, r8: R8) -> &mut Self {
+    fn or_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         self.clear_flags()
             .local_get(A)
-            .local_get(r8_to_reg_param(r8))
+            .get_r8(ctx, r8)
             /* Perform the OR:
              * A = A | R8
              */

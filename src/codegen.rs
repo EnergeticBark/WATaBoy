@@ -71,10 +71,8 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 pc_delta += 1;
             }
 
-            // Ignore INC (HL) for now...
-            Opcode::IncR { x: R8::IndirectHL } => break,
             Opcode::IncR { x } => {
-                instruction_sink.inc_r(x);
+                instruction_sink.inc_r(&mut ctx, x);
                 pc_delta += 1;
             }
 
@@ -121,10 +119,8 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 instruction_sink.xor_r(x);
                 pc_delta += 1;
             }
-            // Ignore OR (HL) for now...
-            Opcode::OrR { x: R8::IndirectHL } => break,
             Opcode::OrR { x } => {
-                instruction_sink.or_r(x);
+                instruction_sink.or_r(&mut ctx, x);
                 pc_delta += 1;
             }
             Opcode::CpR { x: R8::IndirectHL } => break,
