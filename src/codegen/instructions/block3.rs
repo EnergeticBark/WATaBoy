@@ -1,6 +1,8 @@
+use crate::codegen::CodegenCtx;
 use crate::codegen::macros::{FlagBit, Sm83Macros};
 use crate::codegen::registers::A;
 
+use sm83_interp::cpu::opcodes::parameters::R8;
 use wasm_encoder::*;
 
 // Emit Wasm bytecode for Block 1.
@@ -8,9 +10,12 @@ use wasm_encoder::*;
 pub trait Block3 {
     fn add_n(&mut self, imm: i32) -> &mut Self;
     fn cp_n(&mut self, imm: i32) -> &mut Self;
+    fn ldh_a_n(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self;
 }
 
 impl Block3 for InstructionSink<'_> {
+    // TODO: Ensure immediate values in separate ROM banks aren't cached.
+    // E.g. 0x3FFF: AddN, 0x4000: 64. A bank switch could invalidate this immediate value.
     fn add_n(&mut self, imm: i32) -> &mut Self {
         // TODO: Ensure immediate values in separate ROM banks aren't cached.
         // E.g. 0x3FFF: AddN, 0x4000: 64. A bank switch could invalidate this immediate value.
@@ -54,11 +59,7 @@ impl Block3 for InstructionSink<'_> {
             .i32_gt_u()
             .set_flag(FlagBit::HalfCarry)
     }
-
-    // Block 3
     fn cp_n(&mut self, imm: i32) -> &mut Self {
-        // TODO: Ensure immediate values in separate ROM banks aren't cached.
-        // E.g. 0x3FFF: AddN, 0x4000: 64. A bank switch could invalidate this immediate value.
         self.assign_flags(false, true, false, false) // Always set subtraction to 1.
             /* Calculate Half-Carry Flag:
              * (A & 0x0f) < (R8 & 0x0f)
@@ -87,5 +88,20 @@ impl Block3 for InstructionSink<'_> {
             // *** Calculate Zero Flag. ***
             .i32_eqz() // If the result is zero, then 1, otherwise 0.
             .set_flag(FlagBit::Zero)
+    }
+    fn ldh_a_n(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self {
+        ctx.delta_m_cycles += 2;
+        ctx.total_m_cycles += 2;
+        let address = u16::from_le_bytes([imm, 0xFF]);
+        let sink = self
+            .i32_const(address as i32)
+            .i32_const(ctx.delta_m_cycles as i32)
+            .call_read_byte()
+            .set_r8(ctx, R8::A);
+        // Reset delta_m_cycles, because the system clock just caught up.
+        ctx.delta_m_cycles = 0;
+        ctx.delta_m_cycles += 1;
+        ctx.total_m_cycles += 1;
+        sink
     }
 }
