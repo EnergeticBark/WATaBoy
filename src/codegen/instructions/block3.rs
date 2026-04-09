@@ -10,6 +10,7 @@ use wasm_encoder::*;
 // See: https://gbdev.io/pandocs/CPU_Instruction_Set.html#block-1-8-bit-register-to-register-loads
 pub trait Block3 {
     fn add_n(&mut self, imm: i32) -> &mut Self;
+    fn and_n(&mut self, imm: i32) -> &mut Self;
     fn cp_n(&mut self, imm: i32) -> &mut Self;
     fn pop_rr(&mut self, ctx: &mut CodegenCtx, r16_stack: R16Stack) -> &mut Self;
     fn push_rr(&mut self, ctx: &mut CodegenCtx, r16_stack: R16Stack) -> &mut Self;
@@ -64,6 +65,19 @@ impl Block3 for InstructionSink<'_> {
             .i32_const(0x0f)
             .i32_gt_u()
             .set_flag(FlagBit::HalfCarry)
+    }
+    fn and_n(&mut self, imm: i32) -> &mut Self {
+        self.assign_flags(false, false, true, false) // Always set half-carry to 1.
+            .local_get(A)
+            .i32_const(imm)
+            /* Perform the AND:
+             * A = A & R8
+             */
+            .i32_and()
+            .local_tee(A)
+            // *** Calculate Zero Flag. ***
+            .i32_eqz() // If the A is zero, then 1, otherwise 0.
+            .set_flag(FlagBit::Zero)
     }
     fn cp_n(&mut self, imm: i32) -> &mut Self {
         self.assign_flags(false, true, false, false) // Always set subtraction to 1.
