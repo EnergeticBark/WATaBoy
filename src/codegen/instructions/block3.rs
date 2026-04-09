@@ -13,6 +13,7 @@ pub trait Block3 {
     fn cp_n(&mut self, imm: i32) -> &mut Self;
     fn pop_rr(&mut self, ctx: &mut CodegenCtx, r16_stack: R16Stack) -> &mut Self;
     fn push_rr(&mut self, ctx: &mut CodegenCtx, r16_stack: R16Stack) -> &mut Self;
+    fn ldh_n_a(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self;
     fn ld_nn_a(&mut self, ctx: &mut CodegenCtx, imm: u16) -> &mut Self;
     fn ldh_a_n(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self;
     fn ld_a_nn(&mut self, ctx: &mut CodegenCtx, imm: u16) -> &mut Self;
@@ -111,6 +112,21 @@ impl Block3 for InstructionSink<'_> {
             .push_byte(ctx)
             // Push the low byte.
             .push_byte(ctx)
+    }
+    fn ldh_n_a(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self {
+        ctx.delta_m_cycles += 2;
+        ctx.total_m_cycles += 2;
+        let address = u16::from_le_bytes([imm, 0xFF]);
+        let sink = self
+            .local_get(A)
+            .i32_const(address as i32)
+            .i32_const(ctx.delta_m_cycles as i32)
+            .call_write_byte();
+        // Reset delta_m_cycles, because the system clock just caught up.
+        ctx.delta_m_cycles = 0;
+        ctx.delta_m_cycles += 1;
+        ctx.total_m_cycles += 1;
+        sink
     }
     fn ld_nn_a(&mut self, ctx: &mut CodegenCtx, imm: u16) -> &mut Self {
         ctx.delta_m_cycles += 3;
