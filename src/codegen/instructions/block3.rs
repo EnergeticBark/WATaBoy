@@ -93,36 +93,13 @@ impl Block3 for InstructionSink<'_> {
             .set_flag(FlagBit::Zero)
     }
     fn pop_rr(&mut self, ctx: &mut CodegenCtx, r16_stack: R16Stack) -> &mut Self {
+        ctx.delta_m_cycles += 1;
+        ctx.total_m_cycles += 1;
         // Pop the low byte.
-        ctx.delta_m_cycles += 1;
-        ctx.total_m_cycles += 1;
-        self.local_get(SP)
-            .i32_const(ctx.delta_m_cycles as i32)
-            .call_read_byte()
-            .local_get(SP)
-            .i32_const(1)
-            .i32_add()
-            .local_set(SP);
-        // Reset delta_m_cycles, because the system clock just caught up.
-        ctx.delta_m_cycles = 0;
-
-        // Pop the high byte.
-        ctx.delta_m_cycles += 1;
-        ctx.total_m_cycles += 1;
-        self.local_get(SP)
-            .i32_const(ctx.delta_m_cycles as i32)
-            .call_read_byte()
-            .local_get(SP)
-            .i32_const(1)
-            .i32_add()
-            .local_set(SP)
-            .set_r16_stack(r16_stack);
-        // Reset delta_m_cycles, because the system clock just caught up.
-        ctx.delta_m_cycles = 0;
-        ctx.delta_m_cycles += 1;
-        ctx.total_m_cycles += 1;
-
-        self
+        self.pop_byte(ctx)
+            // Pop the high byte.
+            .pop_byte(ctx)
+            .set_r16_stack(r16_stack)
     }
     fn ldh_a_n(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self {
         ctx.delta_m_cycles += 2;

@@ -18,6 +18,7 @@ pub(crate) trait Sm83Macros {
     fn set_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn get_r16(&mut self, r16: R16) -> &mut Self;
     fn set_r16_stack(&mut self, r16: R16Stack) -> &mut Self;
+    fn pop_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
     fn clear_flags(&mut self) -> &mut Self;
     fn assign_flags(
         &mut self,
@@ -117,6 +118,32 @@ impl Sm83Macros for InstructionSink<'_> {
         };
 
         self.local_set(high_reg).local_set(low_reg)
+    }
+
+    /// Pop an 8-bit value from the stack.
+    /// # Signature
+    /// ```
+    /// () -> (value: i32)
+    /// ```
+    /// # Side Effects
+    /// Increments the system clock by 1 M-cycle after reading SP.
+    /// # Pseudocode
+    /// ```
+    /// mem[SP++]
+    /// ```
+    fn pop_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
+        self.local_get(SP)
+            .i32_const(ctx.delta_m_cycles as i32)
+            .call_read_byte()
+            .local_get(SP)
+            .i32_const(1)
+            .i32_add()
+            .local_set(SP);
+        // Reset delta_m_cycles, because the system clock just caught up.
+        ctx.delta_m_cycles = 0;
+        ctx.delta_m_cycles += 1;
+        ctx.total_m_cycles += 1;
+        self
     }
 
     /// Clear all bits in the flag register.
