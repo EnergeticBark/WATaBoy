@@ -2,6 +2,7 @@ use sm83_interp::cpu::opcodes::parameters::R8;
 
 use crate::codegen::CodegenCtx;
 use crate::codegen::macros::{FlagBit, Sm83Macros};
+use crate::codegen::module::PROLOGE_LENGTH;
 
 use wasm_encoder::*;
 
@@ -19,7 +20,7 @@ impl Block0 for InstructionSink<'_> {
 
     fn inc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch register.
-        const RESULT: u32 = 8;
+        const RESULT: u32 = PROLOGE_LENGTH as u32;
         self.check_flag(FlagBit::Carry) // *** Preserve the original value of Carry on the stack. ***
             .clear_flags()
             .set_flag(FlagBit::Carry) // Restore Carry flag.

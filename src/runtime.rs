@@ -35,8 +35,9 @@ impl JitRuntime {
         let e = self.dmg_state.registers.de.e().into();
         let h = self.dmg_state.registers.hl.h().into();
         let l = self.dmg_state.registers.hl.l().into();
-        let (a, f, b, c, d, e, h, l) =
-            call_indirect(compiled_block.func_idx, a, f, b, c, d, e, h, l);
+        let sp = self.dmg_state.registers.sp.into();
+        let (a, f, b, c, d, e, h, l, sp) =
+            call_indirect(compiled_block.func_idx, a, f, b, c, d, e, h, l, sp);
         // Update dmg_state's registers based on the values returned in the JIT's epilogue.
         self.dmg_state.registers.af.set_a(a as u8);
         self.dmg_state.registers.af.set_f(Flags::from_bits(f as u8));
@@ -46,6 +47,7 @@ impl JitRuntime {
         self.dmg_state.registers.de.set_e(e as u8);
         self.dmg_state.registers.hl.set_h(h as u8);
         self.dmg_state.registers.hl.set_l(l as u8);
+        self.dmg_state.registers.sp = sp as u16;
 
         // Update the program counter and clock.
         self.dmg_state.registers.pc += compiled_block.pc_delta;

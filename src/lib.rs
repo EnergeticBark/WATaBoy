@@ -30,9 +30,12 @@ fn call_indirect(
     mut e: i32,
     mut h: i32,
     mut l: i32,
-) -> (i32, i32, i32, i32, i32, i32, i32, i32) {
+    mut sp: i32,
+) -> (i32, i32, i32, i32, i32, i32, i32, i32, i32) {
     unsafe {
-        asm!("local.get {8}",
+        asm!(
+            "local.get {9}",
+            "local.get {8}",
             "local.get {7}",
             "local.get {6}",
             "local.get {5}",
@@ -41,7 +44,7 @@ fn call_indirect(
             "local.get {2}",
             "local.get {1}",
             "local.get {0}",
-            "call_indirect (i32, i32, i32, i32, i32, i32, i32, i32) -> (i32, i32, i32, i32, i32, i32, i32, i32)",
+            "call_indirect (i32, i32, i32, i32, i32, i32, i32, i32, i32) -> (i32, i32, i32, i32, i32, i32, i32, i32, i32)",
             "local.set {1}",
             "local.set {2}",
             "local.set {3}",
@@ -50,7 +53,9 @@ fn call_indirect(
             "local.set {6}",
             "local.set {7}",
             "local.set {8}",
+            "local.set {9}",
             in(local) index,
+            inout(local) sp,
             inout(local) l,
             inout(local) h,
             inout(local) e,
@@ -61,5 +66,5 @@ fn call_indirect(
             inout(local) a,
         );
     }
-    (a, f, b, c, d, e, h, l)
+    (a, f, b, c, d, e, h, l, sp)
 }

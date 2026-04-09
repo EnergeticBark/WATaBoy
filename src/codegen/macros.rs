@@ -1,9 +1,9 @@
-use sm83_interp::cpu::opcodes::parameters::{R8, R16};
+use sm83_interp::cpu::opcodes::parameters::{R8, R16, R16Stack};
 use wasm_encoder::InstructionSink;
 
 use crate::codegen::{
     CodegenCtx,
-    registers::{A, B, C, D, E, F, H, L, r8_to_reg_param},
+    registers::{A, B, C, D, E, F, H, L, SP, r8_to_reg_param},
 };
 
 pub(crate) enum FlagBit {
@@ -17,6 +17,7 @@ pub(crate) trait Sm83Macros {
     fn get_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn set_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn get_r16(&mut self, r16: R16) -> &mut Self;
+    fn set_r16_stack(&mut self, r16: R16Stack) -> &mut Self;
     fn clear_flags(&mut self) -> &mut Self;
     fn assign_flags(
         &mut self,
@@ -99,6 +100,23 @@ impl Sm83Macros for InstructionSink<'_> {
             .i32_shl()
             .local_get(r8_to_reg_param(low_reg))
             .i32_or()
+    }
+
+    /// Set the value of the specified 16-bit stack register.
+    /// # Signature
+    /// ```
+    /// (high_byte: i32, low_byte: i32) -> ()
+    /// ```
+    fn set_r16_stack(&mut self, r16: R16Stack) -> &mut Self {
+        let (high_reg, low_reg) = match r16 {
+            R16Stack::Bc => (B, C),
+            R16Stack::De => (D, E),
+            R16Stack::Hl => (H, L),
+            // TODO: Don't set the lower nibble of F!!!
+            R16Stack::Af => (A, F),
+        };
+
+        self.local_set(high_reg).local_set(low_reg)
     }
 
     /// Clear all bits in the flag register.
@@ -196,6 +214,7 @@ impl Sm83Macros for InstructionSink<'_> {
             .local_get(E)
             .local_get(H)
             .local_get(L)
+            .local_get(SP)
     }
 
     /// Read a byte from the specified address in the Game Boy's memory.

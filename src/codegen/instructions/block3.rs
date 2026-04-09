@@ -1,8 +1,9 @@
 use crate::codegen::CodegenCtx;
 use crate::codegen::macros::{FlagBit, Sm83Macros};
-use crate::codegen::registers::A;
+use crate::codegen::module::PROLOGE_LENGTH;
+use crate::codegen::registers::{A, SP};
 
-use sm83_interp::cpu::opcodes::parameters::R8;
+use sm83_interp::cpu::opcodes::parameters::{R8, R16Stack};
 use wasm_encoder::*;
 
 // Emit Wasm bytecode for Block 1.
@@ -10,6 +11,7 @@ use wasm_encoder::*;
 pub trait Block3 {
     fn add_n(&mut self, imm: i32) -> &mut Self;
     fn cp_n(&mut self, imm: i32) -> &mut Self;
+    fn pop_rr(&mut self, ctx: &mut CodegenCtx, r16_stack: R16Stack) -> &mut Self;
     fn ldh_a_n(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self;
     fn ld_a_nn(&mut self, ctx: &mut CodegenCtx, imm: u16) -> &mut Self;
 }
@@ -21,7 +23,7 @@ impl Block3 for InstructionSink<'_> {
         // TODO: Ensure immediate values in separate ROM banks aren't cached.
         // E.g. 0x3FFF: AddN, 0x4000: 64. A bank switch could invalidate this immediate value.
         // Name our scratch register.
-        const PREV_A: u32 = 8;
+        const PREV_A: u32 = PROLOGE_LENGTH as u32;
         self.clear_flags() // Maybe add a macro for *assigning* flags too so we don't have to do this separately from setting the first flag.
             // *** Store original value of A so it can be used to calculate the half-carry. ***
             .local_get(A)
@@ -89,6 +91,38 @@ impl Block3 for InstructionSink<'_> {
             // *** Calculate Zero Flag. ***
             .i32_eqz() // If the result is zero, then 1, otherwise 0.
             .set_flag(FlagBit::Zero)
+    }
+    fn pop_rr(&mut self, ctx: &mut CodegenCtx, r16_stack: R16Stack) -> &mut Self {
+        // Pop the low byte.
+        ctx.delta_m_cycles += 1;
+        ctx.total_m_cycles += 1;
+        self.local_get(SP)
+            .i32_const(ctx.delta_m_cycles as i32)
+            .call_read_byte()
+            .local_get(SP)
+            .i32_const(1)
+            .i32_add()
+            .local_set(SP);
+        // Reset delta_m_cycles, because the system clock just caught up.
+        ctx.delta_m_cycles = 0;
+
+        // Pop the high byte.
+        ctx.delta_m_cycles += 1;
+        ctx.total_m_cycles += 1;
+        self.local_get(SP)
+            .i32_const(ctx.delta_m_cycles as i32)
+            .call_read_byte()
+            .local_get(SP)
+            .i32_const(1)
+            .i32_add()
+            .local_set(SP)
+            .set_r16_stack(r16_stack);
+        // Reset delta_m_cycles, because the system clock just caught up.
+        ctx.delta_m_cycles = 0;
+        ctx.delta_m_cycles += 1;
+        ctx.total_m_cycles += 1;
+
+        self
     }
     fn ldh_a_n(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self {
         ctx.delta_m_cycles += 2;

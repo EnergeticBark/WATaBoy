@@ -149,13 +149,21 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 instruction_sink.ld_a_nn(&mut ctx, address);
                 pc_delta += 1;
             }
+            Opcode::PopRr { x } => {
+                instruction_sink.pop_rr(&mut ctx, x);
+                pc_delta += 1;
+            }
             _ => break,
         }
 
         // Add the number of cycles this instruction took to delta_m_cycles and total_m_cycles.
         // TODO: Remember to handle any context dependent instructions separately!!
-        ctx.delta_m_cycles += opcodes::cycles::m_cycles(opcode);
-        ctx.total_m_cycles += opcodes::cycles::m_cycles(opcode);
+        // TODO: PopRr ticks manually here, but not in the interpreter.
+        // Remove this if statement once the interpreter ticks it manually.
+        if !matches!(opcode, Opcode::PopRr { .. }) {
+            ctx.delta_m_cycles += opcodes::cycles::m_cycles(opcode);
+            ctx.total_m_cycles += opcodes::cycles::m_cycles(opcode);
+        }
 
         #[cfg(feature = "jit-trace")]
         sm83_disassembly.push_str(&format!("{:?}\n", opcode))

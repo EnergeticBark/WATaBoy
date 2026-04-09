@@ -1,14 +1,16 @@
 use wasm_encoder::*;
 
+pub const PROLOGE_LENGTH: usize = 9;
+
 pub(crate) fn empty_jit_block_module() -> Module {
     let mut module = Module::new();
 
     // Encode the type section.
     let mut types = TypeSection::new();
-    // Parameters: A, F, B, C, D, E, H, and L registers.
-    let params = vec![ValType::I32; 8];
+    // Parameters: A, F, B, C, D, E, H, L, and SP registers.
+    let params = vec![ValType::I32; PROLOGE_LENGTH];
     // Return those same registers, but modified.
-    let results = vec![ValType::I32; 8];
+    let results = vec![ValType::I32; PROLOGE_LENGTH];
     types.ty().function(params, results);
 
     // Type for the read_byte function.
@@ -48,7 +50,7 @@ pub(crate) fn empty_jit_block_module() -> Module {
 }
 
 pub(crate) fn empty_jit_block_function() -> Function {
-    // Provide two locals, 8 and 9, to be used as "scratch registers".
+    // Provide two locals to be used as "scratch registers".
     let locals = vec![(2, ValType::I32)];
     Function::new(locals)
 }

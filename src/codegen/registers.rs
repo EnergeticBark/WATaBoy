@@ -8,6 +8,7 @@ pub const D: u32 = 4;
 pub const E: u32 = 5;
 pub const H: u32 = 6;
 pub const L: u32 = 7;
+pub const SP: u32 = 8;
 
 pub(crate) fn r8_to_reg_param(r8: R8) -> u32 {
     match r8 {
