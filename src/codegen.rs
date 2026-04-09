@@ -129,6 +129,19 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 instruction_sink.cp_n(imm as i32);
                 pc_delta += 1;
             }
+            Opcode::LdNnA => {
+                pc_delta += 1;
+                let current_pc = dmg_state.registers.pc + pc_delta;
+                let first_byte = dmg_state.memory.read_byte(current_pc);
+                pc_delta += 1;
+                let current_pc = dmg_state.registers.pc + pc_delta;
+                let second_byte = dmg_state.memory.read_byte(current_pc);
+                
+                let address = u16::from_le_bytes([first_byte, second_byte]);
+                
+                instruction_sink.ld_nn_a(&mut ctx, address);
+                pc_delta += 1;
+            }
             Opcode::LdhAN => {
                 pc_delta += 1;
                 let current_pc = dmg_state.registers.pc + pc_delta;
