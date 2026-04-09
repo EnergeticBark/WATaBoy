@@ -153,14 +153,18 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 instruction_sink.pop_rr(&mut ctx, x);
                 pc_delta += 1;
             }
+            Opcode::PushRr { x } => {
+                instruction_sink.push_rr(&mut ctx, x);
+                pc_delta += 1;
+            }
             _ => break,
         }
 
         // Add the number of cycles this instruction took to delta_m_cycles and total_m_cycles.
         // TODO: Remember to handle any context dependent instructions separately!!
-        // TODO: PopRr ticks manually here, but not in the interpreter.
-        // Remove this if statement once the interpreter ticks it manually.
-        if !matches!(opcode, Opcode::PopRr { .. }) {
+        // TODO: PopRr and PushRr tick manually here, but not in the interpreter.
+        // Remove this if statement once the interpreter ticks them manually.
+        if !matches!(opcode, Opcode::PopRr { .. } | Opcode::PushRr { .. }) {
             ctx.delta_m_cycles += opcodes::cycles::m_cycles(opcode);
             ctx.total_m_cycles += opcodes::cycles::m_cycles(opcode);
         }

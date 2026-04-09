@@ -17,8 +17,10 @@ pub(crate) trait Sm83Macros {
     fn get_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn set_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn get_r16(&mut self, r16: R16) -> &mut Self;
+    fn get_r16_stack(&mut self, r16: R16Stack) -> &mut Self;
     fn set_r16_stack(&mut self, r16: R16Stack) -> &mut Self;
     fn pop_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
+    fn push_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
     fn clear_flags(&mut self) -> &mut Self;
     fn assign_flags(
         &mut self,
@@ -103,7 +105,24 @@ impl Sm83Macros for InstructionSink<'_> {
             .i32_or()
     }
 
+    /// Get the value of the specified 16-bit stack register.
+    /// # Signature
+    /// ```
+    /// () -> (low_byte: i32, high_byte: i32)
+    /// ```
+    fn get_r16_stack(&mut self, r16: R16Stack) -> &mut Self {
+        let (high_reg, low_reg) = match r16 {
+            R16Stack::Bc => (B, C),
+            R16Stack::De => (D, E),
+            R16Stack::Hl => (H, L),
+            R16Stack::Af => (A, F),
+        };
+
+        self.local_get(low_reg).local_get(high_reg)
+    }
+
     /// Set the value of the specified 16-bit stack register.
+    /// The parameters to this macro are in reverse order compared to values returned by get_r16_stack.
     /// # Signature
     /// ```
     /// (high_byte: i32, low_byte: i32) -> ()
@@ -126,7 +145,7 @@ impl Sm83Macros for InstructionSink<'_> {
     /// () -> (value: i32)
     /// ```
     /// # Side Effects
-    /// Increments the system clock by 1 M-cycle after reading SP.
+    /// Increments the system clock by 1 M-cycle after reading at SP.
     /// # Pseudocode
     /// ```
     /// mem[SP++]
@@ -139,6 +158,32 @@ impl Sm83Macros for InstructionSink<'_> {
             .i32_const(1)
             .i32_add()
             .local_set(SP);
+        // Reset delta_m_cycles, because the system clock just caught up.
+        ctx.delta_m_cycles = 0;
+        ctx.delta_m_cycles += 1;
+        ctx.total_m_cycles += 1;
+        self
+    }
+
+    /// Push an 8-bit value from the stack.
+    /// # Signature
+    /// ```
+    /// (value: i32) -> ()
+    /// ```
+    /// # Side Effects
+    /// Increments the system clock by 1 M-cycle after writing at SP.
+    /// # Pseudocode
+    /// ```
+    /// mem[--SP] = val
+    /// ```
+    fn push_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
+        // Pre-decrement SP.
+        self.local_get(SP)
+            .i32_const(1)
+            .i32_sub()
+            .local_tee(SP)
+            .i32_const(ctx.delta_m_cycles as i32)
+            .call_write_byte();
         // Reset delta_m_cycles, because the system clock just caught up.
         ctx.delta_m_cycles = 0;
         ctx.delta_m_cycles += 1;
