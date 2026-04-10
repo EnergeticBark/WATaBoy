@@ -11,6 +11,7 @@ use wasm_encoder::*;
 pub trait Block0 {
     fn nop(&mut self) -> &mut Self;
     fn inc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
+    fn dec_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn ld_r_n(&mut self, ctx: &mut CodegenCtx, r8: R8, imm: i32) -> &mut Self;
 }
 
@@ -36,6 +37,38 @@ impl Block0 for InstructionSink<'_> {
             .local_tee(RESULT)
             .set_r8(ctx, r8)
             .local_get(RESULT)
+            /* Calculate Half-Carry Flag:
+             * RESULT.trailing_zeros() >= 4
+             */
+            .i32_ctz()
+            .i32_const(3)
+            .i32_gt_u()
+            .set_flag(FlagBit::HalfCarry)
+            // *** Calculate Zero Flag. ***
+            .local_get(RESULT)
+            .i32_eqz() // If the R8 is zero, then 1, otherwise 0.
+            .set_flag(FlagBit::Zero)
+    }
+
+    fn dec_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
+        // Name our scratch register.
+        const RESULT: u32 = PROLOGE_LENGTH as u32;
+        const R8_VAL: u32 = PROLOGE_LENGTH as u32 + 1;
+        self.check_flag(FlagBit::Carry) // *** Preserve the original value of Carry on the stack. ***
+            .assign_flags(false, true, false, false) // Always set subtraction to 1.
+            .set_flag(FlagBit::Carry) // Restore Carry flag.
+            /* Perform the decrement and truncate:
+             * R8 = (R8 - 1) & 0xff
+             */
+            .get_r8(ctx, r8)
+            .local_tee(R8_VAL)
+            .i32_const(1)
+            .i32_sub()
+            .i32_const(0xff)
+            .i32_and()
+            .local_tee(RESULT)
+            .set_r8(ctx, r8)
+            .local_get(R8_VAL)
             /* Calculate Half-Carry Flag:
              * R8.trailing_zeros() >= 4
              */
