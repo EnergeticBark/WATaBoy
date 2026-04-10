@@ -73,6 +73,13 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 instruction_sink.inc_r(&mut ctx, x);
                 pc_delta += 1;
             }
+            Opcode::LdRN { x } => {
+                pc_delta += 1;
+                let current_pc = dmg_state.registers.pc + pc_delta;
+                let imm = dmg_state.memory.read_byte(current_pc);
+                instruction_sink.ld_r_n(&mut ctx, x, imm as i32);
+                pc_delta += 1;
+            }
 
             // Block 1
             Opcode::LdRR { x, y } => {

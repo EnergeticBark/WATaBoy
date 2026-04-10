@@ -11,6 +11,7 @@ use wasm_encoder::*;
 pub trait Block0 {
     fn nop(&mut self) -> &mut Self;
     fn inc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
+    fn ld_r_n(&mut self, ctx: &mut CodegenCtx, r8: R8, imm: i32) -> &mut Self;
 }
 
 impl Block0 for InstructionSink<'_> {
@@ -46,5 +47,11 @@ impl Block0 for InstructionSink<'_> {
             .local_get(RESULT)
             .i32_eqz() // If the R8 is zero, then 1, otherwise 0.
             .set_flag(FlagBit::Zero)
+    }
+
+    fn ld_r_n(&mut self, ctx: &mut CodegenCtx, r8: R8, imm: i32) -> &mut Self {
+        ctx.delta_m_cycles += 2;
+        ctx.total_m_cycles += 2;
+        self.i32_const(imm).set_r8(ctx, r8)
     }
 }
