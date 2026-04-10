@@ -43,13 +43,17 @@ impl Timers {
             return self.next_interrupt;
         }
 
-        if matches!(
-            self.tima_overflow_state,
-            Some(TimaOverflowState::Cancelable)
-        ) {
-            // The interrupt from TIMA overflowing will occur even if TIMA was disabled.
-            self.next_interrupt = self.clock + 4;
-            return self.next_interrupt;
+        // The interrupt from TIMA overflowing will occur even if TIMA was disabled.
+        match self.tima_overflow_state {
+            Some(TimaOverflowState::Cancelable) => {
+                self.next_interrupt = self.clock + 4;
+                return self.next_interrupt;
+            }
+            Some(TimaOverflowState::IgnoringWrites) => {
+                self.next_interrupt = self.clock;
+                return self.next_interrupt;
+            }
+            _ => (),
         }
 
         if !self.tac.tima_enabled() {
