@@ -69,6 +69,14 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 <InstructionSink as Block0>::nop(&mut instruction_sink);
                 pc_delta += 1;
             }
+            Opcode::DecRr { x } => {
+                instruction_sink.dec_rr(x);
+                pc_delta += 1;
+            }
+            Opcode::IncRr { x } => {
+                instruction_sink.inc_rr(x);
+                pc_delta += 1;
+            }
             Opcode::IncR { x } => {
                 instruction_sink.inc_r(&mut ctx, x);
                 pc_delta += 1;

@@ -1,4 +1,4 @@
-use sm83_interp::cpu::opcodes::parameters::R8;
+use sm83_interp::cpu::opcodes::parameters::{R8, R16};
 
 use crate::codegen::CodegenCtx;
 use crate::codegen::macros::{FlagBit, Sm83Macros};
@@ -10,6 +10,8 @@ use wasm_encoder::*;
 // See: https://gbdev.io/pandocs/CPU_Instruction_Set.html#block-0
 pub trait Block0 {
     fn nop(&mut self) -> &mut Self;
+    fn inc_rr(&mut self, r16: R16) -> &mut Self;
+    fn dec_rr(&mut self, r16: R16) -> &mut Self;
     fn inc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn dec_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn ld_r_n(&mut self, ctx: &mut CodegenCtx, r8: R8, imm: i32) -> &mut Self;
@@ -18,6 +20,18 @@ pub trait Block0 {
 impl Block0 for InstructionSink<'_> {
     fn nop(&mut self) -> &mut Self {
         self.nop()
+    }
+
+    fn inc_rr(&mut self, r16: R16) -> &mut Self {
+        // Name our scratch register.
+        const TEMP: u32 = PROLOGE_LENGTH as u32;
+        self.get_r16(r16).i32_const(1).i32_add().set_r16(r16, TEMP)
+    }
+
+    fn dec_rr(&mut self, r16: R16) -> &mut Self {
+        // Name our scratch register.
+        const TEMP: u32 = PROLOGE_LENGTH as u32;
+        self.get_r16(r16).i32_const(1).i32_sub().set_r16(r16, TEMP)
     }
 
     fn inc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
