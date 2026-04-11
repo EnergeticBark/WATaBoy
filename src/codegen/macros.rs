@@ -33,8 +33,8 @@ pub(crate) trait Sm83Macros {
     fn set_flag(&mut self, flag_bit: FlagBit) -> &mut Self;
     fn check_flag(&mut self, flag_bit: FlagBit) -> &mut Self;
     fn return_regs(&mut self) -> &mut Self;
-    fn call_read_byte(&mut self) -> &mut Self;
-    fn write_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
+    fn call_read_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
+    fn call_write_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
 }
 
 impl Sm83Macros for InstructionSink<'_> {
@@ -47,12 +47,7 @@ impl Sm83Macros for InstructionSink<'_> {
     fn get_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         match r8 {
             R8::IndirectHL => {
-                let sink = self
-                    .get_r16(R16::Hl)
-                    .i32_const(ctx.delta_m_cycles as i32)
-                    .call_read_byte();
-                // Reset delta_m_cycles, because the system clock just caught up.
-                ctx.delta_m_cycles = 0;
+                let sink = self.get_r16(R16::Hl).call_read_byte(ctx);
                 ctx.increment_m_cycles(1);
                 sink
             }
@@ -69,7 +64,7 @@ impl Sm83Macros for InstructionSink<'_> {
     fn set_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         match r8 {
             R8::IndirectHL => {
-                self.get_r16(R16::Hl).write_byte(ctx);
+                self.get_r16(R16::Hl).call_write_byte(ctx);
                 ctx.increment_m_cycles(1);
                 self
             }
@@ -171,14 +166,11 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     fn pop_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
         self.local_get(SP)
-            .i32_const(ctx.delta_m_cycles as i32)
-            .call_read_byte()
+            .call_read_byte(ctx)
             .local_get(SP)
             .i32_const(1)
             .i32_add()
             .local_set(SP);
-        // Reset delta_m_cycles, because the system clock just caught up.
-        ctx.delta_m_cycles = 0;
         ctx.increment_m_cycles(1);
         self
     }
@@ -200,7 +192,7 @@ impl Sm83Macros for InstructionSink<'_> {
             .i32_const(1)
             .i32_sub()
             .local_tee(SP)
-            .write_byte(ctx);
+            .call_write_byte(ctx);
         ctx.increment_m_cycles(1);
         self
     }
@@ -306,10 +298,14 @@ impl Sm83Macros for InstructionSink<'_> {
     /// Read a byte from the specified address in the Game Boy's memory.
     /// # Signature
     /// ```
-    /// (addr: i32, delta_m_cycles: i32) -> (value: i32)
+    /// (addr: i32) -> (value: i32)
     /// ```
-    fn call_read_byte(&mut self) -> &mut Self {
-        self.call(0)
+    /// # Side Effects
+    /// Resets delta_m_cycles to 0 because `read_byte_mem` will increment the timers before reading the byte from memory.
+    fn call_read_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
+        self.i32_const(ctx.delta_m_cycles as i32).call(0);
+        ctx.delta_m_cycles = 0;
+        self
     }
 
     /// Write a byte to the specified address in the Game Boy's memory.
@@ -319,7 +315,7 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     /// # Side Effects
     /// Resets delta_m_cycles to 0 because `write_byte_mem` will increment the timers before writing the byte to memory.
-    fn write_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
+    fn call_write_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
         self.i32_const(ctx.delta_m_cycles as i32).call(1);
         ctx.delta_m_cycles = 0;
         self
