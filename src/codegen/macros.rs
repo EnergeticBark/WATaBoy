@@ -46,11 +46,7 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     fn get_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         match r8 {
-            R8::IndirectHL => {
-                self.get_r16(R16::Hl).call_read_byte(ctx);
-                ctx.increment_m_cycles(1);
-                self
-            }
+            R8::IndirectHL => self.get_r16(R16::Hl).call_read_byte(ctx),
             _ => self.local_get(r8_to_reg_param(r8)),
         }
     }
@@ -166,9 +162,7 @@ impl Sm83Macros for InstructionSink<'_> {
             .local_get(SP)
             .i32_const(1)
             .i32_add()
-            .local_set(SP);
-        ctx.increment_m_cycles(1);
-        self
+            .local_set(SP)
     }
 
     /// Push an 8-bit value from the stack.
@@ -295,10 +289,12 @@ impl Sm83Macros for InstructionSink<'_> {
     /// (addr: i32) -> (value: i32)
     /// ```
     /// # Side Effects
-    /// Resets delta_m_cycles to 0 because `read_byte_mem` will increment the timers before reading the byte from memory.
+    /// 1. Resets delta_m_cycles to 0 because `read_byte_mem` will increment the timers before reading the byte from memory.
+    /// 2. Increments M-cycles by 1.
     fn call_read_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
         self.i32_const(ctx.delta_m_cycles as i32).call(0);
         ctx.delta_m_cycles = 0;
+        ctx.increment_m_cycles(1);
         self
     }
 

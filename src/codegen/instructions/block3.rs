@@ -138,14 +138,10 @@ impl Block3 for InstructionSink<'_> {
         let address = u16::from_le_bytes([imm, 0xFF]);
         self.i32_const(address as i32)
             .call_read_byte(ctx)
-            .local_set(A);
-        ctx.increment_m_cycles(1);
-        self
+            .local_set(A)
     }
     fn ld_a_nn(&mut self, ctx: &mut CodegenCtx, imm: u16) -> &mut Self {
         ctx.increment_m_cycles(2);
-        self.i32_const(imm as i32).call_read_byte(ctx).local_set(A);
-        ctx.increment_m_cycles(1);
-        self
+        self.i32_const(imm as i32).call_read_byte(ctx).local_set(A)
     }
 }
