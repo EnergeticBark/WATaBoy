@@ -97,8 +97,7 @@ impl Block0 for InstructionSink<'_> {
     }
 
     fn ld_r_n(&mut self, ctx: &mut CodegenCtx, r8: R8, imm: i32) -> &mut Self {
-        ctx.delta_m_cycles += 2;
-        ctx.total_m_cycles += 2;
+        ctx.increment_m_cycles(2);
         self.i32_const(imm).set_r8(ctx, r8)
     }
 }

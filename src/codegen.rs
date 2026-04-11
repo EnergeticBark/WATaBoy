@@ -29,6 +29,11 @@ pub struct CodegenCtx {
 impl CodegenCtx {
     fn increment_pc(&mut self) {
         self.traced_pc += 1;
+    }
+    
+    fn increment_m_cycles(&mut self, m_cycles: u16) {
+        self.delta_m_cycles += m_cycles;
+        self.total_m_cycles += m_cycles;
     } 
 }
 
@@ -213,8 +218,7 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
         // TODO: PopRr and PushRr tick manually here, but not in the interpreter.
         // Remove this if statement once the interpreter ticks them manually.
         if !matches!(opcode, Opcode::PopRr { .. } | Opcode::PushRr { .. }) {
-            ctx.delta_m_cycles += opcodes::cycles::m_cycles(opcode);
-            ctx.total_m_cycles += opcodes::cycles::m_cycles(opcode);
+            ctx.increment_m_cycles(opcodes::cycles::m_cycles(opcode));
         }
 
         #[cfg(feature = "jit-trace")]
