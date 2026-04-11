@@ -63,11 +63,7 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     fn set_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         match r8 {
-            R8::IndirectHL => {
-                self.get_r16(R16::Hl).call_write_byte(ctx);
-                ctx.increment_m_cycles(1);
-                self
-            }
+            R8::IndirectHL => self.get_r16(R16::Hl).call_write_byte(ctx),
             _ => self.local_set(r8_to_reg_param(r8)),
         }
     }
@@ -192,9 +188,7 @@ impl Sm83Macros for InstructionSink<'_> {
             .i32_const(1)
             .i32_sub()
             .local_tee(SP)
-            .call_write_byte(ctx);
-        ctx.increment_m_cycles(1);
-        self
+            .call_write_byte(ctx)
     }
 
     /// Clear all bits in the flag register.
@@ -314,10 +308,12 @@ impl Sm83Macros for InstructionSink<'_> {
     /// (value: i32, addr: i32) -> ()
     /// ```
     /// # Side Effects
-    /// Resets delta_m_cycles to 0 because `write_byte_mem` will increment the timers before writing the byte to memory.
+    /// 1. Resets delta_m_cycles to 0 because `write_byte_mem` will increment the timers before writing the byte to memory.
+    /// 2. Increments M-cycles by 1.
     fn call_write_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
         self.i32_const(ctx.delta_m_cycles as i32).call(1);
         ctx.delta_m_cycles = 0;
+        ctx.increment_m_cycles(1);
         self
     }
 }
