@@ -79,6 +79,9 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
     loop {
         let bytecode = dmg_state.memory.read_byte(ctx.traced_pc);
         let opcode = Opcode::decode(bytecode).unwrap();
+        
+        // Always increment 1 M-cycle for fetching the first byte.
+        ctx.increment_m_cycles(1);
 
         match opcode {
             // Block 0
@@ -218,12 +221,16 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
         // TODO: PopRr and PushRr tick manually here, but not in the interpreter.
         // Remove this if statement once the interpreter ticks them manually.
         if !matches!(opcode, Opcode::PopRr { .. } | Opcode::PushRr { .. }) {
-            ctx.increment_m_cycles(opcodes::cycles::m_cycles(opcode));
+            ctx.increment_m_cycles(opcodes::cycles::m_cycles(opcode).saturating_sub(1));
         }
 
         #[cfg(feature = "jit-trace")]
         sm83_disassembly.push_str(&format!("{:?}\n", opcode))
     }
+    
+    // The final instruction couldn't be added to the block, so retroactively decrement the M-cycle used to fetch it. 
+    ctx.delta_m_cycles -= 1;
+    ctx.total_m_cycles -= 1;
 
     if ctx.traced_pc == pc {
         return None;
