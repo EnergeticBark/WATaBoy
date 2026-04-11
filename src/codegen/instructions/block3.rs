@@ -128,6 +128,7 @@ impl Block3 for InstructionSink<'_> {
         self.local_get(A)
             .i32_const(address as i32)
             .call_write_byte(ctx)
+            .insert_checkpoint(ctx)
     }
     fn ld_nn_a(&mut self, ctx: &mut CodegenCtx, imm: u16) -> &mut Self {
         ctx.increment_m_cycles(2);

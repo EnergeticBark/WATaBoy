@@ -1,13 +1,11 @@
 // TODO: If block_cache becomes more complicated than just a HashMap move it to this file.
 // Possibly alongside lowestSafeFuncIndex calculations.
 
-#[derive(Copy, Clone)]
+use crate::codegen::Checkpoint;
+
+#[derive(Clone)]
 pub struct CompiledBlock {
     // Func index for the runtime's Wasm table.
     pub func_idx: i32,
-    // In theory, I could update the PC value and clock in the generated Wasm...
-    // Maybe do that if it's cleaner.
-    pub traced_pc: u16,
-    pub delta_m_cycles: u16,
-    pub total_m_cycles: u16,
+    pub checkpoints: Vec<Checkpoint>,
 }

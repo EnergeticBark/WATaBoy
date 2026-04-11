@@ -17,8 +17,17 @@ use wasm_encoder::*;
 #[cfg(feature = "jit-trace")]
 use crate::console_log;
 
+#[derive(Copy, Clone)]
+pub struct Checkpoint {
+    pub exit_pc: u16,
+    // The number of M-Cycles since the system clock has been updated.
+    pub remaining_m_cycles: u16,
+    pub total_m_cycles: u16,
+}
+
 #[derive(Default)]
 pub struct CodegenCtx {
+    pub checkpoints: Vec<Checkpoint>,
     pub traced_pc: u16,
     // The number of M-Cycles since the system clock has been updated.
     pub delta_m_cycles: u16,
@@ -27,6 +36,16 @@ pub struct CodegenCtx {
 }
 
 impl CodegenCtx {
+    // Add a checkpoint at the current point in the trace and return its index.
+    fn add_checkpoint(&mut self) -> usize {
+        self.checkpoints.push(Checkpoint {
+            exit_pc: self.traced_pc,
+            remaining_m_cycles: self.delta_m_cycles,
+            total_m_cycles: self.total_m_cycles
+        });
+        self.checkpoints.len() - 1
+    }
+    
     fn increment_pc(&mut self) {
         self.traced_pc += 1;
     }
@@ -34,7 +53,7 @@ impl CodegenCtx {
     fn increment_m_cycles(&mut self, m_cycles: u16) {
         self.delta_m_cycles += m_cycles;
         self.total_m_cycles += m_cycles;
-    } 
+    }
 }
 
 // Stores the raw Wasm bytecode dynamically recompiled from a
@@ -252,7 +271,9 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
     .end();
     codes.function(&function);
     module.section(&codes);
-
+    
+    ctx.add_checkpoint();
+    
     Some(WasmBlock {
         buffer: module.finish(),
         ctx,

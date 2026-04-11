@@ -25,6 +25,13 @@ pub(crate) fn empty_jit_block_module() -> Module {
     let params = vec![ValType::I32; 3];
     let results = vec![];
     types.ty().function(params, results);
+
+    // Type for the process_checkpoint function.
+    // Parameter: 32-bit checkpoint index.
+    // Returns: Boolean, whether the current block should be aborted.
+    let params = vec![ValType::I32];
+    let results = vec![ValType::I32];
+    types.ty().function(params, results);
     module.section(&types);
 
     let mut imports = ImportSection::new();
@@ -32,6 +39,8 @@ pub(crate) fn empty_jit_block_module() -> Module {
     imports.import("env", "read_byte", EntityType::Function(1));
     // The write_byte function uses index 2 in the types section.
     imports.import("env", "write_byte", EntityType::Function(2));
+    // The process_checkpoint function uses index 3 in the types section.
+    imports.import("env", "process_checkpoint", EntityType::Function(3));
 
     module.section(&imports);
 
@@ -43,7 +52,7 @@ pub(crate) fn empty_jit_block_module() -> Module {
 
     // Encode the export section
     let mut exports = ExportSection::new();
-    exports.export("execute_block", ExportKind::Func, 2);
+    exports.export("execute_block", ExportKind::Func, 3);
     module.section(&exports);
 
     module

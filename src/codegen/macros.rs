@@ -32,6 +32,7 @@ pub(crate) trait Sm83Macros {
     ) -> &mut Self;
     fn set_flag(&mut self, flag_bit: FlagBit) -> &mut Self;
     fn check_flag(&mut self, flag_bit: FlagBit) -> &mut Self;
+    fn insert_checkpoint(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
     fn return_regs(&mut self) -> &mut Self;
     fn call_read_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
     fn call_write_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
@@ -263,6 +264,17 @@ impl Sm83Macros for InstructionSink<'_> {
             .i32_shr_u()
             .i32_const(0x01)
             .i32_and()
+    }
+
+    /// Create a checkpoint.
+    /// Abort the current block's execution if the next interrupt is scheduled to occur before the next checkpoint.
+    /// # Signature
+    /// ```
+    /// () -> ()
+    /// ```
+    fn insert_checkpoint(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
+        let checkpoint_index = ctx.add_checkpoint();
+        self.i32_const(checkpoint_index as i32).call(2).br_if(0)
     }
 
     /// Return all of the registers to satisfy the calling convention.

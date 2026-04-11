@@ -18,6 +18,8 @@ unsafe extern "C" {
 // TODO: Should probably implement PostBoot too/instead...
 #[derive(Default)]
 pub struct JitRuntime {
+    block_start_clock: u64,
+    checkpoint_index: usize,
     pub(crate) dmg_state: Cpu,
     block_cache: HashMap<u16, CompiledBlock>,
     rom_buffer: Vec<u8>,
@@ -26,6 +28,9 @@ pub struct JitRuntime {
 
 impl JitRuntime {
     fn execute_compiled_block(&mut self, compiled_block: CompiledBlock) {
+        self.block_start_clock = self.dmg_state.memory.clock;
+        self.checkpoint_index = compiled_block.checkpoints.len() - 1;
+
         // Provide registers for the JIT's prologue.
         let a = self.dmg_state.registers.af.a().into();
         let f = self.dmg_state.registers.af.f().into_bits().into();
@@ -49,17 +54,18 @@ impl JitRuntime {
         self.dmg_state.registers.hl.set_l(l as u8);
         self.dmg_state.registers.sp = sp as u16;
 
+        let checkpoint = compiled_block.checkpoints[self.checkpoint_index];
         // Update the program counter and clock.
-        self.dmg_state.registers.pc = compiled_block.traced_pc;
+        self.dmg_state.registers.pc = checkpoint.exit_pc;
         self.dmg_state
             .memory
-            .increment_timers(compiled_block.delta_m_cycles);
+            .increment_timers(checkpoint.remaining_m_cycles);
     }
 
     // Get the next CompiledBlock at PC, either from the cache or by compiling a new block.
     fn get_compiled_block(&mut self, pc: u16) -> Option<CompiledBlock> {
-        if let Some(&compiled_block) = self.block_cache.get(&pc) {
-            Some(compiled_block)
+        if let Some(compiled_block) = self.block_cache.get(&pc) {
+            Some(compiled_block.clone())
         } else {
             let jit_block = codegen::recompile(&mut self.dmg_state)?;
             #[cfg(feature = "jit-trace")]
@@ -70,27 +76,26 @@ impl JitRuntime {
             let func_idx = unsafe { instantiate_and_link_module(ptr, len) };
             let compiled_block = CompiledBlock {
                 func_idx,
-                traced_pc: jit_block.ctx.traced_pc,
-                delta_m_cycles: jit_block.ctx.delta_m_cycles,
-                total_m_cycles: jit_block.ctx.total_m_cycles,
+                checkpoints: jit_block.ctx.checkpoints,
             };
 
             // Add the block we just compiled to the cache.
             #[cfg(feature = "caching")]
-            self.block_cache.insert(pc, compiled_block);
+            self.block_cache.insert(pc, compiled_block.clone());
             Some(compiled_block)
         }
     }
 
-    fn wont_be_interrupted(&self, compiled_block: CompiledBlock) -> bool {
-        self.dmg_state.memory.clock + compiled_block.total_m_cycles as u64 * 4
-            < self.dmg_state.memory.next_interrupt
+    // Check if we can execute compiled_block up to the first checkpoint without being interrupted.
+    fn wont_be_interrupted(&self, compiled_block: &CompiledBlock) -> bool {
+        self.dmg_state.memory.clock + compiled_block.checkpoints[0].total_m_cycles as u64 * 4
+            <= self.dmg_state.memory.next_interrupt
     }
 
     // If possible, execute the next JIT-compiled block.
     pub(crate) fn execute(&mut self) {
         if let Some(compiled_block) = self.get_compiled_block(self.dmg_state.registers.pc)
-            && self.wont_be_interrupted(compiled_block)
+            && self.wont_be_interrupted(&compiled_block)
         {
             self.execute_compiled_block(compiled_block);
         } else {
@@ -111,6 +116,21 @@ impl JitRuntime {
     pub extern "C" fn write_byte_mem(&mut self, value: u8, address: u16, delta_m_cycles: u16) {
         self.dmg_state.memory.increment_timers(delta_m_cycles);
         self.dmg_state.memory.write_byte(address, value);
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn process_checkpoint(&mut self, checkpoint_index: u32) -> bool {
+        let current_block = self.block_cache.get(&self.dmg_state.registers.pc).unwrap();
+        let next_checkpoint = current_block.checkpoints[checkpoint_index as usize + 1];
+        let next_checkpoint_clock =
+            self.block_start_clock + next_checkpoint.total_m_cycles as u64 * 4;
+
+        if self.dmg_state.memory.next_interrupt < next_checkpoint_clock {
+            self.checkpoint_index = checkpoint_index as usize;
+            true
+        } else {
+            false
+        }
     }
 
     #[unsafe(no_mangle)]

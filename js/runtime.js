@@ -40,6 +40,7 @@ export const Runtime = class {
 		const anotherMod = new WebAssembly.Module(bytecode);
 		
 		const importObj = {env: {
+			process_checkpoint: (checkpoint_index) => this.instance.exports.process_checkpoint(this.jitRuntimePtr, checkpoint_index),
 			read_byte: (address, clock) => this.instance.exports.read_byte_mem(this.jitRuntimePtr, address, clock),
 			write_byte: (value, address, clock) => this.instance.exports.write_byte_mem(this.jitRuntimePtr, value, address, clock),
 		}};
