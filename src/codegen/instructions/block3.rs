@@ -3,7 +3,7 @@ use crate::codegen::macros::{FlagBit, Sm83Macros};
 use crate::codegen::module::PROLOGE_LENGTH;
 use crate::codegen::registers::A;
 
-use sm83_interp::cpu::opcodes::parameters::{R8, R16Stack};
+use sm83_interp::cpu::opcodes::parameters::R16Stack;
 use wasm_encoder::*;
 
 // Emit Wasm bytecode for Block 1.
@@ -24,8 +24,6 @@ impl Block3 for InstructionSink<'_> {
     // TODO: Ensure immediate values in separate ROM banks aren't cached.
     // E.g. 0x3FFF: AddN, 0x4000: 64. A bank switch could invalidate this immediate value.
     fn add_n(&mut self, imm: i32) -> &mut Self {
-        // TODO: Ensure immediate values in separate ROM banks aren't cached.
-        // E.g. 0x3FFF: AddN, 0x4000: 64. A bank switch could invalidate this immediate value.
         // Name our scratch register.
         const PREV_A: u32 = PROLOGE_LENGTH as u32;
         self.clear_flags() // Maybe add a macro for *assigning* flags too so we don't have to do this separately from setting the first flag.
@@ -164,7 +162,7 @@ impl Block3 for InstructionSink<'_> {
             .i32_const(address as i32)
             .i32_const(ctx.delta_m_cycles as i32)
             .call_read_byte()
-            .set_r8(ctx, R8::A);
+            .local_set(A);
         // Reset delta_m_cycles, because the system clock just caught up.
         ctx.delta_m_cycles = 0;
         ctx.delta_m_cycles += 1;
@@ -178,7 +176,7 @@ impl Block3 for InstructionSink<'_> {
             .i32_const(imm as i32)
             .i32_const(ctx.delta_m_cycles as i32)
             .call_read_byte()
-            .set_r8(ctx, R8::A);
+            .local_set(A);
         // Reset delta_m_cycles, because the system clock just caught up.
         ctx.delta_m_cycles = 0;
         ctx.delta_m_cycles += 1;

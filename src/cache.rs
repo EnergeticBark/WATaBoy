@@ -7,7 +7,7 @@ pub struct CompiledBlock {
     pub func_idx: i32,
     // In theory, I could update the PC value and clock in the generated Wasm...
     // Maybe do that if it's cleaner.
-    pub pc_delta: u16,
+    pub traced_pc: u16,
     pub delta_m_cycles: u16,
     pub total_m_cycles: u16,
 }

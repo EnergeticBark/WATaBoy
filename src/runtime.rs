@@ -50,7 +50,7 @@ impl JitRuntime {
         self.dmg_state.registers.sp = sp as u16;
 
         // Update the program counter and clock.
-        self.dmg_state.registers.pc += compiled_block.pc_delta;
+        self.dmg_state.registers.pc = compiled_block.traced_pc;
         self.dmg_state
             .memory
             .increment_timers(compiled_block.delta_m_cycles);
@@ -70,7 +70,7 @@ impl JitRuntime {
             let func_idx = unsafe { instantiate_and_link_module(ptr, len) };
             let compiled_block = CompiledBlock {
                 func_idx,
-                pc_delta: jit_block.pc_delta,
+                traced_pc: jit_block.ctx.traced_pc,
                 delta_m_cycles: jit_block.ctx.delta_m_cycles,
                 total_m_cycles: jit_block.ctx.total_m_cycles,
             };

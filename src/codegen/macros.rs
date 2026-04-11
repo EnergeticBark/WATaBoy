@@ -303,7 +303,7 @@ impl Sm83Macros for InstructionSink<'_> {
     /// Usually this is the final macro in a block.
     /// # Signature
     /// ```
-    /// () -> (i32, i32, i32, i32, i32, i32, i32, i32)
+    /// () -> (i32, i32, i32, i32, i32, i32, i32, i32, i32)
     /// ```
     fn return_regs(&mut self) -> &mut Self {
         self.local_get(A)
