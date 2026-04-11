@@ -126,33 +126,31 @@ impl Block3 for InstructionSink<'_> {
     fn ldh_n_a(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self {
         ctx.increment_m_cycles(2);
         let address = u16::from_le_bytes([imm, 0xFF]);
-        let sink = self
-            .local_get(A)
+        self.local_get(A)
             .i32_const(address as i32)
             .call_write_byte(ctx);
         ctx.increment_m_cycles(1);
-        sink
+        self
     }
     fn ld_nn_a(&mut self, ctx: &mut CodegenCtx, imm: u16) -> &mut Self {
         ctx.increment_m_cycles(3);
-        let sink = self.local_get(A).i32_const(imm as i32).call_write_byte(ctx);
+        self.local_get(A).i32_const(imm as i32).call_write_byte(ctx);
         ctx.increment_m_cycles(1);
-        sink
+        self
     }
     fn ldh_a_n(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self {
         ctx.increment_m_cycles(2);
         let address = u16::from_le_bytes([imm, 0xFF]);
-        let sink = self
-            .i32_const(address as i32)
+        self.i32_const(address as i32)
             .call_read_byte(ctx)
             .local_set(A);
         ctx.increment_m_cycles(1);
-        sink
+        self
     }
     fn ld_a_nn(&mut self, ctx: &mut CodegenCtx, imm: u16) -> &mut Self {
         ctx.increment_m_cycles(3);
-        let sink = self.i32_const(imm as i32).call_read_byte(ctx).local_set(A);
+        self.i32_const(imm as i32).call_read_byte(ctx).local_set(A);
         ctx.increment_m_cycles(1);
-        sink
+        self
     }
 }

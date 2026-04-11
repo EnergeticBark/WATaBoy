@@ -47,9 +47,9 @@ impl Sm83Macros for InstructionSink<'_> {
     fn get_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         match r8 {
             R8::IndirectHL => {
-                let sink = self.get_r16(R16::Hl).call_read_byte(ctx);
+                self.get_r16(R16::Hl).call_read_byte(ctx);
                 ctx.increment_m_cycles(1);
-                sink
+                self
             }
             _ => self.local_get(r8_to_reg_param(r8)),
         }
