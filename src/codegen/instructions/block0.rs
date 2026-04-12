@@ -11,6 +11,7 @@ use wasm_encoder::*;
 // See: https://gbdev.io/pandocs/CPU_Instruction_Set.html#block-0
 pub trait Block0 {
     fn nop(&mut self) -> &mut Self;
+    fn ld_rr_nn(&mut self, r16: R16, imm: u16) -> &mut Self;
     fn ld_mem_a(&mut self, ctx: &mut CodegenCtx, r16_mem: R16Mem) -> &mut Self;
     fn inc_rr(&mut self, r16: R16) -> &mut Self;
     fn dec_rr(&mut self, r16: R16) -> &mut Self;
@@ -23,6 +24,12 @@ pub trait Block0 {
 impl Block0 for InstructionSink<'_> {
     fn nop(&mut self) -> &mut Self {
         self.nop()
+    }
+
+    fn ld_rr_nn(&mut self, r16: R16, imm: u16) -> &mut Self {
+        // Name our scratch register.
+        const TEMP: u32 = PROLOGE_LENGTH as u32;
+        self.i32_const(imm as i32).set_r16(r16, TEMP)
     }
 
     fn ld_mem_a(&mut self, ctx: &mut CodegenCtx, r16_mem: R16Mem) -> &mut Self {

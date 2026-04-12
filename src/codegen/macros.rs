@@ -98,7 +98,7 @@ impl Sm83Macros for InstructionSink<'_> {
             R16::Bc => (R8::B, R8::C),
             R16::De => (R8::D, R8::E),
             R16::Hl => (R8::H, R8::L),
-            R16::Sp => unimplemented!("SP isn't in the JIT prelude/epilogue yet."),
+            R16::Sp => return self.local_set(SP),
         };
 
         self.local_tee(temp_reg)

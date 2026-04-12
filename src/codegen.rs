@@ -1,4 +1,5 @@
 use sm83_interp::cpu::opcodes::Opcode;
+use sm83_interp::cpu::opcodes::parameters::R16;
 use sm83_interp::cpu::{Cpu, opcodes};
 
 mod instructions;
@@ -108,6 +109,16 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 // Need to use fully-qualified syntax to call *our* nop function.
                 ctx.increment_pc();
                 <InstructionSink as Block0>::nop(&mut instruction_sink);
+            }
+            Opcode::LdRrNn { x } => {                
+                ctx.increment_pc();
+                let first_byte = dmg_state.memory.read_byte(ctx.traced_pc);
+                ctx.increment_pc();
+                let second_byte = dmg_state.memory.read_byte(ctx.traced_pc);
+                
+                let address = u16::from_le_bytes([first_byte, second_byte]);
+                ctx.increment_pc();
+                instruction_sink.ld_rr_nn(x, address);
             }
             Opcode::LdMemA { x } => {
                 ctx.increment_pc();
