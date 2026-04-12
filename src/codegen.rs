@@ -109,6 +109,10 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 ctx.increment_pc();
                 <InstructionSink as Block0>::nop(&mut instruction_sink);
             }
+            Opcode::LdMemA { x } => {
+                ctx.increment_pc();
+                instruction_sink.ld_mem_a(&mut ctx, x);
+            }
             Opcode::DecRr { x } => {
                 ctx.increment_pc();
                 instruction_sink.dec_rr(x);
@@ -130,6 +134,10 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
                 instruction_sink.ld_r_n(&mut ctx, x, imm as i32);
+            }
+            Opcode::Rlca => {
+                ctx.increment_pc();
+                instruction_sink.rlca();
             }
 
             // Block 1
@@ -239,7 +247,7 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
         // TODO: Remember to handle any context dependent instructions separately!!
         // TODO: PopRr and PushRr tick manually here, but not in the interpreter.
         // Remove this if statement once the interpreter ticks them manually.
-        if !matches!(opcode, Opcode::PopRr { .. } | Opcode::PushRr { .. }) {
+        if !matches!(opcode, Opcode::PopRr { .. } | Opcode::PushRr { .. } | Opcode::LdMemA { .. }) {
             ctx.increment_m_cycles(opcodes::cycles::m_cycles(opcode).saturating_sub(1));
         }
 

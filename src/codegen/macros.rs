@@ -1,4 +1,4 @@
-use sm83_interp::cpu::opcodes::parameters::{R8, R16, R16Stack};
+use sm83_interp::cpu::opcodes::parameters::{R8, R16, R16Mem, R16Stack};
 use wasm_encoder::InstructionSink;
 
 use crate::codegen::{
@@ -17,7 +17,8 @@ pub(crate) trait Sm83Macros {
     fn get_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn set_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn get_r16(&mut self, r16: R16) -> &mut Self;
-    fn set_r16(&mut self, r16: R16, scratch_reg: u32) -> &mut Self;
+    fn set_r16(&mut self, r16: R16, temp_reg: u32) -> &mut Self;
+    fn set_r16_mem(&mut self, ctx: &mut CodegenCtx, r16: R16Mem, temp_reg: u32) -> &mut Self;
     fn get_r16_stack(&mut self, r16: R16Stack) -> &mut Self;
     fn set_r16_stack(&mut self, r16: R16Stack) -> &mut Self;
     fn pop_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
@@ -110,6 +111,49 @@ impl Sm83Macros for InstructionSink<'_> {
             .i32_const(0xFF)
             .i32_and()
             .local_set(r8_to_reg_param(low_reg))
+    }
+
+    /// Set the value at the location in memory pointed to by the specified 16-bit memory register.
+    /// The register specified in temp_reg will be clobbered.
+    /// # Signature
+    /// ```
+    /// (value: i32) -> ()
+    /// ```
+    fn set_r16_mem(&mut self, ctx: &mut CodegenCtx, r16_mem: R16Mem, temp_reg: u32) -> &mut Self {
+        let (high_reg, low_reg) = match r16_mem {
+            R16Mem::Bc => (R8::B, R8::C),
+            R16Mem::De => (R8::D, R8::E),
+            _ => (R8::H, R8::L),
+        };
+
+        self.local_get(r8_to_reg_param(high_reg))
+            .i32_const(8)
+            .i32_shl()
+            .local_get(r8_to_reg_param(low_reg))
+            .i32_or();
+
+        if matches!(r16_mem, R16Mem::HlInc | R16Mem::HlDec) {
+            self.local_tee(temp_reg);
+        }
+
+        self.call_write_byte(ctx);
+
+        match r16_mem {
+            R16Mem::HlInc => {
+                self.local_get(temp_reg)
+                    .i32_const(1)
+                    .i32_add()
+                    .set_r16(R16::Hl, temp_reg);
+            }
+            R16Mem::HlDec => {
+                self.local_get(temp_reg)
+                    .i32_const(1)
+                    .i32_sub()
+                    .set_r16(R16::Hl, temp_reg);
+            }
+            _ => (),
+        }
+        self
     }
 
     /// Get the value of the specified 16-bit stack register.

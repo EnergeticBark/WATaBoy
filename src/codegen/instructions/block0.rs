@@ -1,8 +1,9 @@
-use sm83_interp::cpu::opcodes::parameters::{R8, R16};
+use sm83_interp::cpu::opcodes::parameters::{R8, R16, R16Mem};
 
 use crate::codegen::CodegenCtx;
 use crate::codegen::macros::{FlagBit, Sm83Macros};
 use crate::codegen::module::PROLOGE_LENGTH;
+use crate::codegen::registers::A;
 
 use wasm_encoder::*;
 
@@ -10,16 +11,24 @@ use wasm_encoder::*;
 // See: https://gbdev.io/pandocs/CPU_Instruction_Set.html#block-0
 pub trait Block0 {
     fn nop(&mut self) -> &mut Self;
+    fn ld_mem_a(&mut self, ctx: &mut CodegenCtx, r16_mem: R16Mem) -> &mut Self;
     fn inc_rr(&mut self, r16: R16) -> &mut Self;
     fn dec_rr(&mut self, r16: R16) -> &mut Self;
     fn inc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn dec_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn ld_r_n(&mut self, ctx: &mut CodegenCtx, r8: R8, imm: i32) -> &mut Self;
+    fn rlca(&mut self) -> &mut Self;
 }
 
 impl Block0 for InstructionSink<'_> {
     fn nop(&mut self) -> &mut Self {
         self.nop()
+    }
+
+    fn ld_mem_a(&mut self, ctx: &mut CodegenCtx, r16_mem: R16Mem) -> &mut Self {
+        // Name our scratch register.
+        const TEMP: u32 = PROLOGE_LENGTH as u32;
+        self.local_get(A).set_r16_mem(ctx, r16_mem, TEMP)
     }
 
     fn inc_rr(&mut self, r16: R16) -> &mut Self {
@@ -99,5 +108,32 @@ impl Block0 for InstructionSink<'_> {
     fn ld_r_n(&mut self, ctx: &mut CodegenCtx, r8: R8, imm: i32) -> &mut Self {
         ctx.increment_m_cycles(1);
         self.i32_const(imm).set_r8(ctx, r8)
+    }
+
+    fn rlca(&mut self) -> &mut Self {
+        // Name our scratch register.
+        const BIT_7: u32 = PROLOGE_LENGTH as u32;
+        self.clear_flags()
+            /* Calculate the Carry flag:
+             * (A & 0b1000_0000) == 0b1000_0000
+             */
+            .local_get(A)
+            .i32_const(0b1000_0000)
+            .i32_and()
+            .i32_const(0b1000_0000)
+            .i32_eq()
+            .local_tee(BIT_7)
+            .set_flag(FlagBit::Carry)
+            /* Perform the shift left, set the lowest bit to BIT_7, and truncate:
+             * A = ((A << 1) | BIT_7) & 0xff
+             */
+            .local_get(A)
+            .i32_const(1)
+            .i32_shl()
+            .local_get(BIT_7)
+            .i32_or()
+            .i32_const(0xff)
+            .i32_and()
+            .local_set(A)
     }
 }
