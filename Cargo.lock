@@ -127,6 +127,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "intmap"
+version = "3.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2e611826a1868311677fdcdfbec9e8621d104c732d080f546a854530232f0ee"
+
+[[package]]
 name = "itertools"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -304,6 +310,7 @@ name = "sm83-jit"
 version = "0.1.0"
 dependencies = [
  "hw-constants",
+ "intmap",
  "sm83-interp",
  "wasm-encoder",
  "wasmprinter",

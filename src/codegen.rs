@@ -42,15 +42,15 @@ impl CodegenCtx {
         self.checkpoints.push(Checkpoint {
             exit_pc: self.traced_pc,
             remaining_m_cycles: self.delta_m_cycles,
-            total_m_cycles: self.total_m_cycles
+            total_m_cycles: self.total_m_cycles,
         });
         self.checkpoints.len() - 1
     }
-    
+
     fn increment_pc(&mut self) {
         self.traced_pc += 1;
     }
-    
+
     fn increment_m_cycles(&mut self, m_cycles: u16) {
         self.delta_m_cycles += m_cycles;
         self.total_m_cycles += m_cycles;
@@ -73,10 +73,7 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
 
     #[cfg(feature = "caching")]
     // Don't cache below 0x100 if the boot ROM is mounted!
-    if dmg_state.memory.boot_rom_mounted() && pc < 0x100 
-    // Only cache from ROM bank 00 for now.
-    || pc >= 0x4000
-    {
+    if dmg_state.memory.boot_rom_mounted() && pc < 0x100 {
         return None;
     }
 
@@ -99,7 +96,7 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
     loop {
         let bytecode = dmg_state.memory.read_byte(ctx.traced_pc);
         let opcode = Opcode::decode(bytecode).unwrap();
-        
+
         // Always increment 1 M-cycle for fetching the first byte.
         ctx.increment_m_cycles(1);
 
@@ -110,12 +107,12 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 ctx.increment_pc();
                 <InstructionSink as Block0>::nop(&mut instruction_sink);
             }
-            Opcode::LdRrNn { x } => {                
+            Opcode::LdRrNn { x } => {
                 ctx.increment_pc();
                 let first_byte = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
                 let second_byte = dmg_state.memory.read_byte(ctx.traced_pc);
-                
+
                 let address = u16::from_le_bytes([first_byte, second_byte]);
                 ctx.increment_pc();
                 instruction_sink.ld_rr_nn(x, address);
@@ -229,9 +226,9 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 let first_byte = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
                 let second_byte = dmg_state.memory.read_byte(ctx.traced_pc);
-                
+
                 let address = u16::from_le_bytes([first_byte, second_byte]);
-                
+
                 ctx.increment_pc();
                 instruction_sink.ld_nn_a(&mut ctx, address);
             }
@@ -246,7 +243,7 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 let first_byte = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
                 let second_byte = dmg_state.memory.read_byte(ctx.traced_pc);
-                
+
                 let address = u16::from_le_bytes([first_byte, second_byte]);
                 ctx.increment_pc();
                 instruction_sink.ld_a_nn(&mut ctx, address);
@@ -270,15 +267,21 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
         // TODO: Remember to handle any context dependent instructions separately!!
         // TODO: PopRr and PushRr tick manually here, but not in the interpreter.
         // Remove this if statement once the interpreter ticks them manually.
-        if !matches!(opcode, Opcode::PopRr { .. } | Opcode::PushRr { .. } | Opcode::LdMemA { .. } | Opcode::LdAMem { .. }) {
+        if !matches!(
+            opcode,
+            Opcode::PopRr { .. }
+                | Opcode::PushRr { .. }
+                | Opcode::LdMemA { .. }
+                | Opcode::LdAMem { .. }
+        ) {
             ctx.increment_m_cycles(opcodes::cycles::m_cycles(opcode).saturating_sub(1));
         }
 
         #[cfg(feature = "jit-trace")]
         sm83_disassembly.push_str(&format!("{:?}\n", opcode))
     }
-    
-    // The final instruction couldn't be added to the block, so retroactively decrement the M-cycle used to fetch it. 
+
+    // The final instruction couldn't be added to the block, so retroactively decrement the M-cycle used to fetch it.
     ctx.delta_m_cycles -= 1;
     ctx.total_m_cycles -= 1;
 
@@ -295,16 +298,16 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
     let mut codes = CodeSection::new();
 
     instruction_sink
-    // End the inner block.
-    .end()
-    // Add the calling convention's epilogue.
-    .return_regs()
-    .end();
+        // End the inner block.
+        .end()
+        // Add the calling convention's epilogue.
+        .return_regs()
+        .end();
     codes.function(&function);
     module.section(&codes);
-    
+
     ctx.add_checkpoint();
-    
+
     Some(WasmBlock {
         buffer: module.finish(),
         ctx,

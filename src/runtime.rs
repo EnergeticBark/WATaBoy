@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use intmap::IntMap;
 use std::panic;
 
 use crate::cache::CompiledBlock;
@@ -27,11 +27,11 @@ pub struct JitRuntime {
     block_start_clock: u64,
     checkpoint_index: usize,
     pub(crate) dmg_state: Cpu,
-    block_cache: HashMap<u16, CompiledBlock>,
+    block_cache: IntMap<u16, CompiledBlock>,
     rom_buffer: Vec<u8>,
     next_vblank: u64,
     #[cfg(feature = "log-uncompiled")]
-    uncompiled: HashMap<u16, u32>,
+    uncompiled: IntMap<u16, u32>,
 }
 
 impl JitRuntime {
@@ -72,7 +72,7 @@ impl JitRuntime {
 
     // Get the next CompiledBlock at PC, either from the cache or by compiling a new block.
     fn get_compiled_block(&mut self, pc: u16) -> Option<CompiledBlock> {
-        if let Some(compiled_block) = self.block_cache.get(&pc) {
+        if let Some(compiled_block) = self.block_cache.get(pc) {
             Some(compiled_block.clone())
         } else {
             let jit_block = codegen::recompile(&mut self.dmg_state)?;
@@ -102,14 +102,16 @@ impl JitRuntime {
 
     // If possible, execute the next JIT-compiled block.
     pub(crate) fn execute(&mut self) {
-        if let Some(compiled_block) = self.get_compiled_block(self.dmg_state.registers.pc)
+        let pc = self.dmg_state.registers.pc;
+        // Only cache from ROM bank 00 for now.
+        if pc < 0x4000
+            && let Some(compiled_block) = self.get_compiled_block(pc)
             && self.wont_be_interrupted(&compiled_block)
         {
             self.execute_compiled_block(compiled_block);
         } else {
             #[cfg(feature = "log-uncompiled")]
             {
-                let pc = self.dmg_state.registers.pc;
                 if pc < 0x4000 {
                     let mut opcode = self.dmg_state.memory.read_byte(pc) as u16;
 
@@ -162,7 +164,7 @@ impl JitRuntime {
 
     #[unsafe(no_mangle)]
     pub extern "C" fn process_checkpoint(&mut self, checkpoint_index: u32) -> bool {
-        let current_block = self.block_cache.get(&self.dmg_state.registers.pc).unwrap();
+        let current_block = self.block_cache.get(self.dmg_state.registers.pc).unwrap();
         let next_checkpoint = current_block.checkpoints[checkpoint_index as usize + 1];
         let next_checkpoint_clock =
             self.block_start_clock + next_checkpoint.total_m_cycles as u64 * 4;
