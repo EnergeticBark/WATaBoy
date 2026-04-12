@@ -13,6 +13,7 @@ pub trait Block0 {
     fn nop(&mut self) -> &mut Self;
     fn ld_rr_nn(&mut self, r16: R16, imm: u16) -> &mut Self;
     fn ld_mem_a(&mut self, ctx: &mut CodegenCtx, r16_mem: R16Mem) -> &mut Self;
+    fn ld_a_mem(&mut self, ctx: &mut CodegenCtx, r16_mem: R16Mem) -> &mut Self;
     fn inc_rr(&mut self, r16: R16) -> &mut Self;
     fn dec_rr(&mut self, r16: R16) -> &mut Self;
     fn inc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
@@ -36,6 +37,12 @@ impl Block0 for InstructionSink<'_> {
         // Name our scratch register.
         const TEMP: u32 = PROLOGE_LENGTH as u32;
         self.local_get(A).set_r16_mem(ctx, r16_mem, TEMP)
+    }
+
+    fn ld_a_mem(&mut self, ctx: &mut CodegenCtx, r16_mem: R16Mem) -> &mut Self {
+        // Name our scratch register.
+        const TEMP: u32 = PROLOGE_LENGTH as u32;
+        self.get_r16_mem(ctx, r16_mem, TEMP).local_set(A)
     }
 
     fn inc_rr(&mut self, r16: R16) -> &mut Self {
