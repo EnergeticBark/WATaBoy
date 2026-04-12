@@ -259,6 +259,10 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 ctx.increment_pc();
                 instruction_sink.push_rr(&mut ctx, x);
             }
+            Opcode::LdSpHl => {
+                ctx.increment_pc();
+                instruction_sink.ld_sp_hl();
+            }
             _ => break,
         }
 

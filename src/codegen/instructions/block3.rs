@@ -1,9 +1,9 @@
 use crate::codegen::CodegenCtx;
 use crate::codegen::macros::{FlagBit, Sm83Macros};
 use crate::codegen::module::PROLOGE_LENGTH;
-use crate::codegen::registers::A;
+use crate::codegen::registers::{A, SP};
 
-use sm83_interp::cpu::opcodes::parameters::R16Stack;
+use sm83_interp::cpu::opcodes::parameters::{R16, R16Stack};
 use wasm_encoder::*;
 
 // Emit Wasm bytecode for Block 1.
@@ -18,6 +18,7 @@ pub trait Block3 {
     fn ld_nn_a(&mut self, ctx: &mut CodegenCtx, imm: u16) -> &mut Self;
     fn ldh_a_n(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self;
     fn ld_a_nn(&mut self, ctx: &mut CodegenCtx, imm: u16) -> &mut Self;
+    fn ld_sp_hl(&mut self) -> &mut Self;
 }
 
 impl Block3 for InstructionSink<'_> {
@@ -144,5 +145,8 @@ impl Block3 for InstructionSink<'_> {
     fn ld_a_nn(&mut self, ctx: &mut CodegenCtx, imm: u16) -> &mut Self {
         ctx.increment_m_cycles(2);
         self.i32_const(imm as i32).call_read_byte(ctx).local_set(A)
+    }
+    fn ld_sp_hl(&mut self) -> &mut Self {
+        self.get_r16(R16::Hl).local_set(SP)
     }
 }
