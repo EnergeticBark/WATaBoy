@@ -5,6 +5,8 @@ use crate::cache::CompiledBlock;
 use crate::{call_indirect, codegen, console_log};
 
 use sm83_interp::cpu::Cpu;
+#[cfg(feature = "log-uncompiled")]
+use sm83_interp::cpu::opcodes::Opcode;
 use sm83_interp::cpu::registers::Flags;
 use sm83_interp::joypad::ButtonsHeld;
 
@@ -24,6 +26,8 @@ pub struct JitRuntime {
     block_cache: HashMap<u16, CompiledBlock>,
     rom_buffer: Vec<u8>,
     next_vblank: u64,
+    #[cfg(feature = "log-uncompiled")]
+    uncompiled: HashMap<u8, u32>,
 }
 
 impl JitRuntime {
@@ -99,8 +103,31 @@ impl JitRuntime {
         {
             self.execute_compiled_block(compiled_block);
         } else {
+            #[cfg(feature = "log-uncompiled")]
+            {
+                let pc = self.dmg_state.registers.pc;
+                if pc < 0x4000 {
+                    let opcode = self.dmg_state.memory.read_byte(pc);
+                    if let Some(count) = self.uncompiled.get_mut(&opcode) {
+                        *count += 1;
+                    } else {
+                        self.uncompiled.insert(opcode, 1);
+                    }
+                }
+            }
+
             // Fallback to interpreter.
             self.dmg_state.execute().unwrap();
+        }
+    }
+
+    #[cfg(feature = "log-uncompiled")]
+    fn log_uncompiled(&self) {
+        let mut not_compiled_vec: Vec<(&u8, &u32)> = self.not_compiled.iter().collect();
+        not_compiled_vec.sort_by(|a, b| b.1.cmp(a.1));
+        for (opcode, count) in not_compiled_vec {
+            let opcode = Opcode::decode(*opcode);
+            console_log(&format!("{opcode:?}: {count}"));
         }
     }
 }
@@ -146,6 +173,9 @@ impl JitRuntime {
 
     #[unsafe(no_mangle)]
     pub extern "C" fn step_vblank(&mut self) {
+        #[cfg(feature = "log-uncompiled")]
+        self.log_uncompiled();
+
         self.next_vblank += 70224;
         while self.dmg_state.memory.clock < self.next_vblank {
             self.execute();
