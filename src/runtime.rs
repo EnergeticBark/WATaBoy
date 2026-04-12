@@ -5,8 +5,12 @@ use crate::cache::CompiledBlock;
 use crate::{call_indirect, codegen, console_log};
 
 use sm83_interp::cpu::Cpu;
+
 #[cfg(feature = "log-uncompiled")]
 use sm83_interp::cpu::opcodes::Opcode;
+#[cfg(feature = "log-uncompiled")]
+use sm83_interp::cpu::opcodes::PrefixOpcode;
+
 use sm83_interp::cpu::registers::Flags;
 use sm83_interp::joypad::ButtonsHeld;
 
@@ -27,7 +31,7 @@ pub struct JitRuntime {
     rom_buffer: Vec<u8>,
     next_vblank: u64,
     #[cfg(feature = "log-uncompiled")]
-    uncompiled: HashMap<u8, u32>,
+    uncompiled: HashMap<u16, u32>,
 }
 
 impl JitRuntime {
@@ -107,7 +111,13 @@ impl JitRuntime {
             {
                 let pc = self.dmg_state.registers.pc;
                 if pc < 0x4000 {
-                    let opcode = self.dmg_state.memory.read_byte(pc);
+                    let mut opcode = self.dmg_state.memory.read_byte(pc) as u16;
+
+                    if opcode == 0xCB {
+                        let prefix_opcode = self.dmg_state.memory.read_byte(pc + 1);
+                        opcode = u16::from_be_bytes([0xCB, prefix_opcode]);
+                    }
+
                     if let Some(count) = self.uncompiled.get_mut(&opcode) {
                         *count += 1;
                     } else {
@@ -123,11 +133,16 @@ impl JitRuntime {
 
     #[cfg(feature = "log-uncompiled")]
     fn log_uncompiled(&self) {
-        let mut not_compiled_vec: Vec<(&u8, &u32)> = self.not_compiled.iter().collect();
+        let mut not_compiled_vec: Vec<(&u16, &u32)> = self.uncompiled.iter().collect();
         not_compiled_vec.sort_by(|a, b| b.1.cmp(a.1));
         for (opcode, count) in not_compiled_vec {
-            let opcode = Opcode::decode(*opcode);
-            console_log(&format!("{opcode:?}: {count}"));
+            if *opcode <= 0xff {
+                let opcode = Opcode::decode((*opcode) as u8);
+                console_log(&format!("{opcode:?}: {count}"));
+            } else {
+                let prefix_opcode = PrefixOpcode::decode((opcode & 0xff) as u8);
+                console_log(&format!("{prefix_opcode:?}: {count}"));
+            }
         }
     }
 }
