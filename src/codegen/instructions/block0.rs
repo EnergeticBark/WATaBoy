@@ -20,6 +20,7 @@ pub trait Block0 {
     fn dec_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn ld_r_n(&mut self, ctx: &mut CodegenCtx, r8: R8, imm: i32) -> &mut Self;
     fn rlca(&mut self) -> &mut Self;
+    fn cpl(&mut self) -> &mut Self;
 }
 
 impl Block0 for InstructionSink<'_> {
@@ -148,6 +149,17 @@ impl Block0 for InstructionSink<'_> {
             .i32_or()
             .i32_const(0xff)
             .i32_and()
+            .local_set(A)
+    }
+
+    fn cpl(&mut self) -> &mut Self {
+        self.set_flags(false, true, true, false) // Always set subtraction and half carry to 1.
+            /* Flip the bits in A:
+             * A = (!A) & 0xff
+             */
+            .local_get(A)
+            .i32_const(0xff)
+            .i32_xor()
             .local_set(A)
     }
 }

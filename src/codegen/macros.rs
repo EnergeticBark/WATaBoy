@@ -32,6 +32,13 @@ pub(crate) trait Sm83Macros {
         half_carry: bool,
         carry: bool,
     ) -> &mut Self;
+    fn set_flags(
+        &mut self,
+        zero: bool,
+        subtraction: bool,
+        half_carry: bool,
+        carry: bool,
+    ) -> &mut Self;
     fn set_flag(&mut self, flag_bit: FlagBit) -> &mut Self;
     fn check_flag(&mut self, flag_bit: FlagBit) -> &mut Self;
     fn insert_checkpoint(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
@@ -289,6 +296,42 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     fn clear_flags(&mut self) -> &mut Self {
         self.i32_const(0x00).local_set(F)
+    }
+
+    /// Unconditionally set the specified flags to true, leaving the others unmodified.
+    /// # Signature
+    /// ```
+    /// () -> ()
+    /// ```
+    /// # Pseudocode
+    /// ```
+    /// F |= specified_flags
+    /// ```
+    fn set_flags(
+        &mut self,
+        zero: bool,
+        subtraction: bool,
+        half_carry: bool,
+        carry: bool,
+    ) -> &mut Self {
+        let mut flags: u8 = 0b0000_0000;
+        if zero {
+            flags |= 1 << FlagBit::Zero as usize;
+        }
+        if subtraction {
+            flags |= 1 << FlagBit::Subtraction as usize;
+        }
+        if half_carry {
+            flags |= 1 << FlagBit::HalfCarry as usize;
+        }
+        if carry {
+            flags |= 1 << FlagBit::Carry as usize;
+        }
+
+        self.local_get(F)
+            .i32_const(flags as i32)
+            .i32_or()
+            .local_set(F)
     }
 
     /// Assign the bits in the flag register, overwriting any previous value.

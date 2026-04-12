@@ -154,6 +154,10 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 ctx.increment_pc();
                 instruction_sink.rlca();
             }
+            Opcode::Cpl => {
+                ctx.increment_pc();
+                instruction_sink.cpl();
+            }
 
             // Block 1
             Opcode::LdRR { x, y } => {
