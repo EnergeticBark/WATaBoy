@@ -1,5 +1,4 @@
-use sm83_interp::cpu::opcodes::Opcode;
-use sm83_interp::cpu::opcodes::parameters::R16;
+use sm83_interp::cpu::opcodes::{Opcode, PrefixOpcode};
 use sm83_interp::cpu::{Cpu, opcodes};
 
 mod instructions;
@@ -7,7 +6,7 @@ mod macros;
 mod module;
 mod registers;
 
-use instructions::{Block0, Block1, Block2, Block3};
+use instructions::{Block0, Block1, Block2, Block3, Prefix};
 use macros::Sm83Macros;
 use module::{empty_jit_block_function, empty_jit_block_module};
 
@@ -256,6 +255,19 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 ctx.increment_pc();
                 instruction_sink.push_rr(&mut ctx, x);
             }
+            Opcode::Prefix => {
+                ctx.increment_pc();
+                if !recompile_prefix(
+                    dmg_state,
+                    &mut ctx,
+                    &mut instruction_sink,
+                    #[cfg(feature = "jit-trace")]
+                    &mut sm83_disassembly,
+                ) {
+                    ctx.traced_pc -= 1;
+                    break;
+                }
+            }
             Opcode::LdSpHl => {
                 ctx.increment_pc();
                 instruction_sink.ld_sp_hl();
@@ -312,4 +324,30 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
         buffer: module.finish(),
         ctx,
     })
+}
+
+// Try to recompile the prefix opcode at PC. Returns true if the opcode was recompiled successfully.
+pub fn recompile_prefix(
+    dmg_state: &mut Cpu,
+    ctx: &mut CodegenCtx,
+    instruction_sink: &mut InstructionSink,
+    #[cfg(feature = "jit-trace")] sm83_disassembly: &mut String,
+) -> bool {
+    let bytecode = dmg_state.memory.read_byte(ctx.traced_pc);
+    let prefix_opcode = PrefixOpcode::decode(bytecode);
+
+    // TODO: Always increment 1 M-cycle for fetching the prefixed opcode.
+
+    match prefix_opcode {
+        PrefixOpcode::SwapR { x } => {
+            ctx.increment_m_cycles(1);
+            ctx.increment_pc();
+            instruction_sink.swap_r(ctx, x);
+        }
+        _ => return false,
+    }
+
+    #[cfg(feature = "jit-trace")]
+    sm83_disassembly.push_str(&format!("{:?}\n", prefix_opcode));
+    true
 }
