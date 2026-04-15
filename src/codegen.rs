@@ -352,6 +352,10 @@ pub fn recompile_prefix(
             ctx.increment_pc();
             instruction_sink.swap_r(ctx, x);
         }
+        PrefixOpcode::SrlR { x } => {
+            ctx.increment_pc();
+            instruction_sink.srl_r(ctx, x);
+        }
         _ => {
             // The prefixed instruction couldn't be added to the block, so retroactively decrement the M-cycle used to fetch it.
             ctx.delta_m_cycles -= 1;
