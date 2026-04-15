@@ -120,7 +120,7 @@ impl JitRuntime {
                         opcode = u16::from_be_bytes([0xCB, prefix_opcode]);
                     }
 
-                    if let Some(count) = self.uncompiled.get_mut(&opcode) {
+                    if let Some(count) = self.uncompiled.get_mut(opcode) {
                         *count += 1;
                     } else {
                         self.uncompiled.insert(opcode, 1);
@@ -135,11 +135,11 @@ impl JitRuntime {
 
     #[cfg(feature = "log-uncompiled")]
     fn log_uncompiled(&self) {
-        let mut not_compiled_vec: Vec<(&u16, &u32)> = self.uncompiled.iter().collect();
+        let mut not_compiled_vec: Vec<(u16, &u32)> = self.uncompiled.iter().collect();
         not_compiled_vec.sort_by(|a, b| b.1.cmp(a.1));
         for (opcode, count) in not_compiled_vec {
-            if *opcode <= 0xff {
-                let opcode = Opcode::decode((*opcode) as u8);
+            if opcode <= 0xff {
+                let opcode = Opcode::decode(opcode as u8);
                 console_log(&format!("{opcode:?}: {count}"));
             } else {
                 let prefix_opcode = PrefixOpcode::decode((opcode & 0xff) as u8);
