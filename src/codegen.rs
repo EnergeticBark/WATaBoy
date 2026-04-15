@@ -124,13 +124,17 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                 ctx.increment_pc();
                 instruction_sink.ld_a_mem(&mut ctx, x);
             }
+            Opcode::IncRr { x } => {
+                ctx.increment_pc();
+                instruction_sink.inc_rr(x);
+            }
             Opcode::DecRr { x } => {
                 ctx.increment_pc();
                 instruction_sink.dec_rr(x);
             }
-            Opcode::IncRr { x } => {
+            Opcode::AddHlRr { x } => {
                 ctx.increment_pc();
-                instruction_sink.inc_rr(x);
+                instruction_sink.add_hl_rr(x);
             }
             Opcode::IncR { x } => {
                 ctx.increment_pc();

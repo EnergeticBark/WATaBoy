@@ -16,6 +16,7 @@ pub trait Block0 {
     fn ld_a_mem(&mut self, ctx: &mut CodegenCtx, r16_mem: R16Mem) -> &mut Self;
     fn inc_rr(&mut self, r16: R16) -> &mut Self;
     fn dec_rr(&mut self, r16: R16) -> &mut Self;
+    fn add_hl_rr(&mut self, r16: R16) -> &mut Self;
     fn inc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn dec_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn ld_r_n(&mut self, ctx: &mut CodegenCtx, r8: R8, imm: i32) -> &mut Self;
@@ -56,6 +57,52 @@ impl Block0 for InstructionSink<'_> {
         // Name our scratch register.
         const TEMP: u32 = PROLOGE_LENGTH as u32;
         self.get_r16(r16).i32_const(1).i32_sub().set_r16(r16, TEMP)
+    }
+
+    fn add_hl_rr(&mut self, r16: R16) -> &mut Self {
+        // Name our scratch registers.
+        const PREV_HL: u32 = PROLOGE_LENGTH as u32;
+        const PREV_RR: u32 = PROLOGE_LENGTH as u32 + 1;
+        self.check_flag(FlagBit::Zero) // *** Preserve the original value of Zero on the stack. ***
+            .clear_flags()
+            .set_flag(FlagBit::Zero) // Restore Zero flag.
+            // *** Store original values of HL and RR so we can calculate the half-carry first. ***
+            .get_r16(R16::Hl)
+            .local_tee(PREV_HL)
+            .i32_const(0x0FFF)
+            .i32_and()
+            .get_r16(r16)
+            .local_tee(PREV_RR)
+            .i32_const(0x0FFF)
+            .i32_and()
+            /* Calculate Half-Carry Flag:
+             * ((HL & 0x0FFF) + (RR & 0x0FFF)) & 0x1000 == 0x1000
+             */
+            .i32_add()
+            .i32_const(0x1000)
+            .i32_and()
+            .i32_const(0x1000)
+            .i32_eq()
+            .set_flag(FlagBit::HalfCarry)
+            /* Calculate Overflow Flag:
+             * HL + RR > 0xFFFF
+             */
+            .local_get(PREV_HL)
+            .local_get(PREV_RR)
+            .i32_add()
+            .i32_const(0xffff)
+            .i32_gt_u()
+            .set_flag(FlagBit::Carry)
+            /* Perform the addition (truncated by set_r16()):
+             * HL = HL + RR
+             */
+            .local_get(PREV_HL)
+            .local_get(PREV_RR)
+            .i32_add();
+        // Reclaim a scratch registers to use as TEMP.
+        // TODO: It would be nice to actually drop PREV_HL from scope somehow...
+        const TEMP: u32 = PREV_HL;
+        self.set_r16(R16::Hl, TEMP)
     }
 
     fn inc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {

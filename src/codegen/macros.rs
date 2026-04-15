@@ -95,6 +95,7 @@ impl Sm83Macros for InstructionSink<'_> {
     }
 
     /// Set the value of the specified 16-bit register.
+    /// The value passed in will effectively be truncated to 16-bits.
     /// This macro needs a temporary register to store the 16-bit value before writing each byte separately.
     /// The register specified in temp_reg will be clobbered.
     /// # Signature
