@@ -18,6 +18,7 @@ pub trait Block3 {
     fn ld_nn_a(&mut self, ctx: &mut CodegenCtx, imm: u16) -> &mut Self;
     fn ldh_a_n(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self;
     fn ld_a_nn(&mut self, ctx: &mut CodegenCtx, imm: u16) -> &mut Self;
+    fn ld_hl_sp_plus_e(&mut self, e: i8) -> &mut Self;
     fn ld_sp_hl(&mut self) -> &mut Self;
 }
 
@@ -145,6 +146,42 @@ impl Block3 for InstructionSink<'_> {
     fn ld_a_nn(&mut self, ctx: &mut CodegenCtx, imm: u16) -> &mut Self {
         ctx.increment_m_cycles(2);
         self.i32_const(imm as i32).call_read_byte(ctx).local_set(A)
+    }
+    fn ld_hl_sp_plus_e(&mut self, e: i8) -> &mut Self {
+        // Name our scratch register.
+        const TEMP: u32 = PROLOGE_LENGTH as u32;
+        self.clear_flags()
+            /* Calculate Half-Carry Flag:
+             * ((SP & 0x0f) + (E & 0x0f)) > 0x0f
+             */
+            .local_get(SP)
+            .i32_const(0x0f)
+            .i32_and() // (SP & 0x0f)
+            .i32_const(e as i32 & 0x0f) // (E & 0x0f)
+            .i32_add()
+            .i32_const(0x0f)
+            .i32_gt_u()
+            .set_flag(FlagBit::HalfCarry)
+            /* Calculate Carry Flag:
+             * (SP & 0xFF) + E > 0xFF
+             */
+            .local_get(SP)
+            .i32_const(0xff)
+            .i32_and()
+            .i32_const(e as i32)
+            .i32_add()
+            .i32_const(0xff)
+            .i32_gt_u() // If result > 0xFF (overflow), then 1, otherwise 0.
+            .set_flag(FlagBit::Carry)
+            /* Perform the addition:
+             * HL = (SP + E) & 0xFFFF
+             */
+            .local_get(SP)
+            .i32_const(e as i32)
+            .i32_add()
+            .i32_const(0xFFFF)
+            .i32_and()
+            .set_r16(R16::Hl, TEMP)
     }
     fn ld_sp_hl(&mut self) -> &mut Self {
         self.get_r16(R16::Hl).local_set(SP)

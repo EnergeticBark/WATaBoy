@@ -272,6 +272,14 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
                     break;
                 }
             }
+            Opcode::LdHlSpPlusE => {
+                ctx.increment_pc();
+                let imm = dmg_state.memory.read_byte(ctx.traced_pc);
+                let e = imm.cast_signed();
+
+                ctx.increment_pc();
+                instruction_sink.ld_hl_sp_plus_e(e);
+            }
             Opcode::LdSpHl => {
                 ctx.increment_pc();
                 instruction_sink.ld_sp_hl();
