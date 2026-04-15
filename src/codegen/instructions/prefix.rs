@@ -15,6 +15,7 @@ pub trait Prefix {
     fn sla_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn swap_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn srl_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
+    fn bit_b_r(&mut self, ctx: &mut CodegenCtx, bit_index: u8, r8: R8) -> &mut Self;
 }
 
 impl Prefix for InstructionSink<'_> {
@@ -125,5 +126,21 @@ impl Prefix for InstructionSink<'_> {
             // *** Assign the new value to R8. ***
             .local_get(R8_VAL)
             .set_r8(ctx, r8)
+    }
+
+    fn bit_b_r(&mut self, ctx: &mut CodegenCtx, bit_index: u8, r8: R8) -> &mut Self {
+        self.check_flag(FlagBit::Carry) // *** Preserve the original value of Carry on the stack. ***
+            .assign_flags(false, false, true, false)
+            .set_flag(FlagBit::Carry) // Restore Carry flag.
+            .get_r8(ctx, r8)
+            /* Calculate the Zero flag:
+             * (R8_VAL >> bit_index) & 0b0000_0001 == 0
+             */
+            .i32_const(bit_index as i32)
+            .i32_shr_u()
+            .i32_const(0b0000_0001)
+            .i32_and()
+            .i32_eqz()
+            .set_flag(FlagBit::Zero)
     }
 }

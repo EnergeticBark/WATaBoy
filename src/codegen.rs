@@ -356,6 +356,10 @@ pub fn recompile_prefix(
             ctx.increment_pc();
             instruction_sink.srl_r(ctx, x);
         }
+        PrefixOpcode::BitBR { b, x } => {
+            ctx.increment_pc();
+            instruction_sink.bit_b_r(ctx, b.into(), x);
+        }
         _ => {
             // The prefixed instruction couldn't be added to the block, so retroactively decrement the M-cycle used to fetch it.
             ctx.delta_m_cycles -= 1;
