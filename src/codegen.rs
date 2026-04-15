@@ -336,15 +336,24 @@ pub fn recompile_prefix(
     let bytecode = dmg_state.memory.read_byte(ctx.traced_pc);
     let prefix_opcode = PrefixOpcode::decode(bytecode);
 
-    // TODO: Always increment 1 M-cycle for fetching the prefixed opcode.
+    // Always increment 1 M-cycle for fetching the prefixed opcode.
+    ctx.increment_m_cycles(1);
 
     match prefix_opcode {
+        PrefixOpcode::SlaR { x } => {
+            ctx.increment_pc();
+            instruction_sink.sla_r(ctx, x);
+        }
         PrefixOpcode::SwapR { x } => {
-            ctx.increment_m_cycles(1);
             ctx.increment_pc();
             instruction_sink.swap_r(ctx, x);
         }
-        _ => return false,
+        _ => {
+            // The prefixed instruction couldn't be added to the block, so retroactively decrement the M-cycle used to fetch it.
+            ctx.delta_m_cycles -= 1;
+            ctx.total_m_cycles -= 1;
+            return false;
+        }
     }
 
     #[cfg(feature = "jit-trace")]
