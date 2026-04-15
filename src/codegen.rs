@@ -340,6 +340,10 @@ pub fn recompile_prefix(
     ctx.increment_m_cycles(1);
 
     match prefix_opcode {
+        PrefixOpcode::RrcR { x } => {
+            ctx.increment_pc();
+            instruction_sink.rrc_r(ctx, x);
+        }
         PrefixOpcode::SlaR { x } => {
             ctx.increment_pc();
             instruction_sink.sla_r(ctx, x);

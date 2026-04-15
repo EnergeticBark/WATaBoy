@@ -11,11 +11,43 @@ use wasm_encoder::*;
 // Emit Wasm bytecode for Block 1.
 // See: https://gbdev.io/pandocs/CPU_Instruction_Set.html#block-1-8-bit-register-to-register-loads
 pub trait Prefix {
+    fn rrc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn sla_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn swap_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
 }
 
 impl Prefix for InstructionSink<'_> {
+    fn rrc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
+        // Name our scratch registers.
+        const R8_VAL: u32 = PROLOGE_LENGTH as u32;
+        const BIT_0: u32 = PROLOGE_LENGTH as u32 + 1;
+        self.clear_flags()
+            .get_r8(ctx, r8)
+            .local_tee(R8_VAL)
+            // *** Calculate Zero Flag. ***
+            .i32_eqz()
+            .set_flag(FlagBit::Zero)
+            .local_get(R8_VAL)
+            /* Calculate the Carry flag:
+             * (R8_VAL & 0b0000_0001) == 0b0000_0001
+             */
+            .i32_const(0b0000_0001)
+            .i32_and()
+            .local_tee(BIT_0)
+            .set_flag(FlagBit::Carry)
+            /* Perform the shift left and set the highest bit to BIT_0:
+             * R8_VAL = (R8_VAL >> 1) | (BIT_0 << 7)
+             */
+            .local_get(R8_VAL)
+            .i32_const(1)
+            .i32_shr_u()
+            .local_get(BIT_0)
+            .i32_const(7)
+            .i32_shl()
+            .i32_or()
+            .set_r8(ctx, r8)
+    }
+
     fn sla_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch register.
         const R8_VAL: u32 = PROLOGE_LENGTH as u32;
@@ -26,7 +58,7 @@ impl Prefix for InstructionSink<'_> {
             .i32_const(7)
             .i32_shr_u()
             .set_flag(FlagBit::Carry)
-            /* Perform the swap:
+            /* Perform the shift left:
              * R8_VAL = (R8_VAL << 1) & 0xFF
              */
             .local_get(R8_VAL)

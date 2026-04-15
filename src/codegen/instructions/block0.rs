@@ -130,13 +130,11 @@ impl Block0 for InstructionSink<'_> {
         const BIT_7: u32 = PROLOGE_LENGTH as u32;
         self.clear_flags()
             /* Calculate the Carry flag:
-             * (A & 0b1000_0000) == 0b1000_0000
+             * (A >> 7) == 0b0000_0001
              */
             .local_get(A)
-            .i32_const(0b1000_0000)
-            .i32_and()
-            .i32_const(0b1000_0000)
-            .i32_eq()
+            .i32_const(7)
+            .i32_shr_u()
             .local_tee(BIT_7)
             .set_flag(FlagBit::Carry)
             /* Perform the shift left, set the lowest bit to BIT_7, and truncate:
