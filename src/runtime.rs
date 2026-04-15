@@ -1,4 +1,4 @@
-use intmap::IntMap;
+use intmap::{IntKey, IntMap};
 use std::panic;
 
 use crate::cache::CompiledBlock;
@@ -21,13 +21,30 @@ unsafe extern "C" {
     fn instantiate_and_link_module(buffer: *const u8, len: u32) -> i32;
 }
 
+#[derive(Clone, Copy)]
+struct CacheAddress {
+    bank_number: u8,
+    address: u16,
+}
+
+impl IntKey for CacheAddress {
+    type Int = u32;
+
+    // You could also choose another prime number
+    const PRIME: Self::Int = u32::PRIME;
+
+    fn into_int(self) -> Self::Int {
+        ((self.bank_number as u32) << 16) | self.address as u32
+    }
+}
+
 // TODO: Should probably implement PostBoot too/instead...
 #[derive(Default)]
 pub struct JitRuntime {
     block_start_clock: u64,
     checkpoint_index: usize,
     pub(crate) dmg_state: Cpu,
-    block_cache: IntMap<u16, CompiledBlock>,
+    block_cache: IntMap<CacheAddress, CompiledBlock>,
     rom_buffer: Vec<u8>,
     next_vblank: u64,
     #[cfg(feature = "log-uncompiled")]
@@ -70,9 +87,25 @@ impl JitRuntime {
             .increment_timers(checkpoint.remaining_m_cycles);
     }
 
+    // TODO: Handle bank switches while executing in a switchable bank (do any games or test ROMs do this?).
+    fn current_cache_address(&mut self) -> CacheAddress {
+        let pc = self.dmg_state.registers.pc;
+        let bank_number = match pc {
+            ..0x4000 => 0,
+            0x4000..0x8000 => self.dmg_state.memory.mbc.current_rom_bank,
+            _ => 0,
+        };
+
+        CacheAddress {
+            bank_number,
+            address: pc,
+        }
+    }
+
     // Get the next CompiledBlock at PC, either from the cache or by compiling a new block.
-    fn get_compiled_block(&mut self, pc: u16) -> Option<CompiledBlock> {
-        if let Some(compiled_block) = self.block_cache.get(pc) {
+    fn get_compiled_block(&mut self) -> Option<CompiledBlock> {
+        let cache_address = self.current_cache_address();
+        if let Some(compiled_block) = self.block_cache.get(cache_address) {
             Some(compiled_block.clone())
         } else {
             let jit_block = codegen::recompile(&mut self.dmg_state)?;
@@ -89,7 +122,8 @@ impl JitRuntime {
 
             // Add the block we just compiled to the cache.
             #[cfg(feature = "caching")]
-            self.block_cache.insert(pc, compiled_block.clone());
+            self.block_cache
+                .insert(cache_address, compiled_block.clone());
             Some(compiled_block)
         }
     }
@@ -104,15 +138,15 @@ impl JitRuntime {
     pub(crate) fn execute(&mut self) {
         let pc = self.dmg_state.registers.pc;
         // Only cache from ROM bank 00 for now.
-        if pc < 0x4000
-            && let Some(compiled_block) = self.get_compiled_block(pc)
+        if pc < 0x8000
+            && let Some(compiled_block) = self.get_compiled_block()
             && self.wont_be_interrupted(&compiled_block)
         {
             self.execute_compiled_block(compiled_block);
         } else {
             #[cfg(feature = "log-uncompiled")]
             {
-                if pc < 0x4000 {
+                if pc < 0x8000 {
                     let mut opcode = self.dmg_state.memory.read_byte(pc) as u16;
 
                     if opcode == 0xCB {
@@ -164,7 +198,8 @@ impl JitRuntime {
 
     #[unsafe(no_mangle)]
     pub extern "C" fn process_checkpoint(&mut self, checkpoint_index: u32) -> bool {
-        let current_block = self.block_cache.get(self.dmg_state.registers.pc).unwrap();
+        let cache_address = self.current_cache_address();
+        let current_block = self.block_cache.get(cache_address).unwrap();
         let next_checkpoint = current_block.checkpoints[checkpoint_index as usize + 1];
         let next_checkpoint_clock =
             self.block_start_clock + next_checkpoint.total_m_cycles as u64 * 4;
