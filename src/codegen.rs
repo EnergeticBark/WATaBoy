@@ -370,6 +370,10 @@ pub fn recompile_prefix(
             ctx.increment_pc();
             instruction_sink.sla_r(ctx, x);
         }
+        PrefixOpcode::SraR { x } => {
+            ctx.increment_pc();
+            instruction_sink.sra_r(ctx, x);
+        }
         PrefixOpcode::SwapR { x } => {
             ctx.increment_pc();
             instruction_sink.swap_r(ctx, x);
