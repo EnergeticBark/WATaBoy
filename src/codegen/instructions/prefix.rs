@@ -13,6 +13,7 @@ use wasm_encoder::*;
 pub trait Prefix {
     fn rrc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn rl_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
+    fn rr_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn sla_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn swap_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn srl_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
@@ -79,6 +80,40 @@ impl Prefix for InstructionSink<'_> {
             .i32_or()
             .i32_const(0xff)
             .i32_and()
+            .local_tee(R8_VAL)
+            // *** Calculate Zero Flag. ***
+            .i32_eqz()
+            .set_flag(FlagBit::Zero)
+            // *** Assign the new value to R8. ***
+            .local_get(R8_VAL)
+            .set_r8(ctx, r8)
+    }
+
+    fn rr_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
+        // Name our scratch registers.
+        const R8_VAL: u32 = PROLOGE_LENGTH as u32;
+        const CARRY: u32 = PROLOGE_LENGTH as u32 + 1;
+        self.check_flag(FlagBit::Carry)
+            .local_set(CARRY)
+            .clear_flags()
+            .get_r8(ctx, r8)
+            .local_tee(R8_VAL)
+            /* Calculate the Carry flag:
+             * R8_VAL & 0b0000_0001
+             */
+            .i32_const(0b0000_0001)
+            .i32_and()
+            .set_flag(FlagBit::Carry)
+            /* Perform the shift right and set the highest bit to CARRY:
+             * R8_VAL = (R8_VAL >> 1) | CARRY << 7)
+             */
+            .local_get(R8_VAL)
+            .i32_const(1)
+            .i32_shr_u()
+            .local_get(CARRY)
+            .i32_const(7)
+            .i32_shl()
+            .i32_or()
             .local_tee(R8_VAL)
             // *** Calculate Zero Flag. ***
             .i32_eqz()

@@ -362,6 +362,10 @@ pub fn recompile_prefix(
             ctx.increment_pc();
             instruction_sink.rl_r(ctx, x);
         }
+        PrefixOpcode::RrR { x } => {
+            ctx.increment_pc();
+            instruction_sink.rr_r(ctx, x);
+        }
         PrefixOpcode::SlaR { x } => {
             ctx.increment_pc();
             instruction_sink.sla_r(ctx, x);
