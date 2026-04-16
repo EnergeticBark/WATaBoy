@@ -20,6 +20,7 @@ pub trait Prefix {
     fn srl_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn bit_b_r(&mut self, ctx: &mut CodegenCtx, bit_index: u8, r8: R8) -> &mut Self;
     fn res_b_r(&mut self, ctx: &mut CodegenCtx, bit_index: u8, r8: R8) -> &mut Self;
+    fn set_b_r(&mut self, ctx: &mut CodegenCtx, bit_index: u8, r8: R8) -> &mut Self;
 }
 
 impl Prefix for InstructionSink<'_> {
@@ -255,6 +256,13 @@ impl Prefix for InstructionSink<'_> {
         self.get_r8(ctx, r8)
             .i32_const(!(0b0000_0001 << bit_index) & 0xff)
             .i32_and()
+            .set_r8(ctx, r8)
+    }
+
+    fn set_b_r(&mut self, ctx: &mut CodegenCtx, bit_index: u8, r8: R8) -> &mut Self {
+        self.get_r8(ctx, r8)
+            .i32_const(0b0000_0001 << bit_index)
+            .i32_or()
             .set_r8(ctx, r8)
     }
 }
