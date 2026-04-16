@@ -22,6 +22,7 @@ pub trait Block0 {
     fn ld_r_n(&mut self, ctx: &mut CodegenCtx, r8: R8, imm: i32) -> &mut Self;
     fn rlca(&mut self) -> &mut Self;
     fn cpl(&mut self) -> &mut Self;
+    fn ccf(&mut self) -> &mut Self;
 }
 
 impl Block0 for InstructionSink<'_> {
@@ -206,5 +207,17 @@ impl Block0 for InstructionSink<'_> {
             .i32_const(0xff)
             .i32_xor()
             .local_set(A)
+    }
+
+    fn ccf(&mut self) -> &mut Self {
+        self.check_flag(FlagBit::Carry) // *** Preserve the original value of Carry and Zero on the stack. ***
+            .check_flag(FlagBit::Zero)
+            .clear_flags()
+            .set_flag(FlagBit::Zero) // Restore Zero flag.
+            /* Negate the Carry flag:
+             * Carry = Carry == 0
+             */
+            .i32_eqz()
+            .set_flag(FlagBit::Carry)
     }
 }

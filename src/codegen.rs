@@ -160,6 +160,10 @@ pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
                 ctx.increment_pc();
                 instruction_sink.cpl();
             }
+            Opcode::Ccf => {
+                ctx.increment_pc();
+                instruction_sink.ccf();
+            }
 
             // Block 1
             Opcode::LdRR { x, y } => {
