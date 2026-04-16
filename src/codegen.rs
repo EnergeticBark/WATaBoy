@@ -273,6 +273,26 @@ pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
                 ctx.increment_pc();
                 instruction_sink.ld_a_nn(&mut ctx, address);
             }
+            Opcode::JpNn => {
+                let prev_pc = ctx.traced_pc;
+
+                ctx.increment_pc();
+                let first_byte = dmg_state.memory.read_byte(ctx.traced_pc);
+                ctx.increment_pc();
+                let second_byte = dmg_state.memory.read_byte(ctx.traced_pc);
+
+                let address = u16::from_le_bytes([first_byte, second_byte]);
+
+                let outside_rom = address >= 0x8000;
+                let from_bank0_to_switchable = prev_pc < 0x4000 && address >= 0x4000;
+                if outside_rom || from_bank0_to_switchable {
+                    // Couldn't follow the jump, fall back to the interpreter.
+                    ctx.traced_pc -= 2;
+                    break;
+                }
+
+                ctx.traced_pc = address;
+            }
             Opcode::PopRr { x } => {
                 ctx.increment_pc();
                 instruction_sink.pop_rr(&mut ctx, x);
