@@ -11,6 +11,7 @@ use wasm_encoder::*;
 pub trait Block3 {
     fn add_n(&mut self, imm: i32) -> &mut Self;
     fn and_n(&mut self, imm: i32) -> &mut Self;
+    fn or_n(&mut self, imm: i32) -> &mut Self;
     fn cp_n(&mut self, imm: i32) -> &mut Self;
     fn pop_rr(&mut self, ctx: &mut CodegenCtx, r16_stack: R16Stack) -> &mut Self;
     fn push_rr(&mut self, ctx: &mut CodegenCtx, r16_stack: R16Stack) -> &mut Self;
@@ -71,9 +72,22 @@ impl Block3 for InstructionSink<'_> {
             .local_get(A)
             .i32_const(imm)
             /* Perform the AND:
-             * A = A & R8
+             * A = A & IMM
              */
             .i32_and()
+            .local_tee(A)
+            // *** Calculate Zero Flag. ***
+            .i32_eqz() // If the A is zero, then 1, otherwise 0.
+            .set_flag(FlagBit::Zero)
+    }
+    fn or_n(&mut self, imm: i32) -> &mut Self {
+        self.clear_flags()
+            .local_get(A)
+            .i32_const(imm)
+            /* Perform the OR:
+             * A = A | IMM
+             */
+            .i32_or()
             .local_tee(A)
             // *** Calculate Zero Flag. ***
             .i32_eqz() // If the A is zero, then 1, otherwise 0.

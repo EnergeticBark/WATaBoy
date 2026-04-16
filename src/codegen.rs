@@ -222,6 +222,12 @@ pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
                 ctx.increment_pc();
                 instruction_sink.and_n(imm as i32);
             }
+            Opcode::OrN => {
+                ctx.increment_pc();
+                let imm = dmg_state.memory.read_byte(ctx.traced_pc);
+                ctx.increment_pc();
+                instruction_sink.or_n(imm as i32);
+            }
             Opcode::CpN => {
                 ctx.increment_pc();
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
