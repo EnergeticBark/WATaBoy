@@ -41,6 +41,7 @@ impl IntKey for CacheAddress {
 // TODO: Should probably implement PostBoot too/instead...
 #[derive(Default)]
 pub struct JitRuntime {
+    ptr: usize,
     block_start_clock: u64,
     checkpoint_index: usize,
     pub(crate) dmg_state: Cpu,
@@ -108,7 +109,7 @@ impl JitRuntime {
         if let Some(compiled_block) = self.block_cache.get(cache_address) {
             Some(compiled_block.clone())
         } else {
-            let jit_block = codegen::recompile(&mut self.dmg_state)?;
+            let jit_block = codegen::recompile(&mut self.dmg_state, self.ptr)?;
             #[cfg(feature = "jit-trace")]
             console_log(&wasmprinter::print_bytes(&jit_block.buffer).unwrap());
 
@@ -185,27 +186,36 @@ impl JitRuntime {
 
 impl JitRuntime {
     #[unsafe(no_mangle)]
-    pub extern "C" fn read_byte_mem(&mut self, address: u16, delta_m_cycles: u16) -> u8 {
-        self.dmg_state.memory.increment_timers(delta_m_cycles);
-        self.dmg_state.memory.read_byte(address)
+    pub extern "C" fn read_byte_mem(
+        address: u16,
+        delta_m_cycles: u16,
+        runtime: &mut JitRuntime,
+    ) -> u8 {
+        runtime.dmg_state.memory.increment_timers(delta_m_cycles);
+        runtime.dmg_state.memory.read_byte(address)
     }
 
     #[unsafe(no_mangle)]
-    pub extern "C" fn write_byte_mem(&mut self, value: u8, address: u16, delta_m_cycles: u16) {
-        self.dmg_state.memory.increment_timers(delta_m_cycles);
-        self.dmg_state.memory.write_byte(address, value);
+    pub extern "C" fn write_byte_mem(
+        value: u8,
+        address: u16,
+        delta_m_cycles: u16,
+        runtime: &mut JitRuntime,
+    ) {
+        runtime.dmg_state.memory.increment_timers(delta_m_cycles);
+        runtime.dmg_state.memory.write_byte(address, value);
     }
 
     #[unsafe(no_mangle)]
-    pub extern "C" fn process_checkpoint(&mut self, checkpoint_index: u32) -> bool {
-        let cache_address = self.current_cache_address();
-        let current_block = self.block_cache.get(cache_address).unwrap();
+    pub extern "C" fn process_checkpoint(checkpoint_index: u32, runtime: &mut JitRuntime) -> bool {
+        let cache_address = runtime.current_cache_address();
+        let current_block = runtime.block_cache.get(cache_address).unwrap();
         let next_checkpoint = current_block.checkpoints[checkpoint_index as usize + 1];
         let next_checkpoint_clock =
-            self.block_start_clock + next_checkpoint.total_m_cycles as u64 * 4;
+            runtime.block_start_clock + next_checkpoint.total_m_cycles as u64 * 4;
 
-        if self.dmg_state.memory.next_interrupt < next_checkpoint_clock {
-            self.checkpoint_index = checkpoint_index as usize;
+        if runtime.dmg_state.memory.next_interrupt < next_checkpoint_clock {
+            runtime.checkpoint_index = checkpoint_index as usize;
             true
         } else {
             false
@@ -262,6 +272,11 @@ impl JitRuntime {
     #[unsafe(no_mangle)]
     pub extern "C" fn get_lcd_buffer(runtime: &mut JitRuntime) -> *const u8 {
         runtime.dmg_state.memory.ppu.lcd_buffer.as_ptr()
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn set_ptr(runtime: &mut JitRuntime, ptr: usize) {
+        runtime.ptr = ptr;
     }
 }
 

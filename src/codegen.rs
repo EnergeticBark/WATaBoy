@@ -27,6 +27,7 @@ pub struct Checkpoint {
 
 #[derive(Default)]
 pub struct CodegenCtx {
+    pub runtime_ptr: usize,
     pub checkpoints: Vec<Checkpoint>,
     pub traced_pc: u16,
     // The number of M-Cycles since the system clock has been updated.
@@ -67,7 +68,7 @@ pub struct WasmBlock {
 
 // Try to produce a WasmBlock starting at dmg_state's current program counter.
 // TODO: Read one opcode at a time until a branching statement is reached. -> Codegen Wasm for each instruction.
-pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
+pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
     let pc = dmg_state.registers.pc;
 
     #[cfg(feature = "caching")]
@@ -89,6 +90,7 @@ pub fn recompile(dmg_state: &mut Cpu) -> Option<WasmBlock> {
     });
 
     let mut ctx = CodegenCtx {
+        runtime_ptr,
         traced_pc: pc,
         ..Default::default()
     };

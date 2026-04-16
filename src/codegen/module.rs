@@ -14,22 +14,22 @@ pub(crate) fn empty_jit_block_module() -> Module {
     types.ty().function(params, results);
 
     // Type for the read_byte function.
-    // Parameters: 16-bit index into memory, current system clock.
+    // Parameters: 16-bit index into memory, current system clock, runtime pointer.
     // Returns: 8-bit value at the specified index.
-    let params = vec![ValType::I32; 2];
+    let params = vec![ValType::I32; 3];
     let results = vec![ValType::I32];
     types.ty().function(params, results);
 
     // Type for the write_byte function.
-    // Parameters: 8-bit value to write, 16-bit index into memory, current system clock.
-    let params = vec![ValType::I32; 3];
+    // Parameters: 8-bit value to write, 16-bit index into memory, current system clock, runtime pointer.
+    let params = vec![ValType::I32; 4];
     let results = vec![];
     types.ty().function(params, results);
 
     // Type for the process_checkpoint function.
-    // Parameter: 32-bit checkpoint index.
+    // Parameter: 32-bit checkpoint index, runtime pointer.
     // Returns: Boolean, whether the current block should be aborted.
-    let params = vec![ValType::I32];
+    let params = vec![ValType::I32; 2];
     let results = vec![ValType::I32];
     types.ty().function(params, results);
     module.section(&types);

@@ -410,7 +410,10 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     fn insert_checkpoint(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
         let checkpoint_index = ctx.add_checkpoint();
-        self.i32_const(checkpoint_index as i32).call(2).br_if(0)
+        self.i32_const(checkpoint_index as i32)
+            .i32_const(ctx.runtime_ptr as i32)
+            .call(2)
+            .br_if(0)
     }
 
     /// Return all of the registers to satisfy the calling convention.
@@ -440,7 +443,9 @@ impl Sm83Macros for InstructionSink<'_> {
     /// 1. Resets delta_m_cycles to 0 because `read_byte_mem` will increment the timers before reading the byte from memory.
     /// 2. Increments M-cycles by 1.
     fn call_read_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
-        self.i32_const(ctx.delta_m_cycles as i32).call(0);
+        self.i32_const(ctx.delta_m_cycles as i32)
+            .i32_const(ctx.runtime_ptr as i32)
+            .call(0);
         ctx.delta_m_cycles = 0;
         ctx.increment_m_cycles(1);
         self
@@ -455,7 +460,9 @@ impl Sm83Macros for InstructionSink<'_> {
     /// 1. Resets delta_m_cycles to 0 because `write_byte_mem` will increment the timers before writing the byte to memory.
     /// 2. Increments M-cycles by 1.
     fn call_write_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
-        self.i32_const(ctx.delta_m_cycles as i32).call(1);
+        self.i32_const(ctx.delta_m_cycles as i32)
+            .i32_const(ctx.runtime_ptr as i32)
+            .call(1);
         ctx.delta_m_cycles = 0;
         ctx.increment_m_cycles(1);
         self

@@ -25,6 +25,7 @@ export const Runtime = class {
 		this.instance = instance;
 		
 		this.jitRuntimePtr = instance.exports.make_runtime();
+		instance.exports.set_ptr(this.jitRuntimePtr, this.jitRuntimePtr);
 	}
 	
 	console_log_glue = (stringPtr, stringLen) => {
@@ -40,9 +41,9 @@ export const Runtime = class {
 		const anotherMod = new WebAssembly.Module(bytecode);
 		
 		const importObj = {env: {
-			process_checkpoint: (checkpoint_index) => this.instance.exports.process_checkpoint(this.jitRuntimePtr, checkpoint_index),
-			read_byte: (address, clock) => this.instance.exports.read_byte_mem(this.jitRuntimePtr, address, clock),
-			write_byte: (value, address, clock) => this.instance.exports.write_byte_mem(this.jitRuntimePtr, value, address, clock),
+			process_checkpoint: this.instance.exports.process_checkpoint,
+			read_byte: this.instance.exports.read_byte_mem,
+			write_byte: this.instance.exports.write_byte_mem,
 		}};
 		const anotherInstance = new WebAssembly.Instance(anotherMod, importObj);
 		
