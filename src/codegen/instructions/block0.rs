@@ -22,6 +22,7 @@ pub trait Block0 {
     fn ld_r_n(&mut self, ctx: &mut CodegenCtx, r8: R8, imm: i32) -> &mut Self;
     fn rlca(&mut self) -> &mut Self;
     fn cpl(&mut self) -> &mut Self;
+    fn scf(&mut self) -> &mut Self;
     fn ccf(&mut self) -> &mut Self;
 }
 
@@ -207,6 +208,13 @@ impl Block0 for InstructionSink<'_> {
             .i32_const(0xff)
             .i32_xor()
             .local_set(A)
+    }
+
+    fn scf(&mut self) -> &mut Self {
+        self // *** Preserve the original value of Zero on the stack. ***
+            .check_flag(FlagBit::Zero)
+            .assign_flags(false, false, false, true)
+            .set_flag(FlagBit::Zero) // Restore Zero flag.
     }
 
     fn ccf(&mut self) -> &mut Self {
