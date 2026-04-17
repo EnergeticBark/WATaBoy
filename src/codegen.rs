@@ -97,18 +97,15 @@ pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
         let bytecode = dmg_state.memory.read_byte(ctx.traced_pc);
         let opcode = Opcode::decode(bytecode).unwrap();
 
-        // Always increment 1 M-cycle for fetching the first byte.
+        // Always increment 1 M-cycle and PC for fetching the first byte.
         ctx.increment_m_cycles(1);
+        ctx.increment_pc();
 
         match opcode {
             // Block 0
-            Opcode::Nop => {
-                // Need to use fully-qualified syntax to call *our* nop function.
-                ctx.increment_pc();
-                <InstructionSink as Block0>::nop(&mut instruction_sink);
-            }
+            // Need to use fully-qualified syntax to call *our* nop function.
+            Opcode::Nop => _ = <InstructionSink as Block0>::nop(&mut instruction_sink),
             Opcode::LdRrNn { x } => {
-                ctx.increment_pc();
                 let first_byte = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
                 let second_byte = dmg_state.memory.read_byte(ctx.traced_pc);
@@ -117,136 +114,68 @@ pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
                 ctx.increment_pc();
                 instruction_sink.ld_rr_nn(x, address);
             }
-            Opcode::LdMemA { x } => {
-                ctx.increment_pc();
-                instruction_sink.ld_mem_a(&mut ctx, x);
-            }
-            Opcode::LdAMem { x } => {
-                ctx.increment_pc();
-                instruction_sink.ld_a_mem(&mut ctx, x);
-            }
-            Opcode::IncRr { x } => {
-                ctx.increment_pc();
-                instruction_sink.inc_rr(x);
-            }
-            Opcode::DecRr { x } => {
-                ctx.increment_pc();
-                instruction_sink.dec_rr(x);
-            }
-            Opcode::AddHlRr { x } => {
-                ctx.increment_pc();
-                instruction_sink.add_hl_rr(x);
-            }
-            Opcode::IncR { x } => {
-                ctx.increment_pc();
-                instruction_sink.inc_r(&mut ctx, x);
-            }
-            Opcode::DecR { x } => {
-                ctx.increment_pc();
-                instruction_sink.dec_r(&mut ctx, x);
-            }
+            Opcode::LdMemA { x } => _ = instruction_sink.ld_mem_a(&mut ctx, x),
+            Opcode::LdAMem { x } => _ = instruction_sink.ld_a_mem(&mut ctx, x),
+            Opcode::IncRr { x } => _ = instruction_sink.inc_rr(x),
+            Opcode::DecRr { x } => _ = instruction_sink.dec_rr(x),
+            Opcode::AddHlRr { x } => _ = instruction_sink.add_hl_rr(x),
+            Opcode::IncR { x } => _ = instruction_sink.inc_r(&mut ctx, x),
+            Opcode::DecR { x } => _ = instruction_sink.dec_r(&mut ctx, x),
             Opcode::LdRN { x } => {
-                ctx.increment_pc();
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
                 instruction_sink.ld_r_n(&mut ctx, x, imm as i32);
             }
-            Opcode::Rlca => {
-                ctx.increment_pc();
-                instruction_sink.rlca();
-            }
-            Opcode::Cpl => {
-                ctx.increment_pc();
-                instruction_sink.cpl();
-            }
-            Opcode::Scf => {
-                ctx.increment_pc();
-                instruction_sink.scf();
-            }
-            Opcode::Ccf => {
-                ctx.increment_pc();
-                instruction_sink.ccf();
-            }
+            Opcode::Rlca => _ = instruction_sink.rlca(),
+            Opcode::Cpl => _ = instruction_sink.cpl(),
+            Opcode::Scf => _ = instruction_sink.scf(),
+            Opcode::Ccf => _ = instruction_sink.ccf(),
 
             // Block 1
-            Opcode::LdRR { x, y } => {
-                ctx.increment_pc();
-                instruction_sink.ld_r_r(&mut ctx, x, y);
-            }
+            Opcode::LdRR { x, y } => _ = instruction_sink.ld_r_r(&mut ctx, x, y),
 
             // Block 2
-            Opcode::AddR { x } => {
-                ctx.increment_pc();
-                instruction_sink.add_r(&mut ctx, x);
-            }
-            Opcode::AdcR { x } => {
-                ctx.increment_pc();
-                instruction_sink.adc_r(&mut ctx, x);
-            }
-            Opcode::SubR { x } => {
-                ctx.increment_pc();
-                instruction_sink.sub_r(&mut ctx, x);
-            }
-            Opcode::SbcR { x } => {
-                ctx.increment_pc();
-                instruction_sink.sbc_r(&mut ctx, x);
-            }
-            Opcode::AndR { x } => {
-                ctx.increment_pc();
-                instruction_sink.and_r(&mut ctx, x);
-            }
-            Opcode::XorR { x } => {
-                ctx.increment_pc();
-                instruction_sink.xor_r(&mut ctx, x);
-            }
-            Opcode::OrR { x } => {
-                ctx.increment_pc();
-                instruction_sink.or_r(&mut ctx, x);
-            }
-            Opcode::CpR { x } => {
-                ctx.increment_pc();
-                instruction_sink.cp_r(&mut ctx, x);
-            }
+            Opcode::AddR { x } => _ = instruction_sink.add_r(&mut ctx, x),
+            Opcode::AdcR { x } => _ = instruction_sink.adc_r(&mut ctx, x),
+            Opcode::SubR { x } => _ = instruction_sink.sub_r(&mut ctx, x),
+            Opcode::SbcR { x } => _ = instruction_sink.sbc_r(&mut ctx, x),
+            Opcode::AndR { x } => _ = instruction_sink.and_r(&mut ctx, x),
+            Opcode::XorR { x } => _ = instruction_sink.xor_r(&mut ctx, x),
+            Opcode::OrR { x } => _ = instruction_sink.or_r(&mut ctx, x),
+            Opcode::CpR { x } => _ = instruction_sink.cp_r(&mut ctx, x),
 
             // Block 3
             Opcode::AddN => {
-                ctx.increment_pc();
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
                 instruction_sink.add_n(imm as i32);
             }
             Opcode::SubN => {
-                ctx.increment_pc();
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
                 instruction_sink.sub_n(imm as i32);
             }
             Opcode::AndN => {
-                ctx.increment_pc();
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
                 instruction_sink.and_n(imm as i32);
             }
             Opcode::OrN => {
-                ctx.increment_pc();
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
                 instruction_sink.or_n(imm as i32);
             }
             Opcode::CpN => {
-                ctx.increment_pc();
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
                 instruction_sink.cp_n(imm as i32);
             }
             Opcode::LdhNA => {
-                ctx.increment_pc();
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
                 instruction_sink.ldh_n_a(&mut ctx, imm);
             }
             Opcode::LdNnA => {
-                ctx.increment_pc();
                 let first_byte = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
                 let second_byte = dmg_state.memory.read_byte(ctx.traced_pc);
@@ -257,13 +186,11 @@ pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
                 instruction_sink.ld_nn_a(&mut ctx, address);
             }
             Opcode::LdhAN => {
-                ctx.increment_pc();
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
                 instruction_sink.ldh_a_n(&mut ctx, imm);
             }
             Opcode::LdANn => {
-                ctx.increment_pc();
                 let first_byte = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
                 let second_byte = dmg_state.memory.read_byte(ctx.traced_pc);
@@ -273,9 +200,8 @@ pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
                 instruction_sink.ld_a_nn(&mut ctx, address);
             }
             Opcode::JpNn => {
-                let prev_pc = ctx.traced_pc;
+                let prev_pc = ctx.traced_pc - 1;
 
-                ctx.increment_pc();
                 let first_byte = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
                 let second_byte = dmg_state.memory.read_byte(ctx.traced_pc);
@@ -286,42 +212,29 @@ pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
                 let from_bank0_to_switchable = prev_pc < 0x4000 && address >= 0x4000;
                 if outside_rom || from_bank0_to_switchable {
                     // Couldn't follow the jump, fall back to the interpreter.
-                    ctx.traced_pc -= 2;
+                    ctx.traced_pc -= 1;
                     break;
                 }
 
                 ctx.traced_pc = address;
             }
-            Opcode::PopRr { x } => {
-                ctx.increment_pc();
-                instruction_sink.pop_rr(&mut ctx, x);
-            }
-            Opcode::PushRr { x } => {
-                ctx.increment_pc();
-                instruction_sink.push_rr(&mut ctx, x);
-            }
-            Opcode::Prefix => {
-                ctx.increment_pc();
-                recompile_prefix(
-                    dmg_state,
-                    &mut ctx,
-                    &mut instruction_sink,
-                    #[cfg(feature = "jit-trace")]
-                    &mut sm83_disassembly,
-                )
-            }
+            Opcode::PopRr { x } => _ = instruction_sink.pop_rr(&mut ctx, x),
+            Opcode::PushRr { x } => _ = instruction_sink.push_rr(&mut ctx, x),
+            Opcode::Prefix => recompile_prefix(
+                dmg_state,
+                &mut ctx,
+                &mut instruction_sink,
+                #[cfg(feature = "jit-trace")]
+                &mut sm83_disassembly,
+            ),
             Opcode::LdHlSpPlusE => {
-                ctx.increment_pc();
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 let e = imm.cast_signed();
 
                 ctx.increment_pc();
                 instruction_sink.ld_hl_sp_plus_e(e);
             }
-            Opcode::LdSpHl => {
-                ctx.increment_pc();
-                instruction_sink.ld_sp_hl();
-            }
+            Opcode::LdSpHl => _ = instruction_sink.ld_sp_hl(),
             _ => break,
         }
 
@@ -343,9 +256,10 @@ pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
         sm83_disassembly.push_str(&format!("{:?}\n", opcode))
     }
 
-    // The final instruction couldn't be added to the block, so retroactively decrement the M-cycle used to fetch it.
+    // The final instruction couldn't be added to the block, so retroactively decrement the M-cycle and PC used to fetch it.
     ctx.delta_m_cycles -= 1;
     ctx.total_m_cycles -= 1;
+    ctx.traced_pc -= 1;
 
     if ctx.traced_pc == pc {
         return None;
