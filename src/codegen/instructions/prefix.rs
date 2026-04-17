@@ -11,6 +11,7 @@ use wasm_encoder::*;
 // Emit Wasm bytecode for Block 1.
 // See: https://gbdev.io/pandocs/CPU_Instruction_Set.html#block-1-8-bit-register-to-register-loads
 pub trait Prefix {
+    fn rlc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn rrc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn rl_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn rr_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
@@ -24,6 +25,38 @@ pub trait Prefix {
 }
 
 impl Prefix for InstructionSink<'_> {
+    // Haven't seen this particular instruction in any traces yet, so as of now it's untested...
+    fn rlc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
+        // Name our scratch registers.
+        const R8_VAL: u32 = PROLOGE_LENGTH as u32;
+        const BIT_7: u32 = PROLOGE_LENGTH as u32 + 1;
+        self.clear_flags()
+            .get_r8(ctx, r8)
+            .local_tee(R8_VAL)
+            // *** Calculate Zero Flag. ***
+            .i32_eqz()
+            .set_flag(FlagBit::Zero)
+            /* Calculate the Carry flag:
+             * (R8_VAL >> 7) == 0b0000_0001
+             */
+            .local_get(R8_VAL)
+            .i32_const(7)
+            .i32_shr_u()
+            .local_tee(BIT_7)
+            .set_flag(FlagBit::Carry)
+            /* Perform the shift left and set the lowest bit to BIT_7:
+             * R8_VAL = ((R8_VAL << 1) | BIT_7) & 0xFF
+             */
+            .local_get(R8_VAL)
+            .i32_const(1)
+            .i32_shl()
+            .local_get(BIT_7)
+            .i32_or()
+            .i32_const(0xFF)
+            .i32_and()
+            .set_r8(ctx, r8)
+    }
+
     fn rrc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch registers.
         const R8_VAL: u32 = PROLOGE_LENGTH as u32;

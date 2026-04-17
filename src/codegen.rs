@@ -303,16 +303,13 @@ pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
             }
             Opcode::Prefix => {
                 ctx.increment_pc();
-                if !recompile_prefix(
+                recompile_prefix(
                     dmg_state,
                     &mut ctx,
                     &mut instruction_sink,
                     #[cfg(feature = "jit-trace")]
                     &mut sm83_disassembly,
-                ) {
-                    ctx.traced_pc -= 1;
-                    break;
-                }
+                )
             }
             Opcode::LdHlSpPlusE => {
                 ctx.increment_pc();
@@ -386,7 +383,7 @@ pub fn recompile_prefix(
     ctx: &mut CodegenCtx,
     instruction_sink: &mut InstructionSink,
     #[cfg(feature = "jit-trace")] sm83_disassembly: &mut String,
-) -> bool {
+) {
     let bytecode = dmg_state.memory.read_byte(ctx.traced_pc);
     let prefix_opcode = PrefixOpcode::decode(bytecode);
 
@@ -394,6 +391,10 @@ pub fn recompile_prefix(
     ctx.increment_m_cycles(1);
 
     match prefix_opcode {
+        PrefixOpcode::RlcR { x } => {
+            ctx.increment_pc();
+            instruction_sink.rlc_r(ctx, x);
+        }
         PrefixOpcode::RrcR { x } => {
             ctx.increment_pc();
             instruction_sink.rrc_r(ctx, x);
@@ -434,15 +435,8 @@ pub fn recompile_prefix(
             ctx.increment_pc();
             instruction_sink.set_b_r(ctx, b.into(), x);
         }
-        _ => {
-            // The prefixed instruction couldn't be added to the block, so retroactively decrement the M-cycle used to fetch it.
-            ctx.delta_m_cycles -= 1;
-            ctx.total_m_cycles -= 1;
-            return false;
-        }
     }
 
     #[cfg(feature = "jit-trace")]
     sm83_disassembly.push_str(&format!("{:?}\n", prefix_opcode));
-    true
 }
