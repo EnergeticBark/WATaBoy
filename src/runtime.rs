@@ -21,7 +21,7 @@ unsafe extern "C" {
     fn instantiate_and_link_module(buffer: *const u8, len: u32) -> i32;
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 struct CacheAddress {
     bank_number: u8,
     address: u16,
@@ -46,6 +46,7 @@ pub struct JitRuntime {
     checkpoint_index: usize,
     pub(crate) dmg_state: Cpu,
     block_cache: IntMap<CacheAddress, CompiledBlock>,
+    currently_executing: CacheAddress,
     rom_buffer: Vec<u8>,
     next_vblank: u64,
     #[cfg(feature = "log-uncompiled")]
@@ -143,6 +144,7 @@ impl JitRuntime {
             && let Some(compiled_block) = self.get_compiled_block()
             && self.wont_be_interrupted(&compiled_block)
         {
+            self.currently_executing = self.current_cache_address();
             self.execute_compiled_block(compiled_block);
         } else {
             #[cfg(feature = "log-uncompiled")]
@@ -208,8 +210,10 @@ impl JitRuntime {
 
     #[unsafe(no_mangle)]
     pub extern "C" fn process_checkpoint(checkpoint_index: u32, runtime: &mut JitRuntime) -> bool {
-        let cache_address = runtime.current_cache_address();
-        let current_block = runtime.block_cache.get(cache_address).unwrap();
+        let current_block = runtime
+            .block_cache
+            .get(runtime.currently_executing)
+            .unwrap();
         let next_checkpoint = current_block.checkpoints[checkpoint_index as usize + 1];
         let next_checkpoint_clock =
             runtime.block_start_clock + next_checkpoint.total_m_cycles as u64 * 4;
