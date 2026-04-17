@@ -389,53 +389,21 @@ pub fn recompile_prefix(
 
     // Always increment 1 M-cycle for fetching the prefixed opcode.
     ctx.increment_m_cycles(1);
+    ctx.increment_pc();
 
     match prefix_opcode {
-        PrefixOpcode::RlcR { x } => {
-            ctx.increment_pc();
-            instruction_sink.rlc_r(ctx, x);
-        }
-        PrefixOpcode::RrcR { x } => {
-            ctx.increment_pc();
-            instruction_sink.rrc_r(ctx, x);
-        }
-        PrefixOpcode::RlR { x } => {
-            ctx.increment_pc();
-            instruction_sink.rl_r(ctx, x);
-        }
-        PrefixOpcode::RrR { x } => {
-            ctx.increment_pc();
-            instruction_sink.rr_r(ctx, x);
-        }
-        PrefixOpcode::SlaR { x } => {
-            ctx.increment_pc();
-            instruction_sink.sla_r(ctx, x);
-        }
-        PrefixOpcode::SraR { x } => {
-            ctx.increment_pc();
-            instruction_sink.sra_r(ctx, x);
-        }
-        PrefixOpcode::SwapR { x } => {
-            ctx.increment_pc();
-            instruction_sink.swap_r(ctx, x);
-        }
-        PrefixOpcode::SrlR { x } => {
-            ctx.increment_pc();
-            instruction_sink.srl_r(ctx, x);
-        }
-        PrefixOpcode::BitBR { b, x } => {
-            ctx.increment_pc();
-            instruction_sink.bit_b_r(ctx, b.into(), x);
-        }
-        PrefixOpcode::ResBR { b, x } => {
-            ctx.increment_pc();
-            instruction_sink.res_b_r(ctx, b.into(), x);
-        }
-        PrefixOpcode::SetBR { b, x } => {
-            ctx.increment_pc();
-            instruction_sink.set_b_r(ctx, b.into(), x);
-        }
-    }
+        PrefixOpcode::RlcR { x } => instruction_sink.rlc_r(ctx, x),
+        PrefixOpcode::RrcR { x } => instruction_sink.rrc_r(ctx, x),
+        PrefixOpcode::RlR { x } => instruction_sink.rl_r(ctx, x),
+        PrefixOpcode::RrR { x } => instruction_sink.rr_r(ctx, x),
+        PrefixOpcode::SlaR { x } => instruction_sink.sla_r(ctx, x),
+        PrefixOpcode::SraR { x } => instruction_sink.sra_r(ctx, x),
+        PrefixOpcode::SwapR { x } => instruction_sink.swap_r(ctx, x),
+        PrefixOpcode::SrlR { x } => instruction_sink.srl_r(ctx, x),
+        PrefixOpcode::BitBR { b, x } => instruction_sink.bit_b_r(ctx, b.into(), x),
+        PrefixOpcode::ResBR { b, x } => instruction_sink.res_b_r(ctx, b.into(), x),
+        PrefixOpcode::SetBR { b, x } => instruction_sink.set_b_r(ctx, b.into(), x),
+    };
 
     #[cfg(feature = "jit-trace")]
     sm83_disassembly.push_str(&format!("{:?}\n", prefix_opcode));
