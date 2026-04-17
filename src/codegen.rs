@@ -71,7 +71,6 @@ pub struct WasmBlock {
 pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
     let pc = dmg_state.registers.pc;
 
-    #[cfg(feature = "caching")]
     // Don't cache below 0x100 if the boot ROM is mounted!
     if dmg_state.memory.boot_rom_mounted() && pc < 0x100 {
         return None;
@@ -387,7 +386,7 @@ pub fn recompile_prefix(
     let bytecode = dmg_state.memory.read_byte(ctx.traced_pc);
     let prefix_opcode = PrefixOpcode::decode(bytecode);
 
-    // Always increment 1 M-cycle for fetching the prefixed opcode.
+    // Always increment 1 M-cycle and PC for fetching the prefixed opcode.
     ctx.increment_m_cycles(1);
     ctx.increment_pc();
 

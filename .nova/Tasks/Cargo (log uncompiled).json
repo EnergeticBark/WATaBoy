@@ -5,6 +5,6 @@
   },
   "extensionTemplate" : "cargo",
   "extensionValues" : {
-    "xyz.valknight.rust.cargo.build.args" : "-Zbuild-std=core,std,alloc,proc_macro,panic_abort --target=wasm32-unknown-unknown --release --features caching,log-uncompiled"
+    "xyz.valknight.rust.cargo.build.args" : "-Zbuild-std=core,std,alloc,proc_macro,panic_abort --target=wasm32-unknown-unknown --release --features log-uncompiled"
   }
 }

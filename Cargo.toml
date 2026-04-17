@@ -20,5 +20,4 @@ intmap = "3.1.3"
 
 [features]
 jit-trace = ["dep:wasmprinter"]
-caching = []
 log-uncompiled = []

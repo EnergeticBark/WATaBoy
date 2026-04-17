@@ -54,7 +54,9 @@ pub struct JitRuntime {
 }
 
 impl JitRuntime {
-    fn execute_compiled_block(&mut self, compiled_block: CompiledBlock) {
+    fn execute_compiled_block(&mut self, cache_address: CacheAddress) {
+        let compiled_block = self.block_cache.get(cache_address).unwrap();
+        self.currently_executing = cache_address;
         self.block_start_clock = self.dmg_state.memory.clock;
         self.checkpoint_index = compiled_block.checkpoints.len() - 1;
 
@@ -90,7 +92,7 @@ impl JitRuntime {
     }
 
     // TODO: Handle bank switches while executing in a switchable bank (do any games or test ROMs do this?).
-    fn current_cache_address(&mut self) -> CacheAddress {
+    fn current_cache_address(&self) -> CacheAddress {
         let pc = self.dmg_state.registers.pc;
         let bank_number = match pc {
             ..0x4000 => 0,
@@ -105,10 +107,10 @@ impl JitRuntime {
     }
 
     // Get the next CompiledBlock at PC, either from the cache or by compiling a new block.
-    fn get_compiled_block(&mut self) -> Option<CompiledBlock> {
+    fn get_compiled_block(&mut self) -> Option<CacheAddress> {
         let cache_address = self.current_cache_address();
-        if let Some(compiled_block) = self.block_cache.get(cache_address) {
-            Some(compiled_block.clone())
+        if self.block_cache.contains_key(cache_address) {
+            Some(cache_address)
         } else {
             let jit_block = codegen::recompile(&mut self.dmg_state, self.ptr)?;
             #[cfg(feature = "jit-trace")]
@@ -123,15 +125,14 @@ impl JitRuntime {
             };
 
             // Add the block we just compiled to the cache.
-            #[cfg(feature = "caching")]
-            self.block_cache
-                .insert(cache_address, compiled_block.clone());
-            Some(compiled_block)
+            self.block_cache.insert(cache_address, compiled_block);
+            Some(cache_address)
         }
     }
 
     // Check if we can execute compiled_block up to the first checkpoint without being interrupted.
-    fn wont_be_interrupted(&self, compiled_block: &CompiledBlock) -> bool {
+    fn wont_be_interrupted(&self, cache_address: CacheAddress) -> bool {
+        let compiled_block = self.block_cache.get(cache_address).unwrap();
         self.dmg_state.memory.clock + compiled_block.checkpoints[0].total_m_cycles as u64 * 4
             <= self.dmg_state.memory.next_interrupt
     }
@@ -139,13 +140,12 @@ impl JitRuntime {
     // If possible, execute the next JIT-compiled block.
     pub(crate) fn execute(&mut self) {
         let pc = self.dmg_state.registers.pc;
-        // Only cache from ROM bank 00 for now.
+        // Only cache from ROM banks for now.
         if pc < 0x8000
-            && let Some(compiled_block) = self.get_compiled_block()
-            && self.wont_be_interrupted(&compiled_block)
+            && let Some(cache_address) = self.get_compiled_block()
+            && self.wont_be_interrupted(cache_address)
         {
-            self.currently_executing = self.current_cache_address();
-            self.execute_compiled_block(compiled_block);
+            self.execute_compiled_block(cache_address);
         } else {
             #[cfg(feature = "log-uncompiled")]
             {
