@@ -1,4 +1,4 @@
-use intmap::{IntKey, IntMap};
+use rustc_hash::FxHashMap;
 use std::panic;
 
 use crate::cache::CompiledBlock;
@@ -27,13 +27,8 @@ struct CacheAddress {
     address: u16,
 }
 
-impl IntKey for CacheAddress {
-    type Int = u32;
-
-    // You could also choose another prime number
-    const PRIME: Self::Int = u32::PRIME;
-
-    fn into_int(self) -> Self::Int {
+impl CacheAddress {
+    fn to_u32(self) -> u32 {
         ((self.bank_number as u32) << 16) | self.address as u32
     }
 }
@@ -45,7 +40,7 @@ pub struct JitRuntime {
     block_start_clock: u64,
     checkpoint_index: usize,
     pub(crate) dmg_state: Cpu,
-    block_cache: IntMap<CacheAddress, CompiledBlock>,
+    block_cache: FxHashMap<u32, CompiledBlock>,
     currently_executing: CacheAddress,
     rom_buffer: Vec<u8>,
     next_vblank: u64,
@@ -55,7 +50,11 @@ pub struct JitRuntime {
 
 impl JitRuntime {
     fn execute_compiled_block(&mut self, cache_address: CacheAddress) {
-        let compiled_block = self.block_cache.get(cache_address).unwrap();
+        let compiled_block = unsafe {
+            self.block_cache
+                .get(&cache_address.to_u32())
+                .unwrap_unchecked()
+        };
         self.currently_executing = cache_address;
         self.block_start_clock = self.dmg_state.memory.clock;
         self.checkpoint_index = compiled_block.checkpoints.len() - 1;
@@ -107,9 +106,9 @@ impl JitRuntime {
     }
 
     // Get the next CompiledBlock at PC, either from the cache or by compiling a new block.
-    fn get_compiled_block(&mut self) -> Option<CacheAddress> {
+    fn has_compiled_block(&mut self) -> Option<CacheAddress> {
         let cache_address = self.current_cache_address();
-        if self.block_cache.contains_key(cache_address) {
+        if self.block_cache.contains_key(&cache_address.to_u32()) {
             Some(cache_address)
         } else {
             let jit_block = codegen::recompile(&mut self.dmg_state, self.ptr)?;
@@ -125,14 +124,19 @@ impl JitRuntime {
             };
 
             // Add the block we just compiled to the cache.
-            self.block_cache.insert(cache_address, compiled_block);
+            self.block_cache
+                .insert(cache_address.to_u32(), compiled_block);
             Some(cache_address)
         }
     }
 
     // Check if we can execute compiled_block up to the first checkpoint without being interrupted.
     fn wont_be_interrupted(&self, cache_address: CacheAddress) -> bool {
-        let compiled_block = self.block_cache.get(cache_address).unwrap();
+        let compiled_block = unsafe {
+            self.block_cache
+                .get(&cache_address.to_u32())
+                .unwrap_unchecked()
+        };
         self.dmg_state.memory.clock + compiled_block.checkpoints[0].total_m_cycles as u64 * 4
             <= self.dmg_state.memory.next_interrupt
     }
@@ -142,7 +146,7 @@ impl JitRuntime {
         let pc = self.dmg_state.registers.pc;
         // Only cache from ROM banks for now.
         if pc < 0x8000
-            && let Some(cache_address) = self.get_compiled_block()
+            && let Some(cache_address) = self.has_compiled_block()
             && self.wont_be_interrupted(cache_address)
         {
             self.execute_compiled_block(cache_address);
@@ -212,7 +216,7 @@ impl JitRuntime {
     pub extern "C" fn process_checkpoint(checkpoint_index: u32, runtime: &mut JitRuntime) -> bool {
         let current_block = runtime
             .block_cache
-            .get(runtime.currently_executing)
+            .get(&runtime.currently_executing.to_u32())
             .unwrap();
         let next_checkpoint = current_block.checkpoints[checkpoint_index as usize + 1];
         let next_checkpoint_clock =
