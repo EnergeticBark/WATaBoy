@@ -40,7 +40,7 @@ pub struct JitRuntime {
     block_start_clock: u64,
     checkpoint_index: usize,
     pub(crate) dmg_state: Cpu,
-    block_cache: FxHashMap<u32, CompiledBlock>,
+    block_cache: FxHashMap<u32, Option<CompiledBlock>>,
     currently_executing: CacheAddress,
     rom_buffer: Vec<u8>,
     next_vblank: u64,
@@ -54,7 +54,10 @@ impl JitRuntime {
             self.block_cache
                 .get(&cache_address.to_u32())
                 .unwrap_unchecked()
+                .as_ref()
+                .unwrap()
         };
+
         self.currently_executing = cache_address;
         self.block_start_clock = self.dmg_state.memory.clock;
         self.checkpoint_index = compiled_block.checkpoints.len() - 1;
@@ -108,25 +111,32 @@ impl JitRuntime {
     // Get the next CompiledBlock at PC, either from the cache or by compiling a new block.
     fn has_compiled_block(&mut self) -> Option<CacheAddress> {
         let cache_address = self.current_cache_address();
-        if self.block_cache.contains_key(&cache_address.to_u32()) {
-            Some(cache_address)
-        } else {
-            let jit_block = codegen::recompile(&mut self.dmg_state, self.ptr)?;
-            #[cfg(feature = "jit-trace")]
-            console_log(&wasmprinter::print_bytes(&jit_block.buffer).unwrap());
+        match self.block_cache.get(&cache_address.to_u32()) {
+            Some(&None) => None,
+            Some(Some(_)) => Some(cache_address),
+            None => {
+                if let Some(jit_block) = codegen::recompile(&mut self.dmg_state, self.ptr) {
+                    #[cfg(feature = "jit-trace")]
+                    console_log(&wasmprinter::print_bytes(&jit_block.buffer).unwrap());
 
-            let ptr = jit_block.buffer.as_ptr();
-            let len = jit_block.buffer.len() as u32;
-            let func_idx = unsafe { instantiate_and_link_module(ptr, len) };
-            let compiled_block = CompiledBlock {
-                func_idx,
-                checkpoints: jit_block.ctx.checkpoints,
-            };
+                    let ptr = jit_block.buffer.as_ptr();
+                    let len = jit_block.buffer.len() as u32;
+                    let func_idx = unsafe { instantiate_and_link_module(ptr, len) };
+                    let compiled_block = CompiledBlock {
+                        func_idx,
+                        checkpoints: jit_block.ctx.checkpoints,
+                    };
 
-            // Add the block we just compiled to the cache.
-            self.block_cache
-                .insert(cache_address.to_u32(), compiled_block);
-            Some(cache_address)
+                    // Add the block we just compiled to the cache.
+                    self.block_cache
+                        .insert(cache_address.to_u32(), Some(compiled_block));
+                    Some(cache_address)
+                } else {
+                    // Cache "None", indicating that the instruction at this address must be interpreted.
+                    self.block_cache.insert(cache_address.to_u32(), None);
+                    None
+                }
+            }
         }
     }
 
@@ -136,7 +146,10 @@ impl JitRuntime {
             self.block_cache
                 .get(&cache_address.to_u32())
                 .unwrap_unchecked()
+                .as_ref()
+                .unwrap()
         };
+
         self.dmg_state.memory.clock + compiled_block.checkpoints[0].total_m_cycles as u64 * 4
             <= self.dmg_state.memory.next_interrupt
     }
@@ -217,7 +230,10 @@ impl JitRuntime {
         let current_block = runtime
             .block_cache
             .get(&runtime.currently_executing.to_u32())
+            .unwrap()
+            .as_ref()
             .unwrap();
+
         let next_checkpoint = current_block.checkpoints[checkpoint_index as usize + 1];
         let next_checkpoint_clock =
             runtime.block_start_clock + next_checkpoint.total_m_cycles as u64 * 4;
