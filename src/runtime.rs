@@ -1,7 +1,6 @@
-use rustc_hash::FxHashMap;
 use std::panic;
 
-use crate::cache::CompiledBlock;
+use crate::cache::{BlockCache, BlockSlot, CompiledBlock};
 use crate::{call_indirect, codegen, console_log};
 
 use sm83_interp::cpu::Cpu;
@@ -28,8 +27,8 @@ struct CacheAddress {
 }
 
 impl CacheAddress {
-    fn to_u32(self) -> u32 {
-        ((self.bank_number as u32) << 16) | self.address as u32
+    fn to_usize(self) -> usize {
+        ((self.bank_number as usize) << 16) | self.address as usize
     }
 }
 
@@ -40,7 +39,7 @@ pub struct JitRuntime {
     block_start_clock: u64,
     checkpoint_index: usize,
     pub(crate) dmg_state: Cpu,
-    block_cache: FxHashMap<u32, Option<CompiledBlock>>,
+    block_cache: BlockCache,
     currently_executing: CacheAddress,
     rom_buffer: Vec<u8>,
     next_vblank: u64,
@@ -50,13 +49,7 @@ pub struct JitRuntime {
 
 impl JitRuntime {
     fn execute_compiled_block(&mut self, cache_address: CacheAddress) {
-        let compiled_block = unsafe {
-            self.block_cache
-                .get(&cache_address.to_u32())
-                .unwrap_unchecked()
-                .as_ref()
-                .unwrap()
-        };
+        let compiled_block = self.block_cache[cache_address.to_usize()].unwrap_compiled_block();
 
         self.currently_executing = cache_address;
         self.block_start_clock = self.dmg_state.memory.clock;
@@ -111,10 +104,10 @@ impl JitRuntime {
     // Get the next CompiledBlock at PC, either from the cache or by compiling a new block.
     fn has_compiled_block(&mut self) -> Option<CacheAddress> {
         let cache_address = self.current_cache_address();
-        match self.block_cache.get(&cache_address.to_u32()) {
-            Some(&None) => None,
-            Some(Some(_)) => Some(cache_address),
-            None => {
+        match self.block_cache[cache_address.to_usize()] {
+            BlockSlot::Uncompilable => None,
+            BlockSlot::Compiled(_) => Some(cache_address),
+            BlockSlot::Uncompiled => {
                 if let Some(jit_block) = codegen::recompile(&mut self.dmg_state, self.ptr) {
                     #[cfg(feature = "jit-trace")]
                     console_log(&wasmprinter::print_bytes(&jit_block.buffer).unwrap());
@@ -128,12 +121,12 @@ impl JitRuntime {
                     };
 
                     // Add the block we just compiled to the cache.
-                    self.block_cache
-                        .insert(cache_address.to_u32(), Some(compiled_block));
+                    self.block_cache[cache_address.to_usize()] =
+                        BlockSlot::Compiled(compiled_block);
                     Some(cache_address)
                 } else {
                     // Cache "None", indicating that the instruction at this address must be interpreted.
-                    self.block_cache.insert(cache_address.to_u32(), None);
+                    self.block_cache[cache_address.to_usize()] = BlockSlot::Uncompilable;
                     None
                 }
             }
@@ -142,13 +135,7 @@ impl JitRuntime {
 
     // Check if we can execute compiled_block up to the first checkpoint without being interrupted.
     fn wont_be_interrupted(&self, cache_address: CacheAddress) -> bool {
-        let compiled_block = unsafe {
-            self.block_cache
-                .get(&cache_address.to_u32())
-                .unwrap_unchecked()
-                .as_ref()
-                .unwrap()
-        };
+        let compiled_block = self.block_cache[cache_address.to_usize()].unwrap_compiled_block();
 
         self.dmg_state.memory.clock + compiled_block.checkpoints[0].total_m_cycles as u64 * 4
             <= self.dmg_state.memory.next_interrupt
@@ -227,12 +214,8 @@ impl JitRuntime {
 
     #[unsafe(no_mangle)]
     pub extern "C" fn process_checkpoint(checkpoint_index: u32, runtime: &mut JitRuntime) -> bool {
-        let current_block = runtime
-            .block_cache
-            .get(&runtime.currently_executing.to_u32())
-            .unwrap()
-            .as_ref()
-            .unwrap();
+        let current_block =
+            runtime.block_cache[runtime.currently_executing.to_usize()].unwrap_compiled_block();
 
         let next_checkpoint = current_block.checkpoints[checkpoint_index as usize + 1];
         let next_checkpoint_clock =
