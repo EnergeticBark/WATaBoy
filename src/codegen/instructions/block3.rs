@@ -12,6 +12,7 @@ pub trait Block3 {
     fn add_n(&mut self, imm: i32) -> &mut Self;
     fn sub_n(&mut self, imm: i32) -> &mut Self;
     fn and_n(&mut self, imm: i32) -> &mut Self;
+    fn xor_n(&mut self, imm: i32) -> &mut Self;
     fn or_n(&mut self, imm: i32) -> &mut Self;
     fn cp_n(&mut self, imm: i32) -> &mut Self;
     fn pop_rr(&mut self, ctx: &mut CodegenCtx, r16_stack: R16Stack) -> &mut Self;
@@ -110,6 +111,19 @@ impl Block3 for InstructionSink<'_> {
              * A = A & IMM
              */
             .i32_and()
+            .local_tee(A)
+            // *** Calculate Zero Flag. ***
+            .i32_eqz() // If the A is zero, then 1, otherwise 0.
+            .set_flag(FlagBit::Zero)
+    }
+    fn xor_n(&mut self, imm: i32) -> &mut Self {
+        self.clear_flags()
+            .local_get(A)
+            .i32_const(imm)
+            /* Perform the XOR:
+             * A = A ^ IMM
+             */
+            .i32_xor()
             .local_tee(A)
             // *** Calculate Zero Flag. ***
             .i32_eqz() // If the A is zero, then 1, otherwise 0.
