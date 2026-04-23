@@ -4,14 +4,14 @@ use crate::cache::{BlockCache, BlockSlot, CompiledBlock};
 use crate::{call_indirect, codegen, console_log};
 
 use sm83_interp::cpu::Cpu;
-
-#[cfg(feature = "log-uncompiled")]
-use sm83_interp::cpu::opcodes::Opcode;
-#[cfg(feature = "log-uncompiled")]
-use sm83_interp::cpu::opcodes::PrefixOpcode;
-
 use sm83_interp::cpu::registers::Flags;
 use sm83_interp::joypad::ButtonsHeld;
+
+#[cfg(feature = "log-uncompiled")]
+use {
+    sm83_interp::cpu::opcodes::Opcode, sm83_interp::cpu::opcodes::PrefixOpcode,
+    std::collections::HashMap,
+};
 
 unsafe extern "C" {
     // Compiles and instantiates a Wasm module using the bytecode in `buffer`, then adds its function to table 1 of *this* module.
@@ -44,7 +44,7 @@ pub struct JitRuntime {
     rom_buffer: Vec<u8>,
     next_vblank: u64,
     #[cfg(feature = "log-uncompiled")]
-    uncompiled: IntMap<u16, u32>,
+    uncompiled: HashMap<u16, u32>,
 }
 
 impl JitRuntime {
@@ -127,6 +127,26 @@ impl JitRuntime {
                 } else {
                     // Cache "None", indicating that the instruction at this address must be interpreted.
                     self.block_cache[cache_address.to_usize()] = BlockSlot::Uncompilable;
+
+                    #[cfg(feature = "log-uncompiled")]
+                    {
+                        let pc = self.dmg_state.registers.pc;
+                        if !self.dmg_state.memory.boot_rom_mounted() && pc < 0x8000 {
+                            let mut opcode = self.dmg_state.memory.read_byte(pc) as u16;
+
+                            if opcode == 0xCB {
+                                let prefix_opcode = self.dmg_state.memory.read_byte(pc + 1);
+                                opcode = u16::from_be_bytes([0xCB, prefix_opcode]);
+                            }
+
+                            if let Some(count) = self.uncompiled.get_mut(&opcode) {
+                                *count += 1;
+                            } else {
+                                self.uncompiled.insert(opcode, 1);
+                            }
+                        }
+                    }
+
                     None
                 }
             }
@@ -151,36 +171,19 @@ impl JitRuntime {
         {
             self.execute_compiled_block(cache_address);
         } else {
-            #[cfg(feature = "log-uncompiled")]
-            {
-                if pc < 0x8000 {
-                    let mut opcode = self.dmg_state.memory.read_byte(pc) as u16;
-
-                    if opcode == 0xCB {
-                        let prefix_opcode = self.dmg_state.memory.read_byte(pc + 1);
-                        opcode = u16::from_be_bytes([0xCB, prefix_opcode]);
-                    }
-
-                    if let Some(count) = self.uncompiled.get_mut(opcode) {
-                        *count += 1;
-                    } else {
-                        self.uncompiled.insert(opcode, 1);
-                    }
-                }
-            }
-
             // Fallback to interpreter.
             self.dmg_state.execute().unwrap();
         }
     }
 
     #[cfg(feature = "log-uncompiled")]
-    fn log_uncompiled(&self) {
-        let mut not_compiled_vec: Vec<(u16, &u32)> = self.uncompiled.iter().collect();
+    #[unsafe(no_mangle)]
+    pub extern "C" fn log_uncompiled(&self) {
+        let mut not_compiled_vec: Vec<(&u16, &u32)> = self.uncompiled.iter().collect();
         not_compiled_vec.sort_by(|a, b| b.1.cmp(a.1));
         for (opcode, count) in not_compiled_vec {
-            if opcode <= 0xff {
-                let opcode = Opcode::decode(opcode as u8);
+            if *opcode <= 0xff {
+                let opcode = Opcode::decode(*opcode as u8);
                 console_log(&format!("{opcode:?}: {count}"));
             } else {
                 let prefix_opcode = PrefixOpcode::decode((opcode & 0xff) as u8);
@@ -242,9 +245,6 @@ impl JitRuntime {
 
     #[unsafe(no_mangle)]
     pub extern "C" fn step_vblank(&mut self) {
-        #[cfg(feature = "log-uncompiled")]
-        self.log_uncompiled();
-
         self.next_vblank += 70224;
         while self.dmg_state.memory.clock < self.next_vblank {
             self.execute();

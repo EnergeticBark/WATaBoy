@@ -16,7 +16,6 @@ sm83-interp = { path = "../wasmboy/sm83-interp" }
 hw-constants = { path = "../wasmboy/hw-constants" }
 # This library is massive, only include it when JIT tracing is enabled.
 wasmprinter = { version = "0.247.0", optional = true }
-rustc-hash = "2.1.2"
 
 [features]
 jit-trace = ["dep:wasmprinter"]

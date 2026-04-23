@@ -28,3 +28,8 @@ const renderLoop = () => {
 	requestAnimationFrame(renderLoop);
 };
 renderLoop();
+
+const logUncompiledButton = document.querySelector("#log-uncompiled");
+logUncompiledButton.addEventListener("click", () => {
+	runtime.logUncompiled();
+});

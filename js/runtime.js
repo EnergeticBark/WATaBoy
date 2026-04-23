@@ -95,4 +95,8 @@ export const Runtime = class {
 	
 	runBlarggTest = passed_line => this.instance.exports.run_blargg_test(this.jitRuntimePtr, passed_line);
 	runMooneyeTest = passed_line => this.instance.exports.run_mooneye_test(this.jitRuntimePtr);
+	
+	logUncompiled = () => {
+		this.instance.exports.log_uncompiled(this.jitRuntimePtr);
+	};
 }
