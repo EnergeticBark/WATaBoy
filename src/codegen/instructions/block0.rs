@@ -21,6 +21,7 @@ pub trait Block0 {
     fn dec_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn ld_r_n(&mut self, ctx: &mut CodegenCtx, r8: R8, imm: i32) -> &mut Self;
     fn rlca(&mut self) -> &mut Self;
+    fn rrca(&mut self) -> &mut Self;
     fn cpl(&mut self) -> &mut Self;
     fn scf(&mut self) -> &mut Self;
     fn ccf(&mut self) -> &mut Self;
@@ -196,6 +197,31 @@ impl Block0 for InstructionSink<'_> {
             .i32_or()
             .i32_const(0xff)
             .i32_and()
+            .local_set(A)
+    }
+
+    fn rrca(&mut self) -> &mut Self {
+        // Name our scratch register.
+        const BIT_0: u32 = PROLOGE_LENGTH as u32;
+        self.clear_flags()
+            /* Calculate the Carry flag:
+             * A & 0b0000_0001 == 0b0000_0001
+             */
+            .local_get(A)
+            .i32_const(0b0000_0001)
+            .i32_and()
+            .local_tee(BIT_0)
+            .set_flag(FlagBit::Carry)
+            /* Perform the shift right and set the highest bit to BIT_0:
+             * A = (A >> 1) | (BIT_0 << 7)
+             */
+            .local_get(A)
+            .i32_const(1)
+            .i32_shr_u()
+            .local_get(BIT_0)
+            .i32_const(7)
+            .i32_shl()
+            .i32_or()
             .local_set(A)
     }
 
