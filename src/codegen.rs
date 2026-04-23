@@ -256,6 +256,28 @@ pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
 
                 ctx.traced_pc = address;
             }
+            Opcode::CallNn => {
+                let prev_pc = ctx.traced_pc - 1;
+
+                let first_byte = dmg_state.memory.read_byte(ctx.traced_pc);
+                ctx.increment_pc();
+                let second_byte = dmg_state.memory.read_byte(ctx.traced_pc);
+                ctx.increment_pc();
+
+                let address = u16::from_le_bytes([first_byte, second_byte]);
+
+                let outside_rom = address >= 0x8000;
+                let from_bank0_to_switchable = prev_pc < 0x4000 && address >= 0x4000;
+                if outside_rom || from_bank0_to_switchable {
+                    // Couldn't follow the call, fall back to the interpreter.
+                    ctx.traced_pc -= 2;
+                    break;
+                }
+
+                instruction_sink.call_nn(&mut ctx);
+
+                ctx.traced_pc = address;
+            }
             Opcode::PopRr { x } => _ = instruction_sink.pop_rr(&mut ctx, x),
             Opcode::PushRr { x } => _ = instruction_sink.push_rr(&mut ctx, x),
             Opcode::Prefix => recompile_prefix(
@@ -286,6 +308,7 @@ pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
                 | Opcode::PushRr { .. }
                 | Opcode::LdMemA { .. }
                 | Opcode::LdAMem { .. }
+                | Opcode::CallNn
         ) {
             ctx.increment_m_cycles(opcodes::cycles::m_cycles(opcode).saturating_sub(1));
         }

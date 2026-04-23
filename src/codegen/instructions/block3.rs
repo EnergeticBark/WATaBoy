@@ -17,6 +17,7 @@ pub trait Block3 {
     fn xor_n(&mut self, imm: i32) -> &mut Self;
     fn or_n(&mut self, imm: i32) -> &mut Self;
     fn cp_n(&mut self, imm: i32) -> &mut Self;
+    fn call_nn(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
     fn pop_rr(&mut self, ctx: &mut CodegenCtx, r16_stack: R16Stack) -> &mut Self;
     fn push_rr(&mut self, ctx: &mut CodegenCtx, r16_stack: R16Stack) -> &mut Self;
     fn ldh_n_a(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self;
@@ -259,6 +260,17 @@ impl Block3 for InstructionSink<'_> {
             // *** Calculate Zero Flag. ***
             .i32_eqz() // If the result is zero, then 1, otherwise 0.
             .set_flag(FlagBit::Zero)
+    }
+    fn call_nn(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
+        ctx.increment_m_cycles(3);
+        let [low, high] = ctx.traced_pc.to_le_bytes();
+        // Pop the low byte.
+        self.i32_const(high as i32)
+            // Push the high byte.
+            .push_byte(ctx)
+            .i32_const(low as i32)
+            // Push the low byte.
+            .push_byte(ctx)
     }
     fn pop_rr(&mut self, ctx: &mut CodegenCtx, r16_stack: R16Stack) -> &mut Self {
         // Pop the low byte.
