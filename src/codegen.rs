@@ -17,6 +17,7 @@ use wasm_encoder::*;
 #[cfg(feature = "jit-trace")]
 use crate::console_log;
 
+const MIN_BLOCK_SIZE: usize = 1;
 const MAX_BLOCK_SIZE: usize = 500;
 
 #[derive(Copy, Clone)]
@@ -72,10 +73,14 @@ pub struct WasmBlock {
 // Try to produce a WasmBlock starting at dmg_state's current program counter.
 // TODO: Read one opcode at a time until a branching statement is reached. -> Codegen Wasm for each instruction.
 pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
-    let pc = dmg_state.registers.pc;
+    let mut ctx = CodegenCtx {
+        runtime_ptr,
+        traced_pc: dmg_state.registers.pc,
+        ..Default::default()
+    };
 
     // Don't cache below 0x100 if the boot ROM is mounted!
-    if dmg_state.memory.boot_rom_mounted() && pc < 0x100 {
+    if dmg_state.memory.boot_rom_mounted() && ctx.traced_pc < 0x100 {
         return None;
     }
 
@@ -91,11 +96,6 @@ pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
         instruction_sink
     });
 
-    let mut ctx = CodegenCtx {
-        runtime_ptr,
-        traced_pc: pc,
-        ..Default::default()
-    };
     loop {
         let bytecode = dmg_state.memory.read_byte(ctx.traced_pc);
         let opcode = Opcode::decode(bytecode).unwrap();
@@ -327,7 +327,7 @@ pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
     ctx.total_m_cycles -= 1;
     ctx.traced_pc -= 1;
 
-    if ctx.traced_pc == pc {
+    if ctx.block_size < MIN_BLOCK_SIZE {
         return None;
     }
 

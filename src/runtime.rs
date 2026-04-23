@@ -45,6 +45,10 @@ pub struct JitRuntime {
     next_vblank: u64,
     #[cfg(feature = "log-uncompiled")]
     uncompiled: HashMap<u16, u32>,
+    #[cfg(feature = "log-uncompiled")]
+    too_long: usize,
+    #[cfg(feature = "log-uncompiled")]
+    not_too_long: usize,
 }
 
 impl JitRuntime {
@@ -170,7 +174,20 @@ impl JitRuntime {
             && self.wont_be_interrupted(cache_address)
         {
             self.execute_compiled_block(cache_address);
+
+            #[cfg(feature = "log-uncompiled")]
+            {
+                self.not_too_long += 1;
+            }
         } else {
+            #[cfg(feature = "log-uncompiled")]
+            if pc < 0x8000
+                && let Some(cache_address) = self.has_compiled_block()
+                && !self.wont_be_interrupted(cache_address)
+            {
+                self.too_long += 1;
+            }
+
             // Fallback to interpreter.
             self.dmg_state.execute().unwrap();
         }
@@ -190,6 +207,9 @@ impl JitRuntime {
                 console_log(&format!("{prefix_opcode:?}: {count}"));
             }
         }
+
+        console_log(&format!("Too Long: {}", self.too_long));
+        console_log(&format!("Not Too Long: {}", self.not_too_long));
     }
 }
 
