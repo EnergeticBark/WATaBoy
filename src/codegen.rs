@@ -17,6 +17,8 @@ use wasm_encoder::*;
 #[cfg(feature = "jit-trace")]
 use crate::console_log;
 
+const MAX_BLOCK_SIZE: usize = 500;
+
 #[derive(Copy, Clone)]
 pub struct Checkpoint {
     pub exit_pc: u16,
@@ -27,6 +29,7 @@ pub struct Checkpoint {
 
 #[derive(Default)]
 pub struct CodegenCtx {
+    pub block_size: usize,
     pub runtime_ptr: usize,
     pub checkpoints: Vec<Checkpoint>,
     pub traced_pc: u16,
@@ -131,6 +134,24 @@ pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
             Opcode::Cpl => _ = instruction_sink.cpl(),
             Opcode::Scf => _ = instruction_sink.scf(),
             Opcode::Ccf => _ = instruction_sink.ccf(),
+            Opcode::JrE => {
+                let prev_pc = ctx.traced_pc - 1;
+
+                let e = dmg_state.memory.read_byte(ctx.traced_pc).cast_signed();
+                ctx.increment_pc();
+
+                let address = ctx.traced_pc.wrapping_add_signed(i16::from(e));
+
+                let outside_rom = address >= 0x8000;
+                let from_bank0_to_switchable = prev_pc < 0x4000 && address >= 0x4000;
+                if outside_rom || from_bank0_to_switchable {
+                    // Couldn't follow the jump, fall back to the interpreter.
+                    ctx.traced_pc -= 1;
+                    break;
+                }
+
+                ctx.traced_pc = address;
+            }
 
             // Block 1
             Opcode::LdRR { x, y } => _ = instruction_sink.ld_r_r(&mut ctx, x, y),
@@ -264,7 +285,12 @@ pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
         }
 
         #[cfg(feature = "jit-trace")]
-        sm83_disassembly.push_str(&format!("{:?}\n", opcode))
+        sm83_disassembly.push_str(&format!("{:?}\n", opcode));
+
+        ctx.block_size += 1;
+        if ctx.block_size >= MAX_BLOCK_SIZE {
+            break;
+        }
     }
 
     // The final instruction couldn't be added to the block, so retroactively decrement the M-cycle and PC used to fetch it.
