@@ -131,6 +131,7 @@ pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
             }
             Opcode::Rlca => _ = instruction_sink.rlca(),
             Opcode::Rrca => _ = instruction_sink.rrca(),
+            Opcode::Rra => _ = instruction_sink.rra(),
             Opcode::Cpl => _ = instruction_sink.cpl(),
             Opcode::Scf => _ = instruction_sink.scf(),
             Opcode::Ccf => _ = instruction_sink.ccf(),
