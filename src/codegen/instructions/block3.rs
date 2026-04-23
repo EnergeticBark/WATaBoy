@@ -10,6 +10,7 @@ use wasm_encoder::*;
 // See: https://gbdev.io/pandocs/CPU_Instruction_Set.html#block-1-8-bit-register-to-register-loads
 pub trait Block3 {
     fn add_n(&mut self, imm: i32) -> &mut Self;
+    fn adc_n(&mut self, imm: i32) -> &mut Self;
     fn sub_n(&mut self, imm: i32) -> &mut Self;
     fn sbc_n(&mut self, imm: i32) -> &mut Self;
     fn and_n(&mut self, imm: i32) -> &mut Self;
@@ -69,6 +70,51 @@ impl Block3 for InstructionSink<'_> {
             .i32_const(0x0f)
             .i32_gt_u()
             .set_flag(FlagBit::HalfCarry)
+    }
+    fn adc_n(&mut self, imm: i32) -> &mut Self {
+        // Name our scratch registers.
+        const PREV_CARRY: u32 = PROLOGE_LENGTH as u32;
+        self.check_flag(FlagBit::Carry) // *** Store original value of Carry. ***
+            .local_set(PREV_CARRY)
+            .clear_flags()
+            /* Calculate Half-Carry Flag:
+             * ((A & 0x0f) + (IMM & 0x0f)) + PREV_CARRY  > 0x0f
+             */
+            .local_get(A)
+            .i32_const(0x0f)
+            .i32_and() // (A & 0x0f)
+            .i32_const(imm & 0x0f)
+            .i32_add()
+            .local_get(PREV_CARRY)
+            .i32_add()
+            .i32_const(0x0f)
+            .i32_gt_u()
+            .set_flag(FlagBit::HalfCarry)
+            /* Perform the ADD (result not yet truncated):
+             * A = A + IMM + PREV_CARRY
+             */
+            .local_get(A)
+            .i32_const(imm)
+            .i32_add()
+            .local_get(PREV_CARRY)
+            .i32_add()
+            .local_tee(A)
+            /* Calculate Overflow Flag:
+             * A > 0xff
+             */
+            .i32_const(0xff)
+            .i32_gt_u() // If result > 255 (overflow), then 1, otherwise 0.
+            .set_flag(FlagBit::Carry)
+            /* Truncate A to 8-bits:
+             * A &= 0xff
+             */
+            .local_get(A)
+            .i32_const(0xff)
+            .i32_and()
+            .local_tee(A)
+            // *** Calculate Zero Flag. ***
+            .i32_eqz() // If the A is zero, then 1, otherwise 0.
+            .set_flag(FlagBit::Zero)
     }
     fn sub_n(&mut self, imm: i32) -> &mut Self {
         // Name our scratch register.
@@ -136,7 +182,7 @@ impl Block3 for InstructionSink<'_> {
             .local_get(A)
             .i32_const(imm)
             .local_get(PREV_CARRY)
-            .i32_add() // (R8 + PREV_CARRY)
+            .i32_add() // (IMM + PREV_CARRY)
             .i32_sub()
             .i32_const(0xff)
             .i32_and()
@@ -187,7 +233,7 @@ impl Block3 for InstructionSink<'_> {
     fn cp_n(&mut self, imm: i32) -> &mut Self {
         self.assign_flags(false, true, false, false) // Always set subtraction to 1.
             /* Calculate Half-Carry Flag:
-             * (A & 0x0f) < (R8 & 0x0f)
+             * (A & 0x0f) < (IMM & 0x0f)
              */
             .local_get(A)
             .i32_const(0x0f)
@@ -196,14 +242,14 @@ impl Block3 for InstructionSink<'_> {
             .i32_lt_u()
             .set_flag(FlagBit::HalfCarry)
             /* Calculate Carry Flag:
-             * A < R8
+             * A < IMM
              */
             .local_get(A)
             .i32_const(imm)
-            .i32_lt_u() // If A < R8 (underflow), then 1, otherwise 0.
+            .i32_lt_u() // If A < IMM (underflow), then 1, otherwise 0.
             .set_flag(FlagBit::Carry)
             /* Perform the SUB:
-             * (A - R8) & 0xff
+             * (A - IMM) & 0xff
              */
             .local_get(A)
             .i32_const(imm)
