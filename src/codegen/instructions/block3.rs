@@ -1,7 +1,7 @@
 use crate::codegen::CodegenCtx;
 use crate::codegen::macros::{FlagBit, Sm83Macros};
 use crate::codegen::module::PROLOGE_LENGTH;
-use crate::codegen::registers::{A, SP};
+use crate::codegen::registers::{A, C, SP};
 
 use sm83_interp::cpu::opcodes::parameters::{R16, R16Stack};
 use wasm_encoder::*;
@@ -20,6 +20,7 @@ pub trait Block3 {
     fn call_nn(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
     fn pop_rr(&mut self, ctx: &mut CodegenCtx, r16_stack: R16Stack) -> &mut Self;
     fn push_rr(&mut self, ctx: &mut CodegenCtx, r16_stack: R16Stack) -> &mut Self;
+    fn ldh_c_a(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
     fn ldh_n_a(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self;
     fn ld_nn_a(&mut self, ctx: &mut CodegenCtx, imm: u16) -> &mut Self;
     fn ldh_a_n(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self;
@@ -286,6 +287,14 @@ impl Block3 for InstructionSink<'_> {
             .push_byte(ctx)
             // Push the low byte.
             .push_byte(ctx)
+    }
+    fn ldh_c_a(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
+        self.local_get(A)
+            .local_get(C)
+            .i32_const(0xFF00)
+            .i32_or()
+            .call_write_byte(ctx)
+            .insert_checkpoint(ctx)
     }
     fn ldh_n_a(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self {
         ctx.increment_m_cycles(1);

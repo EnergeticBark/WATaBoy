@@ -208,6 +208,7 @@ pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
                 ctx.increment_pc();
                 instruction_sink.cp_n(imm as i32);
             }
+            Opcode::LdhCA => _ = instruction_sink.ldh_c_a(&mut ctx),
             Opcode::LdhNA => {
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
