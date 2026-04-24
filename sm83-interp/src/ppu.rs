@@ -807,11 +807,12 @@ impl Ppu {
     }
 
     pub fn predict_next_interrupt(&mut self, ie: InterruptBits) -> u64 {
+        let current_dot = i64::from(self.line_number) * i64::from(DOTS_PER_SCANLINE)
+            + i64::from(self.dots_this_line);
+
         self.next_vblank_interrupt = if ie.vblank() {
             // VBlank always happens on this dot.
             let vblank_dot = 144 * i64::from(DOTS_PER_SCANLINE) + 4;
-            let current_dot = i64::from(self.line_number) * i64::from(DOTS_PER_SCANLINE)
-                + i64::from(self.dots_this_line);
 
             let mut dots_from_vblank = vblank_dot - current_dot;
             if dots_from_vblank.is_negative() {
@@ -822,7 +823,41 @@ impl Ppu {
         } else {
             u64::MAX
         };
-        self.next_lcd_interrupt = if ie.lcd() { 0 } else { u64::MAX };
+
+        self.next_lcd_interrupt = if ie.lcd() {
+            let stat = self.registers.stat;
+            let next_lyc_interrupt = if stat.lyc_int_select() {
+                let lyc = self.registers.lyc;
+
+                if lyc >= 153 {
+                    // TODO: Special timing for ly_to_compare_lyc 153.
+                    0
+                } else {
+                    // TODO: This needs more testing, but it passes the test ROMs.
+                    // LYC happens on this dot.
+                    let lyc_dot = i64::from(lyc) * i64::from(DOTS_PER_SCANLINE) + 4;
+
+                    let mut dots_from_lyc = lyc_dot - current_dot;
+                    if dots_from_lyc.is_negative() {
+                        dots_from_lyc += i64::from(DOTS_PER_FRAME);
+                    }
+
+                    self.clock + dots_from_lyc.cast_unsigned()
+                }
+            } else {
+                u64::MAX
+            };
+            let next_mode2_interrupt = if stat.mode2_int_select() { 0 } else { u64::MAX };
+            let next_mode1_interrupt = if stat.mode1_int_select() { 0 } else { u64::MAX };
+            let next_mode0_interrupt = if stat.mode0_int_select() { 0 } else { u64::MAX };
+
+            next_lyc_interrupt
+                .min(next_mode2_interrupt)
+                .min(next_mode1_interrupt)
+                .min(next_mode0_interrupt)
+        } else {
+            u64::MAX
+        };
 
         self.next_vblank_interrupt.min(self.next_lcd_interrupt)
         // TODO: actual prediction...
