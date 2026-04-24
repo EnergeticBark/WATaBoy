@@ -394,7 +394,7 @@ impl Ppu {
                 .enumerate()
                 .for_each(|(nth_bit, new_pixel)| {
                     let pixel_index = obj.x_pos as usize + nth_bit + scrolled_left as usize;
-                    if pixel_index < SCREEN_WIDTH as usize + 8 {
+                    if pixel_index < line_buffer.len() {
                         let old_pixel = &mut line_buffer[pixel_index];
                         match old_pixel.palette() {
                             PaletteSelect::Bgp => *old_pixel = mix_pixels(*old_pixel, new_pixel),
