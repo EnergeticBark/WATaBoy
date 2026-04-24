@@ -38,6 +38,7 @@ pub struct Mbc {
     ram_enabled: bool,
     rom: Vec<u8>,
     ext_ram: Vec<u8>,
+    pub current_rom_bank: u8,
     current_rom_bank_start: usize,
     current_ram_bank: u8,
     banking_mode: bool,
@@ -99,6 +100,7 @@ impl Mbc {
         #[cfg(feature = "mbc-logging")]
         info!(target: "mbc_events", "Switching to ROM bank #{bank_number}");
 
+        self.current_rom_bank = bank_number;
         self.current_rom_bank_start = 0x4000 * (bank_number as usize - 1);
     }
 
@@ -214,6 +216,7 @@ impl Default for Mbc {
             ram_enabled: false,
             rom: Vec::new(),
             ext_ram: Vec::new(),
+            current_rom_bank: 1,
             current_rom_bank_start: 0,
             current_ram_bank: 0,
             banking_mode: false,

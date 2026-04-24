@@ -25,7 +25,7 @@ pub struct AddressBus {
     pub timers: Timers,
     #[rkyv(with = Skip)]
     pub ppu: Ppu,
-    mbc: Mbc,
+    pub mbc: Mbc,
     #[rkyv(with = Skip)]
     pub buttons_held: ButtonsHeld,
     pub clock: u64,
