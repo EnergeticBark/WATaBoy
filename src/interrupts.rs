@@ -2,6 +2,7 @@ use egui::{Checkbox, Label, TextWrapMode};
 use egui_extras::{Column, TableBody, TableBuilder};
 use hw_constants::io_regs::STAT;
 use hw_constants::io_regs::{IE, IF};
+use sm83_interp::addressable::Addressable;
 use sm83_interp::cpu::Cpu;
 use sm83_interp::cpu::InterruptBits;
 use sm83_interp::ppu::{LcdStatus, StatMode};
@@ -79,25 +80,23 @@ pub fn show(ui: &mut egui::Ui, dmg_state: &Cpu) {
         });
 }
 
+fn cycles_until_interrupt(next_interrupt: u64, current_clock: u64) -> Option<u64> {
+    // We use u64::MAX to represent interrupts that will never happen, i.e., VBlank interrupt is disabled in IE.
+    if next_interrupt == u64::MAX {
+        None
+    } else {
+        Some(next_interrupt.saturating_sub(current_clock))
+    }
+}
+
 fn draw_ie_and_if_body(body: TableBody<'_>, dmg_state: &Cpu) {
     let intr_enable = InterruptBits::from_bits(dmg_state.memory.buffer[IE as usize]);
     let intr_flag = InterruptBits::from_bits(dmg_state.memory.buffer[IF as usize]);
 
-    let next_vblank = if dmg_state.memory.ppu.next_vblank_interrupt < u64::MAX {
-        Some(dmg_state.memory.ppu.next_vblank_interrupt - dmg_state.memory.clock)
-    } else {
-        None
-    };
-    let next_lcd = if dmg_state.memory.ppu.next_lcd_interrupt < u64::MAX {
-        Some(dmg_state.memory.ppu.next_lcd_interrupt - dmg_state.memory.clock)
-    } else {
-        None
-    };
-    let next_timers = if dmg_state.memory.timers.next_interrupt < u64::MAX {
-        Some(dmg_state.memory.timers.next_interrupt - dmg_state.memory.clock)
-    } else {
-        None
-    };
+    let clock = dmg_state.memory.clock;
+    let next_vblank = cycles_until_interrupt(dmg_state.memory.ppu.next_vblank_interrupt, clock);
+    let next_lcd = cycles_until_interrupt(dmg_state.memory.ppu.next_lcd_interrupt, clock);
+    let next_timers = cycles_until_interrupt(dmg_state.memory.timers.next_interrupt, clock);
 
     let values = [
         (
@@ -154,7 +153,7 @@ fn draw_checkbox_row(body: &mut TableBody<'_>, status: &str, checked: bool) {
 }
 
 fn draw_stat_body(body: &mut TableBody<'_>, dmg_state: &Cpu) {
-    let stat = LcdStatus::from_bits(dmg_state.memory.buffer[STAT as usize]);
+    let stat = LcdStatus::from_bits(dmg_state.memory.ppu.read_byte(STAT, 0));
 
     body.row(ROW_HEIGHT, |mut row| {
         row.col(|ui| {
