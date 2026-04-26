@@ -14,13 +14,10 @@ pub fn draw_register_table(ui: &mut Ui, dmg_state: &Cpu) {
                 .striped(true)
                 .column(Column::auto())
                 .column(Column::auto())
-                .header(18.0, |mut header| {
-                    header.col(|ui| {
-                        ui.label("Register");
-                    });
-                    header.col(|ui| {
-                        ui.label("Value");
-                    });
+                .header(ROW_HEIGHT, |mut header| {
+                    for column_name in ["Register", "Value"] {
+                        header.col(|ui| _ = ui.label(column_name));
+                    }
                 })
                 .body(|body| {
                     draw_registers_body(body, dmg_state);
@@ -38,12 +35,9 @@ pub fn draw_register_table(ui: &mut Ui, dmg_state: &Cpu) {
                 .column(Column::auto())
                 .column(Column::remainder())
                 .header(ROW_HEIGHT, |mut header| {
-                    header.col(|ui| {
-                        ui.label("State");
-                    });
-                    header.col(|ui| {
-                        ui.label("Value");
-                    });
+                    for column_name in ["State", "Value"] {
+                        header.col(|ui| _ = ui.label(column_name));
+                    }
                 })
                 .body(|mut body| {
                     draw_flags_body(&mut body, dmg_state);

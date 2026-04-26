@@ -18,12 +18,9 @@ pub fn show(ui: &mut egui::Ui, dmg_state: &Cpu) {
         .column(Column::auto())
         .column(Column::remainder())
         .header(ROW_HEIGHT, |mut header| {
-            header.col(|ui| {
-                ui.label("Address (Range)");
-            });
-            header.col(|ui| {
-                ui.label("Count");
-            });
+            for column_name in ["Address (Range)", "Count"] {
+                header.col(|ui| _ = ui.label(column_name));
+            }
         })
         .body(|body| {
             draw_woke_timers_body(body, &dmg_state.memory.woke_timers_reads.0);
@@ -37,12 +34,9 @@ pub fn show(ui: &mut egui::Ui, dmg_state: &Cpu) {
         .column(Column::auto())
         .column(Column::remainder())
         .header(ROW_HEIGHT, |mut header| {
-            header.col(|ui| {
-                ui.label("Address (Range)");
-            });
-            header.col(|ui| {
-                ui.label("Count");
-            });
+            for column_name in ["Address (Range)", "Count"] {
+                header.col(|ui| _ = ui.label(column_name));
+            }
         })
         .body(|body| {
             draw_woke_timers_body(body, &dmg_state.memory.woke_timers_writes.0);

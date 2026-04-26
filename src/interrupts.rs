@@ -20,18 +20,9 @@ pub fn show(ui: &mut egui::Ui, dmg_state: &Cpu) {
         .column(Column::auto())
         .column(Column::remainder())
         .header(ROW_HEIGHT, |mut header| {
-            header.col(|ui| {
-                ui.label("Interrupt");
-            });
-            header.col(|ui| {
-                ui.label("Enabled");
-            });
-            header.col(|ui| {
-                ui.label("Flagged");
-            });
-            header.col(|ui| {
-                ui.label("Scheduled");
-            });
+            for column_name in ["Interrupt", "Enabled", "Flagged", "Scheduled"] {
+                header.col(|ui| _ = ui.label(column_name));
+            }
         })
         .body(|body| {
             draw_ie_and_if_body(body, dmg_state);
@@ -47,12 +38,9 @@ pub fn show(ui: &mut egui::Ui, dmg_state: &Cpu) {
         .column(Column::auto())
         .column(Column::remainder())
         .header(ROW_HEIGHT, |mut header| {
-            header.col(|ui| {
-                ui.label("Status");
-            });
-            header.col(|ui| {
-                ui.label("Value");
-            });
+            for column_name in ["Status", "Value"] {
+                header.col(|ui| _ = ui.label(column_name));
+            }
         })
         .body(|mut body| {
             draw_stat_body(&mut body, dmg_state);
@@ -68,12 +56,9 @@ pub fn show(ui: &mut egui::Ui, dmg_state: &Cpu) {
         .column(Column::auto())
         .column(Column::remainder())
         .header(ROW_HEIGHT, |mut header| {
-            header.col(|ui| {
-                ui.label("Status");
-            });
-            header.col(|ui| {
-                ui.label("Value");
-            });
+            for column_name in ["Status", "Value"] {
+                header.col(|ui| _ = ui.label(column_name));
+            }
         })
         .body(|mut body| {
             draw_tac_body(&mut body, dmg_state);

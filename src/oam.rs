@@ -10,33 +10,19 @@ pub fn draw_oam_table(ui: &mut Ui, tiles: &mut [TextureHandle], dmg_state: &Cpu)
         .striped(true)
         .columns(Column::auto(), 9)
         .header(18.0, |mut header| {
-            header.col(|ui| {
-                ui.label("Object #");
-            });
-            header.col(|ui| {
-                ui.label("Y Pos");
-            });
-            header.col(|ui| {
-                ui.label("X Pos");
-            });
-            header.col(|ui| {
-                ui.label("Tile Index");
-            });
-            header.col(|ui| {
-                ui.label("Tile");
-            });
-            header.col(|ui| {
-                ui.label("Priority");
-            });
-            header.col(|ui| {
-                ui.label("Y Flip");
-            });
-            header.col(|ui| {
-                ui.label("X Flip");
-            });
-            header.col(|ui| {
-                ui.label("Palette");
-            });
+            for column_name in [
+                "Object #",
+                "Y Pos",
+                "X Pos",
+                "Tile Index",
+                "Tile",
+                "Priority",
+                "Y Flip",
+                "X Flip",
+                "Palette",
+            ] {
+                header.col(|ui| _ = ui.label(column_name));
+            }
         })
         .body(|body| {
             draw_oam_body(body, tiles, dmg_state);
