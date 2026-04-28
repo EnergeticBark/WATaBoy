@@ -12,8 +12,8 @@ lto = true
 
 [dependencies]
 wasm-encoder = "0.247.0"
-sm83-interp = { path = "../wasmboy/sm83-interp" }
-hw-constants = { path = "../wasmboy/hw-constants" }
+sm83-interp = { path = "../sm83-interp" }
+hw-constants = { path = "../hw-constants" }
 # This library is massive, only include it when JIT tracing is enabled.
 wasmprinter = { version = "0.247.0", optional = true }
 
