@@ -1,0 +1,10 @@
+{
+  "extension" : {
+    "identifier" : "xyz.valknight.rust",
+    "name" : "Rust 3 (??)"
+  },
+  "extensionTemplate" : "cargo",
+  "extensionValues" : {
+    "xyz.valknight.rust.cargo.build.args" : "-Zbuild-std=core,std,alloc,proc_macro,panic_abort --target=wasm32-unknown-unknown --features jit-trace --release"
+  }
+}

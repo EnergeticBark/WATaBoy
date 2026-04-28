@@ -1,0 +1,6 @@
+{
+  "xyz.valknight.rust.env-vars" : [
+
+  ],
+  "xyz.valknight.rust.lint-args" : "--target=wasm32-unknown-unknown --features jit-trace"
+}
