@@ -1,3 +1,4 @@
+import { testROMPath } from "./common.js";
 import { Runtime } from "../runtime.js";
 
 // Parameters for the parameterised test.
@@ -20,7 +21,7 @@ test.each(roms)("%p", async (romName, passed_line) => {
 	const runtime = new Runtime();
 	const wasmSource = await Bun.file("./target/wasm32-unknown-unknown/release/sm83_jit.wasm").arrayBuffer();
 	await runtime.init(wasmSource);
-	const rom = await Bun.file("./js/__tests__/roms/blarggs/cpu_instrs/" + romName).bytes();
+	const rom = await Bun.file(testROMPath + "blarggs/cpu_instrs/" + romName).bytes();
 	runtime.loadRom(rom);
 	
 	let passed = runtime.runBlarggTest(passed_line);
