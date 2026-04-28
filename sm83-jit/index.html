@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<script type="module" src="js/main.js"></script>
+	<style>
+		#lcd {
+			border: 1px solid;
+			/* 5x scale. */
+			width: 640px;
+			height: 576px;
+			/* It looks kinda funny blurry. */
+			/*image-rendering: pixelated;*/
+		}
+	</style>
+	<title>WATaBoy</title>
+</head>
+<body>
+	<canvas id="lcd" width="160" height="144"></canvas>
+	<p id="frametimes"></p>
+	<input type="button" id="log-uncompiled" value="Log Uncompiled" />
+</body>
+</html>

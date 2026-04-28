@@ -1,0 +1,22 @@
+[package]
+name = "sm83-jit"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[profile.release]
+debug = true
+lto = true
+
+[dependencies]
+wasm-encoder = "0.247.0"
+sm83-interp = { path = "../wasmboy/sm83-interp" }
+hw-constants = { path = "../wasmboy/hw-constants" }
+# This library is massive, only include it when JIT tracing is enabled.
+wasmprinter = { version = "0.247.0", optional = true }
+
+[features]
+jit-trace = ["dep:wasmprinter"]
+log-uncompiled = []
