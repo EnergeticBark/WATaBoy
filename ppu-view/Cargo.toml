@@ -1,0 +1,51 @@
+[package]
+name = "ppu-view"
+version = "0.1.0"
+authors = ["Seth Humphries <seth@humphri.es>"]
+edition = "2024"
+include = ["LICENSE-APACHE", "LICENSE-MIT", "**/*.rs", "Cargo.toml"]
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
+
+[dependencies]
+hw-constants = { path = "../wasmboy/hw-constants" }
+sm83-interp = {
+    path = "../wasmboy/sm83-interp",
+    features = ["woke-counters"],
+    #features = ["ppu-logging", "cpu-logging"],
+}
+egui = "0.34.1"
+egui_extras = "0.34.1"
+eframe = { version = "0.34.1", default-features = false, features = [
+    "default_fonts", # Embed the default egui fonts.
+    "glow", # Use the glow rendering backend. Alternative: "wgpu".
+    "persistence", # Enable restoring app state when restarting the app.
+] }
+log = "0.4.29"
+egui_logger = "0.10.0"
+rkyv = "0.8.14"
+
+# native:
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+env_logger = "0.11.8"
+
+# web:
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = "0.4.50"
+web-sys = "0.3.70"              # to access the DOM (to hide the loading text)
+
+[profile.release]
+opt-level = 2 # fast and small wasm
+
+# Optimize all dependencies even in debug builds:
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release-with-debug]
+inherits = "release"
+debug = true
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
