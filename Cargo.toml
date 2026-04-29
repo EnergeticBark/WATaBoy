@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["hw-constants", "sm83-interp", "sm83-jit"]
+members = ["hw-constants", "ppu-view", "sm83-interp", "sm83-jit"]
 
 [profile.release]
 debug = true
