@@ -1,6 +1,7 @@
 [package]
 name = "sm83-jit"
 version = "0.1.0"
+authors = ["Seth Humphries <seth@humphri.es>"]
 edition = "2024"
 
 [lib]
