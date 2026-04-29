@@ -18,8 +18,6 @@ use sm83_interp::joypad::ButtonsHeld;
 use std::fs::File;
 use std::io::{Read, Write};
 
-const NINTENDO_LOGO: &[u8; 48] = include_bytes!("../nintendo_logo.bin");
-
 pub struct PPUViewApp {
     dmg_state: Cpu,
     tiles: Vec<TextureHandle>,
@@ -46,16 +44,7 @@ impl PPUViewApp {
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
 
         Self {
-            dmg_state: {
-                let mut cpu = Cpu::default();
-                cpu.memory.buffer[0x0104..0x0134].copy_from_slice(NINTENDO_LOGO);
-                /* Our rom header is all zeros, so just hardcode the checksum of those zeros to make
-                   the bootrom happy.
-                   See: https://gbdev.io/pandocs/The_Cartridge_Header.html#014d--header-checksum
-                */
-                cpu.memory.buffer[0x014D] = 0xE7;
-                cpu
-            },
+            dmg_state: Cpu::default(),
             tiles: (0..384)
                 .map(|tile_index| {
                     cc.egui_ctx.load_texture(
