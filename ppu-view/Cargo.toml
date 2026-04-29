@@ -10,9 +10,9 @@ all-features = true
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
 [dependencies]
-hw-constants = { path = "../wasmboy/hw-constants" }
+hw-constants = { path = "../hw-constants" }
 sm83-interp = {
-    path = "../wasmboy/sm83-interp",
+    path = "../sm83-interp",
     features = ["woke-counters"],
     #features = ["ppu-logging", "cpu-logging"],
 }

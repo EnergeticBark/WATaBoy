@@ -3,5 +3,9 @@
     "identifier" : "xyz.valknight.rust",
     "name" : "Rust 3 (??)"
   },
-  "extensionTemplate" : "cargo"
+  "extensionTemplate" : "cargo",
+  "extensionValues" : {
+    "xyz.valknight.rust.cargo.build.args" : "--package ppu-view",
+    "xyz.valknight.rust.cargo.run.args" : "--package ppu-view"
+  }
 }
