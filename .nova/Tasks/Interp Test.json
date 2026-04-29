@@ -5,6 +5,7 @@
   },
   "extensionTemplate" : "cargo",
   "extensionValues" : {
+    "xyz.valknight.rust.cargo.build.args" : "--package sm83-interp",
     "xyz.valknight.rust.cargo.build.subcommand" : "test",
     "xyz.valknight.rust.cargo.run.subcommand" : "test"
   }
