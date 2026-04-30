@@ -508,6 +508,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 
 [[package]]
+name = "debugger"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui",
+ "egui_extras",
+ "egui_logger",
+ "env_logger",
+ "hw-constants",
+ "interpreter",
+ "log",
+ "rkyv",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "dispatch"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2101,23 +2118,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0103b1cef7ec0cf76490e969665504990193874ea05c85ff9bab8b911d0a0564"
 dependencies = [
  "zerovec",
-]
-
-[[package]]
-name = "ppu-view"
-version = "0.1.0"
-dependencies = [
- "eframe",
- "egui",
- "egui_extras",
- "egui_logger",
- "env_logger",
- "hw-constants",
- "interpreter",
- "log",
- "rkyv",
- "wasm-bindgen-futures",
- "web-sys",
 ]
 
 [[package]]

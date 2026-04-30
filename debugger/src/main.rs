@@ -15,7 +15,7 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "ppu view",
         native_options,
-        Box::new(|cc| Ok(Box::new(ppu_view::PPUViewApp::new(cc)))),
+        Box::new(|cc| Ok(Box::new(debugger::PPUViewApp::new(cc)))),
     )
 }
 
