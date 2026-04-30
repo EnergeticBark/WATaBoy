@@ -13,7 +13,7 @@ const roms = [
 
 test.each(roms)("%p", async (romName) => {
 	const runtime = new Runtime();
-	const wasmSource = await Bun.file("./target/wasm32-unknown-unknown/release/sm83_jit.wasm").arrayBuffer();
+	const wasmSource = await Bun.file("./target/wasm32-unknown-unknown/release/jit.wasm").arrayBuffer();
 	await runtime.init(wasmSource);
 	const rom = await Bun.file(testROMPath + "mooneye/mbc1/" + romName).bytes();
 	runtime.loadRom(rom);
