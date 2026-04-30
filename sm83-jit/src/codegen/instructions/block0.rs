@@ -1,4 +1,4 @@
-use sm83_interp::cpu::opcodes::parameters::{R8, R16, R16Mem};
+use interpreter::cpu::opcodes::parameters::{R8, R16, R16Mem};
 
 use crate::codegen::CodegenCtx;
 use crate::codegen::macros::{FlagBit, Sm83Macros};

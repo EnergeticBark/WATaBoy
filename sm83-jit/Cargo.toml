@@ -9,7 +9,7 @@ crate-type = ["cdylib", "lib"]
 
 [dependencies]
 wasm-encoder = "0.247.0"
-sm83-interp = { path = "../sm83-interp" }
+interpreter = { path = "../interpreter" }
 hw-constants = { path = "../hw-constants" }
 # This library is massive, only include it when JIT tracing is enabled.
 wasmprinter = { version = "0.247.0", optional = true }

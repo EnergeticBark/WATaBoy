@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use egui_extras::{Column, TableBody, TableBuilder};
 use hw_constants::io_regs::{BGP, IF, LCDC, LY, LYC, OBP0, OBP1, SCX, SCY, STAT, WX, WY};
 use hw_constants::{IE, OAM_END, OAM_START, VRAM_END, VRAM_START};
-use sm83_interp::cpu::Cpu;
+use interpreter::cpu::Cpu;
 
 const ROW_HEIGHT: f32 = 18.0;
 

@@ -12,9 +12,9 @@ use hw_constants::{SCREEN_HEIGHT, SCREEN_WIDTH, TILE_MAP_SIZE, TILE_SIZE};
 use log::error;
 use rkyv::deserialize;
 use rkyv::rancor::Error;
-use sm83_interp::cpu::opcodes::Opcode;
-use sm83_interp::cpu::{ArchivedCpu, Cpu};
-use sm83_interp::joypad::ButtonsHeld;
+use interpreter::cpu::opcodes::Opcode;
+use interpreter::cpu::{ArchivedCpu, Cpu};
+use interpreter::joypad::ButtonsHeld;
 use std::fs::File;
 use std::io::{Read, Write};
 

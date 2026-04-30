@@ -1237,6 +1237,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "interpreter"
+version = "0.1.0"
+dependencies = [
+ "arbitrary-int",
+ "bitfield-struct",
+ "bitmatch",
+ "hw-constants",
+ "log",
+ "rkyv",
+]
+
+[[package]]
 name = "is_terminal_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2089,9 +2101,9 @@ dependencies = [
  "egui_logger",
  "env_logger",
  "hw-constants",
+ "interpreter",
  "log",
  "rkyv",
- "sm83-interp",
  "wasm-bindgen-futures",
  "web-sys",
 ]
@@ -2489,23 +2501,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "sm83-interp"
-version = "0.1.0"
-dependencies = [
- "arbitrary-int",
- "bitfield-struct",
- "bitmatch",
- "hw-constants",
- "log",
- "rkyv",
-]
-
-[[package]]
 name = "sm83-jit"
 version = "0.1.0"
 dependencies = [
  "hw-constants",
- "sm83-interp",
+ "interpreter",
  "wasm-encoder",
  "wasmprinter",
 ]

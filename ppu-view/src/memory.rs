@@ -1,6 +1,6 @@
 use eframe::epaint::Color32;
 use egui::{RichText, TextStyle, Ui};
-use sm83_interp::cpu::Cpu;
+use interpreter::cpu::Cpu;
 
 pub fn draw_memory_table(ui: &mut Ui, dmg_state: &Cpu) {
     ui.style_mut().override_text_style = Some(TextStyle::Monospace);

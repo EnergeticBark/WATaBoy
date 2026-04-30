@@ -3,13 +3,13 @@ use std::panic;
 use crate::cache::{BlockCache, BlockSlot, CompiledBlock};
 use crate::{call_indirect, codegen, console_log};
 
-use sm83_interp::cpu::Cpu;
-use sm83_interp::cpu::registers::Flags;
-use sm83_interp::joypad::ButtonsHeld;
+use interpreter::cpu::Cpu;
+use interpreter::cpu::registers::Flags;
+use interpreter::joypad::ButtonsHeld;
 
 #[cfg(feature = "log-uncompiled")]
 use {
-    sm83_interp::cpu::opcodes::Opcode, sm83_interp::cpu::opcodes::PrefixOpcode,
+    interpreter::cpu::opcodes::Opcode, interpreter::cpu::opcodes::PrefixOpcode,
     std::collections::HashMap,
 };
 

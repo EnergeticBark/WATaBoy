@@ -1,5 +1,5 @@
 [package]
-name = "sm83-interp"
+name = "interpreter"
 version = "0.1.0"
 authors = ["Seth Humphries <seth@humphri.es>"]
 edition = "2024"

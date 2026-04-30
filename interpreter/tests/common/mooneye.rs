@@ -1,6 +1,6 @@
-use sm83_interp::cpu::Cpu;
-use sm83_interp::cpu::opcodes::Opcode;
-use sm83_interp::cpu::opcodes::parameters::R8;
+use interpreter::cpu::Cpu;
+use interpreter::cpu::opcodes::Opcode;
+use interpreter::cpu::opcodes::parameters::R8;
 
 pub const FIBONACCI: [u8; 6] = [3, 5, 8, 13, 21, 34];
 fn read_bcdehl(cpu: &Cpu) -> [u8; 6] {

@@ -1,6 +1,6 @@
 use egui::{Checkbox, Color32, RichText, Ui};
 use egui_extras::{Column, TableBody, TableBuilder};
-use sm83_interp::cpu::Cpu;
+use interpreter::cpu::Cpu;
 
 const ROW_HEIGHT: f32 = 18.0;
 

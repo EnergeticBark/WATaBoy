@@ -1,8 +1,8 @@
 use eframe::epaint::TextureHandle;
 use egui::{Checkbox, Ui};
 use egui_extras::{Column, TableBody, TableBuilder};
-use sm83_interp::cpu::Cpu;
-use sm83_interp::ppu::oam;
+use interpreter::cpu::Cpu;
+use interpreter::ppu::oam;
 
 pub fn draw_oam_table(ui: &mut Ui, tiles: &mut [TextureHandle], dmg_state: &Cpu) {
     TableBuilder::new(ui)
