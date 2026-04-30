@@ -18,7 +18,7 @@ use interpreter::joypad::ButtonsHeld;
 use std::fs::File;
 use std::io::{Read, Write};
 
-pub struct PPUViewApp {
+pub struct DebuggerApp {
     dmg_state: Cpu,
     tiles: Vec<TextureHandle>,
     tile_map_0: TextureHandle,
@@ -36,7 +36,7 @@ pub struct PPUViewApp {
     woke_timers_open: bool,
 }
 
-impl PPUViewApp {
+impl DebuggerApp {
     /// Called once before the first frame.
     #[must_use]
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
@@ -149,7 +149,7 @@ fn step_vblank(dmg_state: &mut Cpu, buttons_held: ButtonsHeld) {
     }
 }
 
-impl eframe::App for PPUViewApp {
+impl eframe::App for DebuggerApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         egui::Window::new("Log")

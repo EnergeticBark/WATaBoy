@@ -13,9 +13,9 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
     eframe::run_native(
-        "ppu view",
+        "WATaBoy debugger",
         native_options,
-        Box::new(|cc| Ok(Box::new(debugger::PPUViewApp::new(cc)))),
+        Box::new(|cc| Ok(Box::new(debugger::DebuggerApp::new(cc)))),
     )
 }
 
