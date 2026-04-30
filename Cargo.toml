@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["hw-constants", "ppu-view", "interpreter", "jit"]
+members = ["hw-constants", "debugger", "interpreter", "jit"]
 
 [profile.release]
 debug = true

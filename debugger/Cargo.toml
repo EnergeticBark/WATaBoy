@@ -1,5 +1,5 @@
 [package]
-name = "ppu-view"
+name = "debugger"
 version = "0.1.0"
 authors = ["Seth Humphries <seth@humphri.es>"]
 edition = "2024"

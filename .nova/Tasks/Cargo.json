@@ -5,7 +5,7 @@
   },
   "extensionTemplate" : "cargo",
   "extensionValues" : {
-    "xyz.valknight.rust.cargo.build.args" : "--package ppu-view",
-    "xyz.valknight.rust.cargo.run.args" : "--package ppu-view"
+    "xyz.valknight.rust.cargo.build.args" : "--package debugger",
+    "xyz.valknight.rust.cargo.run.args" : "--package debugger"
   }
 }
