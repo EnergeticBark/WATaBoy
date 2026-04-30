@@ -9,4 +9,4 @@ mod tiles;
 mod woke_ppu;
 mod woke_timers;
 
-pub use app::PPUViewApp;
+pub use app::DebuggerApp;
