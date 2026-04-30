@@ -1,4 +1,4 @@
-use sm83_interp::cpu::opcodes::parameters::{R8, R16, R16Mem, R16Stack};
+use interpreter::cpu::opcodes::parameters::{R8, R16, R16Mem, R16Stack};
 use wasm_encoder::InstructionSink;
 
 use crate::codegen::{

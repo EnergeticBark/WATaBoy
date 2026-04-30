@@ -2,10 +2,10 @@ use egui::{Checkbox, Label, TextWrapMode};
 use egui_extras::{Column, TableBody, TableBuilder};
 use hw_constants::io_regs::STAT;
 use hw_constants::io_regs::{IE, IF};
-use sm83_interp::addressable::Addressable;
-use sm83_interp::cpu::Cpu;
-use sm83_interp::cpu::InterruptBits;
-use sm83_interp::ppu::{LcdStatus, StatMode};
+use interpreter::addressable::Addressable;
+use interpreter::cpu::Cpu;
+use interpreter::cpu::InterruptBits;
+use interpreter::ppu::{LcdStatus, StatMode};
 
 const ROW_HEIGHT: f32 = 18.0;
 

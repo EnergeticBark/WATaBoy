@@ -5,9 +5,9 @@ use egui::emath::RectTransform;
 use egui::{Color32, Frame, Stroke, StrokeKind, Ui, Vec2, pos2};
 use hw_constants::TILE_MAP_SIZE;
 use hw_constants::io_regs::{LCDC, SCX, SCY, WX, WY};
-use sm83_interp::addressable::Addressable;
-use sm83_interp::ppu::tiles;
-use sm83_interp::ppu::{LcdControl, Ppu};
+use interpreter::addressable::Addressable;
+use interpreter::ppu::tiles;
+use interpreter::ppu::{LcdControl, Ppu};
 
 const TILE_MAP_SCALE: f32 = 1.0;
 

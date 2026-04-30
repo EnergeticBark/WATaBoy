@@ -5,7 +5,7 @@ use hw_constants::{
     IE,
     io_regs::{DIV, IF, TAC, TIMA, TMA},
 };
-use sm83_interp::cpu::Cpu;
+use interpreter::cpu::Cpu;
 
 const ROW_HEIGHT: f32 = 18.0;
 

@@ -1,4 +1,4 @@
-use sm83_interp::addressable::Addressable;
+use interpreter::addressable::Addressable;
 
 use crate::runtime::JitRuntime;
 

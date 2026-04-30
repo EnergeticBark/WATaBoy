@@ -1,1 +1,1 @@
-export const testROMPath = "./sm83-interp/tests/roms/";
+export const testROMPath = "./interpreter/tests/roms/";

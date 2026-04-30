@@ -1,5 +1,5 @@
 use egui::DroppedFile;
-use sm83_interp::cpu::Cpu;
+use interpreter::cpu::Cpu;
 use std::fs;
 
 #[cfg(not(target_arch = "wasm32"))]

@@ -1,5 +1,5 @@
-use sm83_interp::cpu::opcodes::{Opcode, PrefixOpcode};
-use sm83_interp::cpu::{Cpu, opcodes};
+use interpreter::cpu::opcodes::{Opcode, PrefixOpcode};
+use interpreter::cpu::{Cpu, opcodes};
 
 mod instructions;
 mod macros;

@@ -1,5 +1,5 @@
-use sm83_interp::addressable::Addressable;
-use sm83_interp::cpu::Cpu;
+use interpreter::addressable::Addressable;
+use interpreter::cpu::Cpu;
 
 pub struct BlarggTest {
     pub rom: &'static [u8],

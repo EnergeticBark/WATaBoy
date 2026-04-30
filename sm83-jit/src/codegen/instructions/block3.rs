@@ -3,7 +3,7 @@ use crate::codegen::macros::{FlagBit, Sm83Macros};
 use crate::codegen::module::PROLOGE_LENGTH;
 use crate::codegen::registers::{A, C, SP};
 
-use sm83_interp::cpu::opcodes::parameters::{R16, R16Stack};
+use interpreter::cpu::opcodes::parameters::{R16, R16Stack};
 use wasm_encoder::*;
 
 // Emit Wasm bytecode for Block 1.
