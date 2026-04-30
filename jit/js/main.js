@@ -10,7 +10,7 @@ const lcdCanvas = document.querySelector("#lcd");
 const ctx = lcdCanvas.getContext("2d", { alpha: false });
 
 const runtime = new Runtime();
-const wasmSource = await (await fetch("../target/wasm32-unknown-unknown/release/sm83_jit.wasm")).bytes();
+const wasmSource = await (await fetch("../target/wasm32-unknown-unknown/release/jit.wasm")).bytes();
 await runtime.init(wasmSource);
 const rom = await (await fetch("./Pokemon - Blue Version (USA, Europe) (SGB Enhanced).sgb")).bytes();
 runtime.loadRom(rom);
