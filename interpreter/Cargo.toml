@@ -6,11 +6,11 @@ edition = "2024"
 
 [dependencies]
 hw-constants = { path = "../hw-constants" }
-bitfield-struct = "0.12.1"
+bitfield-struct = "0.13.0"
 bitmatch = "0.1.1"
 arbitrary-int = "2.1.0"
 log = "0.4.29"
-rkyv = "0.8.14"
+rkyv = "0.8.16"
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
