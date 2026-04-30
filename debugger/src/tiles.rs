@@ -1,0 +1,60 @@
+use eframe::epaint::textures::TextureOptions;
+use eframe::epaint::{ColorImage, TextureHandle};
+use egui::Ui;
+use egui_extras::{Column, TableBody, TableBuilder};
+use interpreter::cpu::Cpu;
+use interpreter::ppu::tiles;
+
+const TILE_SCALE: f32 = 4.0;
+
+pub fn draw_tile_table(ui: &mut Ui, tiles: &mut [TextureHandle], dmg_state: &Cpu) {
+    ui.heading("Tile Data: 0x8000-0x9800");
+    TableBuilder::new(ui)
+        .id_salt("Tile View")
+        .striped(true)
+        .columns(Column::auto(), 8)
+        .body(|body| {
+            draw_tiles_body(body, tiles, dmg_state);
+        });
+}
+
+pub fn greyscale_from_tile(tile: &[u8; 16]) -> Vec<u8> {
+    tiles::tile_to_palette_indices(tile)
+        .into_iter()
+        // Bring the range of values from 0-3 to 0-255.
+        .map(|palette_index| palette_index.value() * 64)
+        .collect()
+}
+
+fn draw_tiles_body(body: TableBody<'_>, tiles: &mut [TextureHandle], dmg_state: &Cpu) {
+    body.rows(
+        f32::from(hw_constants::TILE_SIZE) * TILE_SCALE,
+        tiles.len() / 8,
+        |mut row| {
+            let row_index = row.index() * 8;
+
+            for i in 0..8 {
+                let tile = &mut tiles[row_index + i];
+
+                let tile_data = tiles::unsigned_nth_tile(
+                    dmg_state.memory.ppu.vram.as_array().unwrap(),
+                    row_index + i,
+                );
+                tile.set(
+                    ColorImage::from_gray(
+                        [
+                            hw_constants::TILE_SIZE as usize,
+                            hw_constants::TILE_SIZE as usize,
+                        ],
+                        &greyscale_from_tile(tile_data),
+                    ),
+                    TextureOptions::NEAREST,
+                );
+
+                row.col(|ui| {
+                    ui.add(egui::Image::from_texture(&*tile).fit_to_original_size(TILE_SCALE));
+                });
+            }
+        },
+    );
+}

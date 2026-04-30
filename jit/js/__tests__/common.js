@@ -1,0 +1,1 @@
+export const testROMPath = "./interpreter/tests/roms/";
