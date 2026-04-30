@@ -3,10 +3,18 @@ export const LCD_HEIGHT = 144;
 
 const utf8decoder = new TextDecoder();
 
+const findLowestSafeFuncIdx = (table) => {
+	// Start with an index of 1, because Rust's linker leaves index 0 as null for some reason.
+	for (let tableIndex = 1; tableIndex < table.length; tableIndex += 1) {
+		if (table.get(tableIndex) === null) {
+			return tableIndex;
+		}
+	}
+}
+
 export const Runtime = class {
-	// TODO: Determine this value at runtime instead of hardcoding it.
-	lowestSafeFuncIdx = 5000;
 	__indirect_function_table;
+	lowestSafeFuncIdx;
 	instance;
 	jitRuntimePtr;
 	
@@ -23,7 +31,7 @@ export const Runtime = class {
 		
 		const {instance} = await WebAssembly.instantiate(source, importObj);
 		this.instance = instance;
-		
+		this.lowestSafeFuncIdx = findLowestSafeFuncIdx(this.__indirect_function_table);
 		this.jitRuntimePtr = instance.exports.make_runtime();
 		instance.exports.set_ptr(this.jitRuntimePtr, this.jitRuntimePtr);
 	}
