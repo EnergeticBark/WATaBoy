@@ -7,10 +7,8 @@ pub(crate) fn empty_jit_block_module() -> Module {
 
     // Encode the type section.
     let mut types = TypeSection::new();
-    // Parameters: A, F, B, C, D, E, H, L, and SP registers.
-    let params = vec![ValType::I32; PROLOGE_LENGTH];
-    // Return those same registers, but modified.
-    let results = vec![ValType::I32; PROLOGE_LENGTH];
+    let params = vec![];
+    let results = vec![];
     types.ty().function(params, results);
 
     // Type for the read_byte function.
@@ -35,6 +33,18 @@ pub(crate) fn empty_jit_block_module() -> Module {
     module.section(&types);
 
     let mut imports = ImportSection::new();
+    imports.import(
+        "env",
+        "runtime_mem",
+        EntityType::Memory(MemoryType {
+            minimum: 0,
+            maximum: None,
+            memory64: false,
+            shared: false,
+            page_size_log2: None,
+        }),
+    );
+
     // The read_byte function uses index 1 in the types section.
     imports.import("env", "read_byte", EntityType::Function(1));
     // The write_byte function uses index 2 in the types section.
@@ -60,6 +70,6 @@ pub(crate) fn empty_jit_block_module() -> Module {
 
 pub(crate) fn empty_jit_block_function() -> Function {
     // Provide two locals to be used as "scratch registers".
-    let locals = vec![(2, ValType::I32)];
+    let locals = vec![(PROLOGE_LENGTH as u32 + 2, ValType::I32)];
     Function::new(locals)
 }
