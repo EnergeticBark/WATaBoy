@@ -4,7 +4,7 @@ use crate::cache::{BlockCache, BlockSlot, CompiledBlock};
 use crate::{call_indirect, codegen, console_log};
 
 use interpreter::cpu::Cpu;
-use interpreter::cpu::registers::Flags;
+use interpreter::cpu::registers::{Flags, Registers};
 use interpreter::joypad::ButtonsHeld;
 
 #[cfg(feature = "log-uncompiled")]
@@ -36,6 +36,7 @@ impl CacheAddress {
 #[derive(Default)]
 pub struct JitRuntime {
     ptr: usize,
+    registers_ptr: usize,
     block_start_clock: u64,
     checkpoint_index: usize,
     pub(crate) dmg_state: Cpu,
@@ -59,28 +60,13 @@ impl JitRuntime {
         self.block_start_clock = self.dmg_state.memory.clock;
         self.checkpoint_index = compiled_block.checkpoints.len() - 1;
 
-        // Provide registers for the JIT's prologue.
-        let a = self.dmg_state.registers.af.a().into();
-        let f = self.dmg_state.registers.af.f().into_bits().into();
-        let b = self.dmg_state.registers.bc.b().into();
-        let c = self.dmg_state.registers.bc.c().into();
-        let d = self.dmg_state.registers.de.d().into();
-        let e = self.dmg_state.registers.de.e().into();
-        let h = self.dmg_state.registers.hl.h().into();
-        let l = self.dmg_state.registers.hl.l().into();
-        let sp = self.dmg_state.registers.sp.into();
-        let (a, f, b, c, d, e, h, l, sp) =
-            call_indirect(compiled_block.func_idx, a, f, b, c, d, e, h, l, sp);
-        // Update dmg_state's registers based on the values returned in the JIT's epilogue.
-        self.dmg_state.registers.af.set_a(a as u8);
-        self.dmg_state.registers.af.set_f(Flags::from_bits(f as u8));
-        self.dmg_state.registers.bc.set_b(b as u8);
-        self.dmg_state.registers.bc.set_c(c as u8);
-        self.dmg_state.registers.de.set_d(d as u8);
-        self.dmg_state.registers.de.set_e(e as u8);
-        self.dmg_state.registers.hl.set_h(h as u8);
-        self.dmg_state.registers.hl.set_l(l as u8);
-        self.dmg_state.registers.sp = sp as u16;
+        call_indirect(compiled_block.func_idx);
+
+        // Ensure that the unused bits in Flags go unset.
+        // TODO: Do this in the block itself.
+        self.dmg_state.registers.af.set_f(Flags::from_bits(
+            self.dmg_state.registers.af.f().into_bits(),
+        ));
 
         let checkpoint = compiled_block.checkpoints[self.checkpoint_index];
         // Update the program counter and clock.
@@ -112,7 +98,9 @@ impl JitRuntime {
             BlockSlot::Uncompilable => None,
             BlockSlot::Compiled(_) => Some(cache_address),
             BlockSlot::Uncompiled => {
-                if let Some(jit_block) = codegen::recompile(&mut self.dmg_state, self.ptr) {
+                if let Some(jit_block) =
+                    codegen::recompile(&mut self.dmg_state, self.ptr, self.registers_ptr)
+                {
                     #[cfg(feature = "jit-trace")]
                     console_log(&wasmprinter::print_bytes(&jit_block.buffer).unwrap());
 
@@ -304,6 +292,7 @@ impl JitRuntime {
     #[unsafe(no_mangle)]
     pub extern "C" fn set_ptr(runtime: &mut JitRuntime, ptr: usize) {
         runtime.ptr = ptr;
+        runtime.registers_ptr = core::ptr::addr_of!(runtime.dmg_state.registers) as usize;
     }
 }
 

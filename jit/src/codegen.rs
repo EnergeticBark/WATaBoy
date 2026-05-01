@@ -72,7 +72,11 @@ pub struct WasmBlock {
 
 // Try to produce a WasmBlock starting at dmg_state's current program counter.
 // TODO: Read one opcode at a time until a branching statement is reached. -> Codegen Wasm for each instruction.
-pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
+pub fn recompile(
+    dmg_state: &mut Cpu,
+    runtime_ptr: usize,
+    registers_ptr: usize,
+) -> Option<WasmBlock> {
     let mut ctx = CodegenCtx {
         runtime_ptr,
         traced_pc: dmg_state.registers.pc,
@@ -91,6 +95,9 @@ pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
     let mut function = LazyCell::new(empty_jit_block_function);
     let mut instruction_sink = LazyCell::new(|| {
         let mut instruction_sink = function.instructions();
+
+        instruction_sink.read_regs(registers_ptr);
+
         // Wrap our JIT'd instructions in a block so we can break early if needed.
         instruction_sink.block(BlockType::Empty);
         instruction_sink
@@ -344,7 +351,7 @@ pub fn recompile(dmg_state: &mut Cpu, runtime_ptr: usize) -> Option<WasmBlock> {
         // End the inner block.
         .end()
         // Add the calling convention's epilogue.
-        .return_regs()
+        .return_regs(registers_ptr)
         .end();
     codes.function(&function);
     module.section(&codes);

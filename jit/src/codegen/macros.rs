@@ -1,5 +1,5 @@
 use interpreter::cpu::opcodes::parameters::{R8, R16, R16Mem, R16Stack};
-use wasm_encoder::InstructionSink;
+use wasm_encoder::{InstructionSink, MemArg};
 
 use crate::codegen::{
     CodegenCtx,
@@ -42,7 +42,8 @@ pub(crate) trait Sm83Macros {
     fn set_flag(&mut self, flag_bit: FlagBit) -> &mut Self;
     fn check_flag(&mut self, flag_bit: FlagBit) -> &mut Self;
     fn insert_checkpoint(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
-    fn return_regs(&mut self) -> &mut Self;
+    fn read_regs(&mut self, registers_ptr: usize) -> &mut Self;
+    fn return_regs(&mut self, registers_ptr: usize) -> &mut Self;
     fn call_read_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
     fn call_write_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
 }
@@ -416,22 +417,56 @@ impl Sm83Macros for InstructionSink<'_> {
             .br_if(0)
     }
 
-    /// Return all of the registers to satisfy the calling convention.
+    /// Load all of the registers to satisfy the calling convention.
+    /// Usually this is the first macro in a block.
+    /// # Signature
+    /// ```
+    /// () -> ()
+    /// ```
+    fn read_regs(&mut self, registers_ptr: usize) -> &mut Self {
+        let register_mem_offsets = [1, 0, 3, 2, 5, 4, 7, 6];
+        for (reg, offset) in register_mem_offsets.iter().enumerate() {
+            self.i32_const(*offset)
+                .i32_load8_u(MemArg {
+                    offset: registers_ptr as u64,
+                    align: 0,
+                    memory_index: 0,
+                })
+                .local_set(reg as u32);
+        }
+
+        self.i32_const(8)
+            .i32_load16_u(MemArg {
+                offset: registers_ptr as u64,
+                align: 0,
+                memory_index: 0,
+            })
+            .local_set(8)
+    }
+
+    /// Store all of the registers to satisfy the calling convention.
     /// Usually this is the final macro in a block.
     /// # Signature
     /// ```
-    /// () -> (i32, i32, i32, i32, i32, i32, i32, i32, i32)
+    /// () -> ()
     /// ```
-    fn return_regs(&mut self) -> &mut Self {
-        self.local_get(A)
-            .local_get(F)
-            .local_get(B)
-            .local_get(C)
-            .local_get(D)
-            .local_get(E)
-            .local_get(H)
-            .local_get(L)
-            .local_get(SP)
+    fn return_regs(&mut self, registers_ptr: usize) -> &mut Self {
+        let register_mem_offsets = [1, 0, 3, 2, 5, 4, 7, 6];
+        for (reg, offset) in register_mem_offsets.iter().enumerate() {
+            self.i32_const(*offset)
+                .local_get(reg as u32)
+                .i32_store8(MemArg {
+                    offset: registers_ptr as u64,
+                    align: 0,
+                    memory_index: 0,
+                });
+        }
+
+        self.i32_const(8).local_get(8).i32_store16(MemArg {
+            offset: registers_ptr as u64,
+            align: 0,
+            memory_index: 0,
+        })
     }
 
     /// Read a byte from the specified address in the Game Boy's memory.
