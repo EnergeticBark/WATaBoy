@@ -433,18 +433,18 @@ impl Sm83Macros for InstructionSink<'_> {
     fn read_regs(&mut self, registers_ptr: usize) -> &mut Self {
         let register_mem_offsets = [F, A, C, B, E, D, L, H];
         for (reg, offset) in register_mem_offsets.iter().zip(0..) {
-            self.i32_const(registers_ptr as i32 + offset)
+            self.i32_const(registers_ptr as i32)
                 .i32_load8_u(MemArg {
-                    offset: 0,
+                    offset,
                     align: 0,
                     memory_index: 0,
                 })
                 .local_set(*reg);
         }
 
-        self.i32_const(registers_ptr as i32 + 8)
+        self.i32_const(registers_ptr as i32)
             .i32_load16_u(MemArg {
-                offset: 0,
+                offset: 8,
                 align: 0,
                 memory_index: 0,
             })
@@ -462,19 +462,19 @@ impl Sm83Macros for InstructionSink<'_> {
     fn return_regs(&mut self, registers_ptr: usize) -> &mut Self {
         let register_mem_offsets = [F, A, C, B, E, D, L, H];
         for (reg, offset) in register_mem_offsets.iter().zip(0..) {
-            self.i32_const(registers_ptr as i32 + offset)
+            self.i32_const(registers_ptr as i32)
                 .local_get(*reg)
                 .i32_store8(MemArg {
-                    offset: 0,
+                    offset,
                     align: 0,
                     memory_index: 0,
                 });
         }
 
-        self.i32_const(registers_ptr as i32 + 8)
+        self.i32_const(registers_ptr as i32)
             .local_get(SP)
             .i32_store16(MemArg {
-                offset: 0,
+                offset: 8,
                 align: 0,
                 memory_index: 0,
             })
