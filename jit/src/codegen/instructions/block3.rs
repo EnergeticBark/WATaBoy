@@ -313,15 +313,11 @@ impl Block3 for InstructionSink<'_> {
     fn ldh_a_n(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self {
         ctx.increment_m_cycles(1);
         let address = u16::from_le_bytes([imm, 0xFF]);
-        self.i32_const(i32::from(address))
-            .call_read_byte(ctx)
-            .local_set(A)
+        self.read_byte_static(ctx, address).local_set(A)
     }
     fn ld_a_nn(&mut self, ctx: &mut CodegenCtx, imm: u16) -> &mut Self {
         ctx.increment_m_cycles(2);
-        self.i32_const(i32::from(imm))
-            .call_read_byte(ctx)
-            .local_set(A)
+        self.read_byte_static(ctx, imm).local_set(A)
     }
     fn ld_hl_sp_plus_e(&mut self, e: i8) -> &mut Self {
         // Name our scratch register.
