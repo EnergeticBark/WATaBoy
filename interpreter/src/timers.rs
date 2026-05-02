@@ -61,7 +61,15 @@ impl Timers {
             return self.next_interrupt;
         }
 
-        // TODO: Actually calculate this
+        // TODO: Very conservative estimate, make this more precise later.
+        let remaining_tima_ticks = 0xff - self.tima;
+        if remaining_tima_ticks > 10 {
+            let t_cycles =
+                u64::from(remaining_tima_ticks) * 4 * u64::from(self.tac.clock_select().period());
+            self.next_interrupt = self.clock + t_cycles;
+            return self.next_interrupt;
+        }
+
         self.next_interrupt = self.clock;
         self.next_interrupt
     }

@@ -4,7 +4,8 @@ use crate::cache::{BlockCache, BlockSlot, CompiledBlock};
 use crate::{call_indirect, codegen, console_log};
 
 use interpreter::cpu::Cpu;
-use interpreter::cpu::registers::{Flags, Registers};
+use interpreter::cpu::opcodes::Opcode;
+use interpreter::cpu::registers::Flags;
 use interpreter::joypad::ButtonsHeld;
 
 #[cfg(feature = "log-uncompiled")]
@@ -155,6 +156,11 @@ impl JitRuntime {
 
     // If possible, execute the next JIT-compiled block.
     pub(crate) fn execute(&mut self) {
+        self.dmg_state.handle_interrupts();
+        if self.dmg_state.halted {
+            return;
+        }
+
         let pc = self.dmg_state.registers.pc;
         // Only cache from ROM banks for now.
         if pc < 0x8000
@@ -177,7 +183,9 @@ impl JitRuntime {
             }
 
             // Fallback to interpreter.
-            self.dmg_state.execute().unwrap();
+            let bytecode = self.dmg_state.memory.read_byte(pc);
+            let opcode = Opcode::decode(bytecode).unwrap();
+            self.dmg_state.execute_op(opcode).unwrap();
         }
     }
 
