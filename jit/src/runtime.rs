@@ -18,7 +18,7 @@ unsafe extern "C" {
     // Compiles and instantiates a Wasm module using the bytecode in `buffer`, then adds its function to table 1 of *this* module.
     // Wasm-bindgen uses table 0 for doing Rust <-> JavaScript communication, so we use table 1 to avoid stepping on its toes.
     // Returns the index of the newly linked function in table 1.
-    fn instantiate_and_link_module(buffer: *const u8, len: u32) -> i32;
+    fn instantiate_and_link_module(buffer: *const u8, len: usize) -> i32;
 }
 
 #[derive(Clone, Copy, Default)]
@@ -81,7 +81,6 @@ impl JitRuntime {
     fn current_cache_address(&self) -> CacheAddress {
         let pc = self.dmg_state.registers.pc;
         let bank_number = match pc {
-            ..0x4000 => 0,
             0x4000..0x8000 => self.dmg_state.memory.mbc.current_rom_bank,
             _ => 0,
         };
@@ -106,7 +105,7 @@ impl JitRuntime {
                     console_log(&wasmprinter::print_bytes(&jit_block.buffer).unwrap());
 
                     let ptr = jit_block.buffer.as_ptr();
-                    let len = jit_block.buffer.len() as u32;
+                    let len = jit_block.buffer.len();
                     let func_idx = unsafe { instantiate_and_link_module(ptr, len) };
                     let compiled_block = CompiledBlock {
                         func_idx,
@@ -150,7 +149,7 @@ impl JitRuntime {
     fn wont_be_interrupted(&self, cache_address: CacheAddress) -> bool {
         let compiled_block = self.block_cache[cache_address.to_usize()].unwrap_compiled_block();
 
-        self.dmg_state.memory.clock + compiled_block.checkpoints[0].total_m_cycles as u64 * 4
+        self.dmg_state.memory.clock + u64::from(compiled_block.checkpoints[0].total_m_cycles) * 4
             <= self.dmg_state.memory.next_interrupt
     }
 
@@ -238,7 +237,7 @@ impl JitRuntime {
 
         let next_checkpoint = current_block.checkpoints[checkpoint_index as usize + 1];
         let next_checkpoint_clock =
-            runtime.block_start_clock + next_checkpoint.total_m_cycles as u64 * 4;
+            runtime.block_start_clock + u64::from(next_checkpoint.total_m_cycles) * 4;
 
         if runtime.dmg_state.memory.next_interrupt < next_checkpoint_clock {
             runtime.checkpoint_index = checkpoint_index as usize;

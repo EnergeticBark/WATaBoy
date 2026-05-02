@@ -25,6 +25,8 @@ pub(crate) trait Sm83Macros {
     fn pop_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
     fn push_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
     fn clear_flags(&mut self) -> &mut Self;
+    // TODO: I should probably just reuse the Flag struct defined in the interpreter here.
+    #[allow(clippy::fn_params_excessive_bools)]
     fn assign_flags(
         &mut self,
         zero: bool,
@@ -32,6 +34,7 @@ pub(crate) trait Sm83Macros {
         half_carry: bool,
         carry: bool,
     ) -> &mut Self;
+    #[allow(clippy::fn_params_excessive_bools)]
     fn set_flags(
         &mut self,
         zero: bool,
@@ -50,7 +53,7 @@ pub(crate) trait Sm83Macros {
 
 impl Sm83Macros for InstructionSink<'_> {
     /// Get the value of the specified 8-bit register.
-    /// If R8 is [HL], delta_m_cycles will reset to 0 and total_m_cycles will increase by 1.
+    /// If R8 is [HL], `delta_m_cycles` will reset to 0 and `total_m_cycles` will increase by 1.
     /// # Signature
     /// ```
     /// () -> (value: i32)
@@ -63,7 +66,7 @@ impl Sm83Macros for InstructionSink<'_> {
     }
 
     /// Set the value of the specified 8-bit register.
-    /// If R8 is [HL], delta_m_cycles will reset to 0 and total_m_cycles will increase by 1.
+    /// If R8 is [HL], `delta_m_cycles` will reset to 0 and `total_m_cycles` will increase by 1.
     /// # Signature
     /// ```
     /// (value: i32) -> ()
@@ -98,7 +101,7 @@ impl Sm83Macros for InstructionSink<'_> {
     /// Set the value of the specified 16-bit register.
     /// The value passed in will effectively be truncated to 16-bits.
     /// This macro needs a temporary register to store the 16-bit value before writing each byte separately.
-    /// The register specified in temp_reg will be clobbered.
+    /// The register specified in `temp_reg` will be clobbered.
     /// # Signature
     /// ```
     /// (value: i32) -> ()
@@ -124,7 +127,7 @@ impl Sm83Macros for InstructionSink<'_> {
     }
 
     /// Get the value at the location in memory pointed to by the specified 16-bit memory register.
-    /// The register specified in temp_reg will be clobbered.
+    /// The register specified in `temp_reg` will be clobbered.
     /// # Signature
     /// ```
     /// () -> (value: i32)
@@ -169,7 +172,7 @@ impl Sm83Macros for InstructionSink<'_> {
     }
 
     /// Set the value at the location in memory pointed to by the specified 16-bit memory register.
-    /// The register specified in temp_reg will be clobbered.
+    /// The register specified in `temp_reg` will be clobbered.
     /// # Signature
     /// ```
     /// (value: i32) -> ()
@@ -230,7 +233,7 @@ impl Sm83Macros for InstructionSink<'_> {
     }
 
     /// Set the value of the specified 16-bit stack register.
-    /// The parameters to this macro are in reverse order compared to values returned by get_r16_stack.
+    /// The parameters to this macro are in reverse order compared to values returned by `get_r16_stack`.
     /// # Signature
     /// ```
     /// (high_byte: i32, low_byte: i32) -> ()
@@ -331,7 +334,7 @@ impl Sm83Macros for InstructionSink<'_> {
         }
 
         self.local_get(F)
-            .i32_const(flags as i32)
+            .i32_const(i32::from(flags))
             .i32_or()
             .local_set(F)
     }
@@ -366,7 +369,7 @@ impl Sm83Macros for InstructionSink<'_> {
             flags |= 1 << FlagBit::Carry as usize;
         }
 
-        self.i32_const(flags as i32).local_set(F)
+        self.i32_const(i32::from(flags)).local_set(F)
     }
 
     /// Set the selected bit in the flag register. This will only change a 0 to a 1, not vice-versa.
@@ -409,6 +412,8 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     /// () -> ()
     /// ```
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_possible_wrap)]
     fn insert_checkpoint(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
         let checkpoint_index = ctx.add_checkpoint();
         self.i32_const(checkpoint_index as i32)
@@ -425,8 +430,8 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     fn read_regs(&mut self, registers_ptr: usize) -> &mut Self {
         let register_mem_offsets = [F, A, C, B, E, D, L, H];
-        for (offset, reg) in register_mem_offsets.iter().enumerate() {
-            self.i32_const(offset as i32)
+        for (reg, offset) in register_mem_offsets.iter().zip(0..) {
+            self.i32_const(offset)
                 .i32_load8_u(MemArg {
                     offset: registers_ptr as u64,
                     align: 0,
@@ -452,14 +457,12 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     fn return_regs(&mut self, registers_ptr: usize) -> &mut Self {
         let register_mem_offsets = [F, A, C, B, E, D, L, H];
-        for (offset, reg) in register_mem_offsets.iter().enumerate() {
-            self.i32_const(offset as i32)
-                .local_get(*reg)
-                .i32_store8(MemArg {
-                    offset: registers_ptr as u64,
-                    align: 0,
-                    memory_index: 0,
-                });
+        for (reg, offset) in register_mem_offsets.iter().zip(0..) {
+            self.i32_const(offset).local_get(*reg).i32_store8(MemArg {
+                offset: registers_ptr as u64,
+                align: 0,
+                memory_index: 0,
+            });
         }
 
         self.i32_const(8).local_get(SP).i32_store16(MemArg {
@@ -475,10 +478,12 @@ impl Sm83Macros for InstructionSink<'_> {
     /// (addr: i32) -> (value: i32)
     /// ```
     /// # Side Effects
-    /// 1. Resets delta_m_cycles to 0 because `read_byte_mem` will increment the timers before reading the byte from memory.
+    /// 1. Resets `delta_m_cycles` to 0 because `read_byte_mem` will increment the timers before reading the byte from memory.
     /// 2. Increments M-cycles by 1.
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_possible_wrap)]
     fn call_read_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
-        self.i32_const(ctx.delta_m_cycles as i32)
+        self.i32_const(i32::from(ctx.delta_m_cycles))
             .i32_const(ctx.runtime_ptr as i32)
             .call(0);
         ctx.delta_m_cycles = 0;
@@ -492,10 +497,12 @@ impl Sm83Macros for InstructionSink<'_> {
     /// (value: i32, addr: i32) -> ()
     /// ```
     /// # Side Effects
-    /// 1. Resets delta_m_cycles to 0 because `write_byte_mem` will increment the timers before writing the byte to memory.
+    /// 1. Resets `delta_m_cycles` to 0 because `write_byte_mem` will increment the timers before writing the byte to memory.
     /// 2. Increments M-cycles by 1.
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_possible_wrap)]
     fn call_write_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
-        self.i32_const(ctx.delta_m_cycles as i32)
+        self.i32_const(i32::from(ctx.delta_m_cycles))
             .i32_const(ctx.runtime_ptr as i32)
             .call(1);
         ctx.delta_m_cycles = 0;

@@ -12,7 +12,7 @@ use module::{empty_jit_block_function, empty_jit_block_module};
 
 use std::cell::LazyCell;
 
-use wasm_encoder::*;
+use wasm_encoder::{BlockType, CodeSection, InstructionSink};
 
 #[cfg(feature = "jit-trace")]
 use crate::console_log;
@@ -72,6 +72,7 @@ pub struct WasmBlock {
 
 // Try to produce a WasmBlock starting at dmg_state's current program counter.
 // TODO: Read one opcode at a time until a branching statement is reached. -> Codegen Wasm for each instruction.
+#[allow(clippy::too_many_lines)]
 pub fn recompile(
     dmg_state: &mut Cpu,
     runtime_ptr: usize,
@@ -138,7 +139,7 @@ pub fn recompile(
             Opcode::LdRN { x } => {
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
-                instruction_sink.ld_r_n(&mut ctx, x, imm as i32);
+                instruction_sink.ld_r_n(&mut ctx, x, imm);
             }
             Opcode::Rlca => _ = instruction_sink.rlca(),
             Opcode::Rrca => _ = instruction_sink.rrca(),
@@ -182,42 +183,42 @@ pub fn recompile(
             Opcode::AddN => {
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
-                instruction_sink.add_n(imm as i32);
+                instruction_sink.add_n(imm);
             }
             Opcode::AdcN => {
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
-                instruction_sink.adc_n(imm as i32);
+                instruction_sink.adc_n(imm);
             }
             Opcode::SubN => {
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
-                instruction_sink.sub_n(imm as i32);
+                instruction_sink.sub_n(imm);
             }
             Opcode::SbcN => {
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
-                instruction_sink.sbc_n(imm as i32);
+                instruction_sink.sbc_n(imm);
             }
             Opcode::AndN => {
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
-                instruction_sink.and_n(imm as i32);
+                instruction_sink.and_n(imm);
             }
             Opcode::XorN => {
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
-                instruction_sink.xor_n(imm as i32);
+                instruction_sink.xor_n(imm);
             }
             Opcode::OrN => {
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
-                instruction_sink.or_n(imm as i32);
+                instruction_sink.or_n(imm);
             }
             Opcode::CpN => {
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
-                instruction_sink.cp_n(imm as i32);
+                instruction_sink.cp_n(imm);
             }
             Opcode::LdhCA => _ = instruction_sink.ldh_c_a(&mut ctx),
             Opcode::LdhNA => {

@@ -62,7 +62,7 @@ fn highlight_background(ui: &mut Ui, to_screen: RectTransform, ppu: &Ppu) {
     ui.painter().rect_stroke(
         visible,
         0.0,
-        Stroke::new(2.0, Color32::RED),
+        Stroke::new(2.0_f32, Color32::RED),
         StrokeKind::Middle,
     );
 }
@@ -81,7 +81,7 @@ fn highlight_window(ui: &mut Ui, to_screen: RectTransform, ppu: &Ppu) {
     ui.painter().rect_stroke(
         visible,
         0.0,
-        Stroke::new(2.0, Color32::BLUE),
+        Stroke::new(2.0_f32, Color32::BLUE),
         StrokeKind::Middle,
     );
 }
