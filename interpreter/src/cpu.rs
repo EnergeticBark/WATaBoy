@@ -107,7 +107,7 @@ impl Cpu {
         }
     }
 
-    fn handle_interrupts(&mut self) {
+    pub fn handle_interrupts(&mut self) {
         self.memory.update_joypad(); // Is this the best place to put this?
 
         if self.halted {
@@ -211,23 +211,25 @@ impl Cpu {
         }
     }
 
-    /// # Errors
-    ///
-    /// Will return an error if the instruction at the current program counter is unimplemented.
-    #[allow(clippy::too_many_lines)]
     pub fn execute(&mut self) -> Result<(), Box<dyn Error>> {
-        // Our halted CPU just early return forever unless handle_interrupts gets us out of halted mode.
+        // Our halted CPU just early returns forever unless handle_interrupts gets us out of halted mode.
         // This function may tick other components if we're halted and/or servicing an interrupt.
         self.handle_interrupts();
-
         if self.halted {
             return Ok(());
         }
 
-        let pc = self.registers.pc;
-        let bytecode = self.memory.read_byte(pc);
+        let bytecode = self.memory.read_byte(self.registers.pc);
         let opcode = Opcode::decode(bytecode)?;
+        self.execute_op(opcode)
+    }
 
+    /// # Errors
+    ///
+    /// Will return an error if the opcode is unimplemented.
+    #[allow(clippy::too_many_lines)]
+    pub fn execute_op(&mut self, opcode: Opcode) -> Result<(), Box<dyn Error>> {
+        let pc = self.registers.pc;
         let mut m_cycles = self.calculate_m_cycles(opcode);
 
         if m_cycles > 0 {

@@ -111,6 +111,10 @@ pub fn recompile(
         ctx.increment_m_cycles(1);
         ctx.increment_pc();
 
+        if ctx.block_size >= MAX_BLOCK_SIZE {
+            break;
+        }
+
         match opcode {
             // Block 0
             // Need to use fully-qualified syntax to call *our* nop function.
