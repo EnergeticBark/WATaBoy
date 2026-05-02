@@ -1,6 +1,7 @@
 use std::panic;
 
 use crate::cache::{BlockCache, BlockSlot, CompiledBlock};
+use crate::codegen::Checkpoint;
 use crate::{call_indirect, codegen, console_log};
 
 use interpreter::cpu::Cpu;
@@ -55,6 +56,12 @@ pub struct JitRuntime {
 }
 
 impl JitRuntime {
+    #[allow(clippy::cast_possible_truncation)]
+    fn remaining_m_cycles(&self, checkpoint: Checkpoint) -> u16 {
+        let m_cycles_so_far = (self.dmg_state.memory.clock - self.block_start_clock) / 4;
+        (u64::from(checkpoint.total_m_cycles) - m_cycles_so_far) as u16
+    }
+
     fn execute_compiled_block(&mut self, cache_address: CacheAddress) {
         let compiled_block = self.block_cache[cache_address.to_usize()].unwrap_compiled_block();
 
@@ -73,9 +80,9 @@ impl JitRuntime {
         let checkpoint = compiled_block.checkpoints[self.checkpoint_index];
         // Update the program counter and clock.
         self.dmg_state.registers.pc = checkpoint.exit_pc;
-        self.dmg_state
-            .memory
-            .increment_timers(checkpoint.remaining_m_cycles);
+
+        let remaining_m_cycles = self.remaining_m_cycles(checkpoint);
+        self.dmg_state.memory.increment_timers(remaining_m_cycles);
     }
 
     // TODO: Handle bank switches while executing in a switchable bank (do any games or test ROMs do this?).
