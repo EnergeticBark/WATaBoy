@@ -18,6 +18,7 @@ pub(crate) trait Sm83Macros {
     fn set_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn get_r16(&mut self, r16: R16) -> &mut Self;
     fn set_r16(&mut self, r16: R16, temp_reg: u32) -> &mut Self;
+    fn set_r16_static(&mut self, r16: R16, value: u16) -> &mut Self;
     fn get_r16_mem(&mut self, ctx: &mut CodegenCtx, r16_mem: R16Mem, temp_reg: u32) -> &mut Self;
     fn set_r16_mem(&mut self, ctx: &mut CodegenCtx, r16: R16Mem, temp_reg: u32) -> &mut Self;
     fn get_r16_stack(&mut self, r16: R16Stack) -> &mut Self;
@@ -48,6 +49,14 @@ pub(crate) trait Sm83Macros {
     fn read_regs(&mut self, registers_ptr: usize) -> &mut Self;
     fn return_regs(&mut self, registers_ptr: usize) -> &mut Self;
     fn read_byte_static(&mut self, ctx: &mut CodegenCtx, addr: u16) -> &mut Self;
+    fn write_byte_static<'a, F>(
+        &'a mut self,
+        ctx: &mut CodegenCtx,
+        addr: u16,
+        f: F,
+    ) -> &'a mut Self
+    where
+        F: FnOnce(&'a mut Self) -> &'a mut Self;
     fn call_read_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
     fn call_write_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
 }
@@ -124,6 +133,22 @@ impl Sm83Macros for InstructionSink<'_> {
             .local_get(temp_reg)
             .i32_const(0xFF)
             .i32_and()
+            .local_set(r8_to_reg_param(low_reg))
+    }
+
+    fn set_r16_static(&mut self, r16: R16, value: u16) -> &mut Self {
+        let (high_reg, low_reg) = match r16 {
+            R16::Bc => (R8::B, R8::C),
+            R16::De => (R8::D, R8::E),
+            R16::Hl => (R8::H, R8::L),
+            R16::Sp => return self.i32_const(i32::from(value)).local_set(SP),
+        };
+
+        let [high, low] = value.to_be_bytes();
+
+        self.i32_const(i32::from(high))
+            .local_set(r8_to_reg_param(high_reg))
+            .i32_const(i32::from(low))
             .local_set(r8_to_reg_param(low_reg))
     }
 
@@ -482,26 +507,61 @@ impl Sm83Macros for InstructionSink<'_> {
     }
 
     /// Read a byte from the Game Boy's memory using a static address known at compile time.
+    /// This can allow for optimisations such as reads from work RAM bypassing `call_read_byte`.
     /// # Signature
     /// ```
     /// () -> (value: i32)
     /// ```
     /// # Side Effects
-    /// 1. Calls `call_read_byte`.
+    /// 1. May reset `delta_m_cycles` to 0 by calling `call_read_byte`.
+    /// 2. Always increments M-cycles by 1.
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_possible_wrap)]
     fn read_byte_static(&mut self, ctx: &mut CodegenCtx, addr: u16) -> &mut Self {
         if (0xC000..0xE000).contains(&addr) {
+            // If addr is in work RAM, emit a load instruction to read the byte directly.
             self.i32_const(ctx.work_ram_ptr as i32).i32_load8_u(MemArg {
                 offset: u64::from(addr),
                 align: 0,
                 memory_index: 0,
             });
             ctx.increment_m_cycles(1);
+            self
         } else {
-            self.i32_const(i32::from(addr)).call_read_byte(ctx);
+            // Otherwise fall back to call_read_byte().
+            self.i32_const(i32::from(addr)).call_read_byte(ctx)
         }
-        self
+    }
+
+    /// Write a byte to the Game Boy's memory using a static address known at compile time.
+    /// This can allow for optimisations such as writes to work RAM bypassing `call_write_byte`.
+    /// This function takes a closure, `f`, in which the caller is expected to put the 8-bit value to write on the stack.
+    /// # Signature
+    /// ```
+    /// () -> ()
+    /// ```
+    /// # Side Effects
+    /// 1. May reset `delta_m_cycles` to 0 by calling `call_write_byte`.
+    /// 2. Always increments M-cycles by 1.
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_possible_wrap)]
+    fn write_byte_static<'a, F>(&'a mut self, ctx: &mut CodegenCtx, addr: u16, f: F) -> &'a mut Self
+    where
+        F: FnOnce(&'a mut Self) -> &'a mut Self,
+    {
+        if (0xC000..0xE000).contains(&addr) {
+            self.i32_const(ctx.work_ram_ptr as i32);
+
+            let sink = f(self).i32_store8(MemArg {
+                offset: u64::from(addr),
+                align: 0,
+                memory_index: 0,
+            });
+            ctx.increment_m_cycles(1);
+            sink
+        } else {
+            f(self).i32_const(i32::from(addr)).call_write_byte(ctx)
+        }
     }
 
     /// Read a byte from the specified address in the Game Boy's memory.
