@@ -47,6 +47,7 @@ pub(crate) trait Sm83Macros {
     fn insert_checkpoint(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
     fn read_regs(&mut self, registers_ptr: usize) -> &mut Self;
     fn return_regs(&mut self, registers_ptr: usize) -> &mut Self;
+    fn read_byte_static(&mut self, ctx: &mut CodegenCtx, addr: u16) -> &mut Self;
     fn call_read_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
     fn call_write_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
 }
@@ -478,6 +479,29 @@ impl Sm83Macros for InstructionSink<'_> {
                 align: 0,
                 memory_index: 0,
             })
+    }
+
+    /// Read a byte from the Game Boy's memory using a static address known at compile time.
+    /// # Signature
+    /// ```
+    /// () -> (value: i32)
+    /// ```
+    /// # Side Effects
+    /// 1. Calls `call_read_byte`.
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_possible_wrap)]
+    fn read_byte_static(&mut self, ctx: &mut CodegenCtx, addr: u16) -> &mut Self {
+        if (0xC000..0xE000).contains(&addr) {
+            self.i32_const(ctx.work_ram_ptr as i32).i32_load8_u(MemArg {
+                offset: u64::from(addr),
+                align: 0,
+                memory_index: 0,
+            });
+            ctx.increment_m_cycles(1);
+        } else {
+            self.i32_const(i32::from(addr)).call_read_byte(ctx);
+        }
+        self
     }
 
     /// Read a byte from the specified address in the Game Boy's memory.

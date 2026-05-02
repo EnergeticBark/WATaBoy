@@ -38,6 +38,7 @@ impl CacheAddress {
 pub struct JitRuntime {
     ptr: usize,
     registers_ptr: usize,
+    work_ram_ptr: usize,
     block_start_clock: u64,
     checkpoint_index: usize,
     pub(crate) dmg_state: Cpu,
@@ -98,9 +99,12 @@ impl JitRuntime {
             BlockSlot::Uncompilable => None,
             BlockSlot::Compiled(_) => Some(cache_address),
             BlockSlot::Uncompiled => {
-                if let Some(jit_block) =
-                    codegen::recompile(&mut self.dmg_state, self.ptr, self.registers_ptr)
-                {
+                if let Some(jit_block) = codegen::recompile(
+                    &mut self.dmg_state,
+                    self.ptr,
+                    self.registers_ptr,
+                    self.work_ram_ptr,
+                ) {
                     #[cfg(feature = "jit-trace")]
                     console_log(&wasmprinter::print_bytes(&jit_block.buffer).unwrap());
 
@@ -300,6 +304,7 @@ impl JitRuntime {
     pub extern "C" fn set_ptr(runtime: &mut JitRuntime, ptr: usize) {
         runtime.ptr = ptr;
         runtime.registers_ptr = core::ptr::addr_of!(runtime.dmg_state.registers) as usize;
+        runtime.work_ram_ptr = runtime.dmg_state.memory.buffer.as_ptr() as usize;
     }
 }
 
