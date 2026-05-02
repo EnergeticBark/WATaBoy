@@ -6,7 +6,7 @@ use crate::codegen::{
     module::PROLOGE_LENGTH,
 };
 
-use wasm_encoder::*;
+use wasm_encoder::InstructionSink;
 
 // Emit Wasm bytecode for Block 1.
 // See: https://gbdev.io/pandocs/CPU_Instruction_Set.html#block-1-8-bit-register-to-register-loads
@@ -28,8 +28,8 @@ impl Prefix for InstructionSink<'_> {
     // Haven't seen this particular instruction in any traces yet, so as of now it's untested...
     fn rlc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch registers.
-        const R8_VAL: u32 = PROLOGE_LENGTH as u32;
-        const BIT_7: u32 = PROLOGE_LENGTH as u32 + 1;
+        const R8_VAL: u32 = PROLOGE_LENGTH;
+        const BIT_7: u32 = PROLOGE_LENGTH + 1;
         self.clear_flags()
             .get_r8(ctx, r8)
             .local_tee(R8_VAL)
@@ -59,8 +59,8 @@ impl Prefix for InstructionSink<'_> {
 
     fn rrc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch registers.
-        const R8_VAL: u32 = PROLOGE_LENGTH as u32;
-        const BIT_0: u32 = PROLOGE_LENGTH as u32 + 1;
+        const R8_VAL: u32 = PROLOGE_LENGTH;
+        const BIT_0: u32 = PROLOGE_LENGTH + 1;
         self.clear_flags()
             .get_r8(ctx, r8)
             .local_tee(R8_VAL)
@@ -90,8 +90,8 @@ impl Prefix for InstructionSink<'_> {
 
     fn rl_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch registers.
-        const R8_VAL: u32 = PROLOGE_LENGTH as u32;
-        const CARRY: u32 = PROLOGE_LENGTH as u32 + 1;
+        const R8_VAL: u32 = PROLOGE_LENGTH;
+        const CARRY: u32 = PROLOGE_LENGTH + 1;
         self.check_flag(FlagBit::Carry)
             .local_set(CARRY)
             .clear_flags()
@@ -126,8 +126,8 @@ impl Prefix for InstructionSink<'_> {
 
     fn rr_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch registers.
-        const R8_VAL: u32 = PROLOGE_LENGTH as u32;
-        const CARRY: u32 = PROLOGE_LENGTH as u32 + 1;
+        const R8_VAL: u32 = PROLOGE_LENGTH;
+        const CARRY: u32 = PROLOGE_LENGTH + 1;
         self.check_flag(FlagBit::Carry)
             .local_set(CARRY)
             .clear_flags()
@@ -160,7 +160,7 @@ impl Prefix for InstructionSink<'_> {
 
     fn sla_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch register.
-        const R8_VAL: u32 = PROLOGE_LENGTH as u32;
+        const R8_VAL: u32 = PROLOGE_LENGTH;
         self.clear_flags()
             .get_r8(ctx, r8)
             .local_tee(R8_VAL)
@@ -187,8 +187,8 @@ impl Prefix for InstructionSink<'_> {
 
     fn sra_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch register.
-        const R8_VAL: u32 = PROLOGE_LENGTH as u32;
-        const BIT_7: u32 = PROLOGE_LENGTH as u32 + 1;
+        const R8_VAL: u32 = PROLOGE_LENGTH;
+        const BIT_7: u32 = PROLOGE_LENGTH + 1;
         self.clear_flags()
             .get_r8(ctx, r8)
             .local_tee(R8_VAL)
@@ -222,7 +222,7 @@ impl Prefix for InstructionSink<'_> {
 
     fn swap_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch register.
-        const R8_VAL: u32 = PROLOGE_LENGTH as u32;
+        const R8_VAL: u32 = PROLOGE_LENGTH;
         self.clear_flags()
             .get_r8(ctx, r8)
             .local_tee(R8_VAL)
@@ -246,7 +246,7 @@ impl Prefix for InstructionSink<'_> {
 
     fn srl_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch registers.
-        const R8_VAL: u32 = PROLOGE_LENGTH as u32;
+        const R8_VAL: u32 = PROLOGE_LENGTH;
         self.clear_flags()
             .get_r8(ctx, r8)
             .local_tee(R8_VAL)

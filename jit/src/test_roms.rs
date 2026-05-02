@@ -25,7 +25,7 @@ fn read_ascii_from_tile_map(runtime: &JitRuntime) -> Vec<String> {
 #[unsafe(no_mangle)]
 pub extern "C" fn run_blargg_test(runtime: &mut JitRuntime, passed_line: usize) -> bool {
     // This is a totally arbitrary number of execute calls, all that matters is it's enough for the test to finish.
-    for _ in 0..10000000 {
+    for _ in 0..10_000_000 {
         runtime.execute();
     }
 
@@ -39,7 +39,8 @@ pub extern "C" fn run_blargg_test(runtime: &mut JitRuntime, passed_line: usize) 
 /// If the test passed, `true`, otherwise `false`.
 #[unsafe(no_mangle)]
 pub extern "C" fn run_mooneye_test(runtime: &mut JitRuntime) -> bool {
-    for _ in 0..10000000 {
+    const FIBONACCI: [u8; 6] = [3, 5, 8, 13, 21, 34];
+    for _ in 0..10_000_000 {
         runtime.execute();
     }
 
@@ -53,6 +54,5 @@ pub extern "C" fn run_mooneye_test(runtime: &mut JitRuntime) -> bool {
         regs.hl.l(),
     ];
 
-    const FIBONACCI: [u8; 6] = [3, 5, 8, 13, 21, 34];
     bcdehl == FIBONACCI
 }

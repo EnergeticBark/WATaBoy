@@ -462,6 +462,7 @@ impl Ppu {
             });
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn catch_up(&mut self, cpu_clock: u64, interrupt_flags: &mut u8) {
         // Make the PPU catch up to the CPU!
         while self.clock < cpu_clock {
@@ -676,7 +677,7 @@ impl Ppu {
                     if self.x == SCREEN_WIDTH {
                         self.transition_hblank();
                     }
-                    assert!(self.x <= SCREEN_WIDTH);
+                    debug_assert!(self.x <= SCREEN_WIDTH);
                 }
                 PpuMode::DrawingCoarse => {
                     self.oam_access = PpuMemAccess::Blocked;

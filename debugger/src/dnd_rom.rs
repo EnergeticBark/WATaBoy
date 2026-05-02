@@ -1,6 +1,5 @@
 use egui::DroppedFile;
 use interpreter::cpu::Cpu;
-use std::fs;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn handle_dropped_rom(file: DroppedFile, dmg_state: &mut Cpu) {

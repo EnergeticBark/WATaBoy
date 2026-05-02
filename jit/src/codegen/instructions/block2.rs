@@ -5,7 +5,7 @@ use crate::codegen::macros::{FlagBit, Sm83Macros};
 use crate::codegen::module::PROLOGE_LENGTH;
 use crate::codegen::registers::A;
 
-use wasm_encoder::*;
+use wasm_encoder::InstructionSink;
 
 // Emit Wasm bytecode for Block 2.
 // See: https://gbdev.io/pandocs/CPU_Instruction_Set.html#block-2-8-bit-arithmetic
@@ -23,7 +23,7 @@ pub trait Block2 {
 impl Block2 for InstructionSink<'_> {
     fn add_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch register.
-        const R8_VAL: u32 = PROLOGE_LENGTH as u32;
+        const R8_VAL: u32 = PROLOGE_LENGTH;
         self.clear_flags() // Maybe add a macro for *assigning* a flag too so we don't have to do this separately from setting the first flag.
             .get_r8(ctx, r8)
             .local_set(R8_VAL)
@@ -67,8 +67,8 @@ impl Block2 for InstructionSink<'_> {
 
     fn adc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch registers.
-        const PREV_CARRY: u32 = PROLOGE_LENGTH as u32;
-        const R8_VAL: u32 = PROLOGE_LENGTH as u32 + 1;
+        const PREV_CARRY: u32 = PROLOGE_LENGTH;
+        const R8_VAL: u32 = PROLOGE_LENGTH + 1;
         self.check_flag(FlagBit::Carry) // *** Store original value of Carry. ***
             .local_set(PREV_CARRY)
             .clear_flags()
@@ -118,7 +118,7 @@ impl Block2 for InstructionSink<'_> {
 
     fn sub_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch register.
-        const R8_VAL: u32 = PROLOGE_LENGTH as u32;
+        const R8_VAL: u32 = PROLOGE_LENGTH;
         self.assign_flags(false, true, false, false) // Always set subtraction to 1.
             .get_r8(ctx, r8)
             .local_set(R8_VAL)
@@ -156,8 +156,8 @@ impl Block2 for InstructionSink<'_> {
 
     fn sbc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch registers.
-        const PREV_CARRY: u32 = PROLOGE_LENGTH as u32;
-        const R8_VAL: u32 = PROLOGE_LENGTH as u32 + 1;
+        const PREV_CARRY: u32 = PROLOGE_LENGTH;
+        const R8_VAL: u32 = PROLOGE_LENGTH + 1;
         self.check_flag(FlagBit::Carry) // *** Store original value of Carry. ***
             .local_set(PREV_CARRY)
             .assign_flags(false, true, false, false) // Always set subtraction to 1.
@@ -246,7 +246,7 @@ impl Block2 for InstructionSink<'_> {
     // Identical to SUB r but doesn't update A.
     fn cp_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch register.
-        const R8_VAL: u32 = PROLOGE_LENGTH as u32;
+        const R8_VAL: u32 = PROLOGE_LENGTH;
         self.assign_flags(false, true, false, false) // Always set subtraction to 1.
             .get_r8(ctx, r8)
             .local_set(R8_VAL)

@@ -2,7 +2,7 @@ use interpreter::cpu::opcodes::parameters::R8;
 
 use crate::codegen::{CodegenCtx, macros::Sm83Macros};
 
-use wasm_encoder::*;
+use wasm_encoder::InstructionSink;
 
 // Emit Wasm bytecode for Block 1.
 // See: https://gbdev.io/pandocs/CPU_Instruction_Set.html#block-1-8-bit-register-to-register-loads
