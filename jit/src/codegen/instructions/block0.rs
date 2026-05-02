@@ -5,7 +5,7 @@ use crate::codegen::macros::{FlagBit, Sm83Macros};
 use crate::codegen::module::PROLOGE_LENGTH;
 use crate::codegen::registers::A;
 
-use wasm_encoder::*;
+use wasm_encoder::InstructionSink;
 
 // Emit Wasm bytecode for Block 0.
 // See: https://gbdev.io/pandocs/CPU_Instruction_Set.html#block-0
@@ -19,7 +19,7 @@ pub trait Block0 {
     fn add_hl_rr(&mut self, r16: R16) -> &mut Self;
     fn inc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn dec_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
-    fn ld_r_n(&mut self, ctx: &mut CodegenCtx, r8: R8, imm: i32) -> &mut Self;
+    fn ld_r_n(&mut self, ctx: &mut CodegenCtx, r8: R8, imm: u8) -> &mut Self;
     fn rlca(&mut self) -> &mut Self;
     fn rrca(&mut self) -> &mut Self;
     fn rra(&mut self) -> &mut Self;
@@ -35,38 +35,38 @@ impl Block0 for InstructionSink<'_> {
 
     fn ld_rr_nn(&mut self, r16: R16, imm: u16) -> &mut Self {
         // Name our scratch register.
-        const TEMP: u32 = PROLOGE_LENGTH as u32;
-        self.i32_const(imm as i32).set_r16(r16, TEMP)
+        const TEMP: u32 = PROLOGE_LENGTH;
+        self.i32_const(i32::from(imm)).set_r16(r16, TEMP)
     }
 
     fn ld_mem_a(&mut self, ctx: &mut CodegenCtx, r16_mem: R16Mem) -> &mut Self {
         // Name our scratch register.
-        const TEMP: u32 = PROLOGE_LENGTH as u32;
+        const TEMP: u32 = PROLOGE_LENGTH;
         self.local_get(A).set_r16_mem(ctx, r16_mem, TEMP)
     }
 
     fn ld_a_mem(&mut self, ctx: &mut CodegenCtx, r16_mem: R16Mem) -> &mut Self {
         // Name our scratch register.
-        const TEMP: u32 = PROLOGE_LENGTH as u32;
+        const TEMP: u32 = PROLOGE_LENGTH;
         self.get_r16_mem(ctx, r16_mem, TEMP).local_set(A)
     }
 
     fn inc_rr(&mut self, r16: R16) -> &mut Self {
         // Name our scratch register.
-        const TEMP: u32 = PROLOGE_LENGTH as u32;
+        const TEMP: u32 = PROLOGE_LENGTH;
         self.get_r16(r16).i32_const(1).i32_add().set_r16(r16, TEMP)
     }
 
     fn dec_rr(&mut self, r16: R16) -> &mut Self {
         // Name our scratch register.
-        const TEMP: u32 = PROLOGE_LENGTH as u32;
+        const TEMP: u32 = PROLOGE_LENGTH;
         self.get_r16(r16).i32_const(1).i32_sub().set_r16(r16, TEMP)
     }
 
     fn add_hl_rr(&mut self, r16: R16) -> &mut Self {
         // Name our scratch registers.
-        const PREV_HL: u32 = PROLOGE_LENGTH as u32;
-        const PREV_RR: u32 = PROLOGE_LENGTH as u32 + 1;
+        const PREV_HL: u32 = PROLOGE_LENGTH;
+        const PREV_RR: u32 = PROLOGE_LENGTH + 1;
         self.check_flag(FlagBit::Zero) // *** Preserve the original value of Zero on the stack. ***
             .clear_flags()
             .set_flag(FlagBit::Zero) // Restore Zero flag.
@@ -105,13 +105,14 @@ impl Block0 for InstructionSink<'_> {
             .i32_add();
         // Reclaim a scratch registers to use as TEMP.
         // TODO: It would be nice to actually drop PREV_HL from scope somehow...
+        #[allow(clippy::items_after_statements)]
         const TEMP: u32 = PREV_HL;
         self.set_r16(R16::Hl, TEMP)
     }
 
     fn inc_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch register.
-        const RESULT: u32 = PROLOGE_LENGTH as u32;
+        const RESULT: u32 = PROLOGE_LENGTH;
         self.check_flag(FlagBit::Carry) // *** Preserve the original value of Carry on the stack. ***
             .clear_flags()
             .set_flag(FlagBit::Carry) // Restore Carry flag.
@@ -141,8 +142,8 @@ impl Block0 for InstructionSink<'_> {
 
     fn dec_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch register.
-        const RESULT: u32 = PROLOGE_LENGTH as u32;
-        const R8_VAL: u32 = PROLOGE_LENGTH as u32 + 1;
+        const RESULT: u32 = PROLOGE_LENGTH;
+        const R8_VAL: u32 = PROLOGE_LENGTH + 1;
         self.check_flag(FlagBit::Carry) // *** Preserve the original value of Carry on the stack. ***
             .assign_flags(false, true, false, false) // Always set subtraction to 1.
             .set_flag(FlagBit::Carry) // Restore Carry flag.
@@ -171,14 +172,14 @@ impl Block0 for InstructionSink<'_> {
             .set_flag(FlagBit::Zero)
     }
 
-    fn ld_r_n(&mut self, ctx: &mut CodegenCtx, r8: R8, imm: i32) -> &mut Self {
+    fn ld_r_n(&mut self, ctx: &mut CodegenCtx, r8: R8, imm: u8) -> &mut Self {
         ctx.increment_m_cycles(1);
-        self.i32_const(imm).set_r8(ctx, r8)
+        self.i32_const(i32::from(imm)).set_r8(ctx, r8)
     }
 
     fn rlca(&mut self) -> &mut Self {
         // Name our scratch register.
-        const BIT_7: u32 = PROLOGE_LENGTH as u32;
+        const BIT_7: u32 = PROLOGE_LENGTH;
         self.clear_flags()
             /* Calculate the Carry flag:
              * (A >> 7) == 0b0000_0001
@@ -203,7 +204,7 @@ impl Block0 for InstructionSink<'_> {
 
     fn rrca(&mut self) -> &mut Self {
         // Name our scratch register.
-        const BIT_0: u32 = PROLOGE_LENGTH as u32;
+        const BIT_0: u32 = PROLOGE_LENGTH;
         self.clear_flags()
             /* Calculate the Carry flag:
              * A & 0b0000_0001 == 0b0000_0001
@@ -228,7 +229,7 @@ impl Block0 for InstructionSink<'_> {
 
     fn rra(&mut self) -> &mut Self {
         // Name our scratch register.
-        const PREV_CARRY: u32 = PROLOGE_LENGTH as u32;
+        const PREV_CARRY: u32 = PROLOGE_LENGTH;
         self.check_flag(FlagBit::Carry) // *** Store original value of Carry. ***
             .local_set(PREV_CARRY)
             .clear_flags()

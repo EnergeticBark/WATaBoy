@@ -34,7 +34,7 @@ impl Default for BlockCache {
         let mut vec = Vec::new();
         // Highest ROM bank value (0x7F) * address space (0xFFFF), not optimal size-wise, but it works for now.
         // TODO: Pick the smallest needed dynamically based on the number of ROM banks on ROM load.
-        vec.resize_with(0x7EFF81, || BlockSlot::Uncompiled);
+        vec.resize_with(0x7E_FF81, || BlockSlot::Uncompiled);
 
         Self(vec)
     }

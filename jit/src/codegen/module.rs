@@ -1,6 +1,9 @@
-use wasm_encoder::*;
+use wasm_encoder::{
+    EntityType, ExportKind, ExportSection, Function, FunctionSection, ImportSection, MemoryType,
+    Module, TypeSection, ValType,
+};
 
-pub const PROLOGE_LENGTH: usize = 9;
+pub const PROLOGE_LENGTH: u32 = 9;
 
 pub(crate) fn empty_jit_block_module() -> Module {
     let mut module = Module::new();
@@ -70,6 +73,6 @@ pub(crate) fn empty_jit_block_module() -> Module {
 
 pub(crate) fn empty_jit_block_function() -> Function {
     // Provide two locals to be used as "scratch registers".
-    let locals = vec![(PROLOGE_LENGTH as u32 + 2, ValType::I32)];
+    let locals = vec![(PROLOGE_LENGTH + 2, ValType::I32)];
     Function::new(locals)
 }
