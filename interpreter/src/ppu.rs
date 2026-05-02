@@ -108,7 +108,6 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
 }
 
 impl Ppu {
-    #[inline(never)]
     fn compute_ly(&self, cpu_clock: u64) -> u8 {
         if matches!(self.mode, PpuMode::Disabled) {
             return 0;
@@ -136,7 +135,6 @@ impl Ppu {
         }
     }
 
-    #[inline(never)]
     // Draw background tiles.
     fn coarse_background(&self, line_buffer: &mut [Pixel; SCREEN_WIDTH as usize + 24]) {
         // Legend: * tile, [] LCD boundaries.
@@ -226,7 +224,7 @@ impl Ppu {
 
     // Draw window tiles.
     // Lots of overlap with how the background tiles are render, should probably refactor some of this into a separate function.
-    #[inline(never)]
+
     fn coarse_window(&mut self, line_buffer: &mut [Pixel; SCREEN_WIDTH as usize + 24]) {
         if !self.registers.lcdc.window_enabled()
             || self.line_number < self.registers.wy
@@ -323,7 +321,7 @@ impl Ppu {
     }
 
     // Draw object tiles.
-    #[inline(never)]
+
     fn coarse_objects(&self, line_buffer: &mut [Pixel; SCREEN_WIDTH as usize + 24]) {
         // Draw object tiles.
         for obj in &self.obj_buffer {
@@ -413,7 +411,7 @@ impl Ppu {
 
     // Quickly draw a scanline in one go without manually emulating the tile fetchers or pixel FIFOs.
     // Can be used after we've determined that the CPU didn't modify VRAM, OAM, or PPU registers for the duration of a scanline.
-    #[inline(never)]
+
     fn coarse_scanline(&mut self) {
         // 8 extra pixels for scrolling, plus another 16.
         let mut line_buffer = [Pixel::from_bits(0); SCREEN_WIDTH as usize + 24];

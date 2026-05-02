@@ -424,15 +424,15 @@ impl Sm83Macros for InstructionSink<'_> {
     /// () -> ()
     /// ```
     fn read_regs(&mut self, registers_ptr: usize) -> &mut Self {
-        let register_mem_offsets = [1, 0, 3, 2, 5, 4, 7, 6];
-        for (reg, offset) in register_mem_offsets.iter().enumerate() {
-            self.i32_const(*offset)
+        let register_mem_offsets = [F, A, C, B, E, D, L, H];
+        for (offset, reg) in register_mem_offsets.iter().enumerate() {
+            self.i32_const(offset as i32)
                 .i32_load8_u(MemArg {
                     offset: registers_ptr as u64,
                     align: 0,
                     memory_index: 0,
                 })
-                .local_set(reg as u32);
+                .local_set(*reg);
         }
 
         self.i32_const(8)
@@ -441,7 +441,7 @@ impl Sm83Macros for InstructionSink<'_> {
                 align: 0,
                 memory_index: 0,
             })
-            .local_set(8)
+            .local_set(SP)
     }
 
     /// Store all of the registers to satisfy the calling convention.
@@ -451,10 +451,10 @@ impl Sm83Macros for InstructionSink<'_> {
     /// () -> ()
     /// ```
     fn return_regs(&mut self, registers_ptr: usize) -> &mut Self {
-        let register_mem_offsets = [1, 0, 3, 2, 5, 4, 7, 6];
-        for (reg, offset) in register_mem_offsets.iter().enumerate() {
-            self.i32_const(*offset)
-                .local_get(reg as u32)
+        let register_mem_offsets = [F, A, C, B, E, D, L, H];
+        for (offset, reg) in register_mem_offsets.iter().enumerate() {
+            self.i32_const(offset as i32)
+                .local_get(*reg)
                 .i32_store8(MemArg {
                     offset: registers_ptr as u64,
                     align: 0,
@@ -462,7 +462,7 @@ impl Sm83Macros for InstructionSink<'_> {
                 });
         }
 
-        self.i32_const(8).local_get(8).i32_store16(MemArg {
+        self.i32_const(8).local_get(SP).i32_store16(MemArg {
             offset: registers_ptr as u64,
             align: 0,
             memory_index: 0,
