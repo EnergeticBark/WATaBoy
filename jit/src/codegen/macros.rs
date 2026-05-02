@@ -63,7 +63,7 @@ pub(crate) trait Sm83Macros {
 
 impl Sm83Macros for InstructionSink<'_> {
     /// Get the value of the specified 8-bit register.
-    /// If R8 is [HL], `delta_m_cycles` will reset to 0 and `total_m_cycles` will increase by 1.
+    /// If R8 is [HL], `total_m_cycles` will increase by 1.
     /// # Signature
     /// ```
     /// () -> (value: i32)
@@ -76,7 +76,7 @@ impl Sm83Macros for InstructionSink<'_> {
     }
 
     /// Set the value of the specified 8-bit register.
-    /// If R8 is [HL], `delta_m_cycles` will reset to 0 and `total_m_cycles` will increase by 1.
+    /// If R8 is [HL], `total_m_cycles` will increase by 1.
     /// # Signature
     /// ```
     /// (value: i32) -> ()
@@ -513,8 +513,7 @@ impl Sm83Macros for InstructionSink<'_> {
     /// () -> (value: i32)
     /// ```
     /// # Side Effects
-    /// 1. May reset `delta_m_cycles` to 0 by calling `call_read_byte`.
-    /// 2. Always increments M-cycles by 1.
+    /// 1. Increments M-cycles by 1.
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_possible_wrap)]
     fn read_byte_static(&mut self, ctx: &mut CodegenCtx, addr: u16) -> &mut Self {
@@ -541,8 +540,7 @@ impl Sm83Macros for InstructionSink<'_> {
     /// () -> ()
     /// ```
     /// # Side Effects
-    /// 1. May reset `delta_m_cycles` to 0 by calling `call_write_byte`.
-    /// 2. Always increments M-cycles by 1.
+    /// 1. Increments M-cycles by 1.
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_possible_wrap)]
     fn write_byte_static<'a, F>(&'a mut self, ctx: &mut CodegenCtx, addr: u16, f: F) -> &'a mut Self
@@ -570,15 +568,13 @@ impl Sm83Macros for InstructionSink<'_> {
     /// (addr: i32) -> (value: i32)
     /// ```
     /// # Side Effects
-    /// 1. Resets `delta_m_cycles` to 0 because `read_byte_mem` will increment the timers before reading the byte from memory.
-    /// 2. Increments M-cycles by 1.
+    /// 1. Increments M-cycles by 1.
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_possible_wrap)]
     fn call_read_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
-        self.i32_const(i32::from(ctx.delta_m_cycles))
+        self.i32_const(i32::from(ctx.total_m_cycles))
             .i32_const(ctx.runtime_ptr as i32)
             .call(0);
-        ctx.delta_m_cycles = 0;
         ctx.increment_m_cycles(1);
         self
     }
@@ -589,15 +585,13 @@ impl Sm83Macros for InstructionSink<'_> {
     /// (value: i32, addr: i32) -> ()
     /// ```
     /// # Side Effects
-    /// 1. Resets `delta_m_cycles` to 0 because `write_byte_mem` will increment the timers before writing the byte to memory.
-    /// 2. Increments M-cycles by 1.
+    /// 1. Increments M-cycles by 1.
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_possible_wrap)]
     fn call_write_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
-        self.i32_const(i32::from(ctx.delta_m_cycles))
+        self.i32_const(i32::from(ctx.total_m_cycles))
             .i32_const(ctx.runtime_ptr as i32)
             .call(1);
-        ctx.delta_m_cycles = 0;
         ctx.increment_m_cycles(1);
         self
     }

@@ -33,9 +33,7 @@ pub struct CodegenCtx {
     pub work_ram_ptr: usize,
     pub checkpoints: Vec<Checkpoint>,
     pub traced_pc: u16,
-    // The number of M-Cycles since the system clock has been updated.
-    pub delta_m_cycles: u16,
-    // The total number of M-Cycles this block of instructions takes to execute.
+    // The total number of M-Cycles this block of instructions has taken to execute so far.
     pub total_m_cycles: u16,
 }
 
@@ -54,7 +52,6 @@ impl CodegenCtx {
     }
 
     fn increment_m_cycles(&mut self, m_cycles: u16) {
-        self.delta_m_cycles += m_cycles;
         self.total_m_cycles += m_cycles;
     }
 }
@@ -311,7 +308,7 @@ pub fn recompile(
             _ => break,
         }
 
-        // Add the number of cycles this instruction took to delta_m_cycles and total_m_cycles.
+        // Add the number of cycles this instruction took to total_m_cycles.
         // TODO: Remember to handle any context dependent instructions separately!!
         // TODO: PopRr and PushRr tick manually here, but not in the interpreter.
         // Remove this if statement once the interpreter ticks them manually.
@@ -336,7 +333,6 @@ pub fn recompile(
     }
 
     // The final instruction couldn't be added to the block, so retroactively decrement the M-cycle and PC used to fetch it.
-    ctx.delta_m_cycles -= 1;
     ctx.total_m_cycles -= 1;
     ctx.traced_pc -= 1;
 
