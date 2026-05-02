@@ -1,7 +1,6 @@
 use std::panic;
 
 use crate::cache::{BlockCache, BlockSlot, CompiledBlock};
-use crate::codegen::Checkpoint;
 use crate::{call_indirect, codegen, console_log};
 
 use interpreter::cpu::Cpu;
@@ -57,9 +56,9 @@ pub struct JitRuntime {
 
 impl JitRuntime {
     #[allow(clippy::cast_possible_truncation)]
-    fn remaining_m_cycles(&self, checkpoint: Checkpoint) -> u16 {
+    fn remaining_m_cycles(&self, total_m_cycles: u16) -> u16 {
         let m_cycles_so_far = (self.dmg_state.memory.clock - self.block_start_clock) / 4;
-        (u64::from(checkpoint.total_m_cycles) - m_cycles_so_far) as u16
+        (u64::from(total_m_cycles) - m_cycles_so_far) as u16
     }
 
     fn execute_compiled_block(&mut self, cache_address: CacheAddress) {
@@ -81,7 +80,7 @@ impl JitRuntime {
         // Update the program counter and clock.
         self.dmg_state.registers.pc = checkpoint.exit_pc;
 
-        let remaining_m_cycles = self.remaining_m_cycles(checkpoint);
+        let remaining_m_cycles = self.remaining_m_cycles(checkpoint.total_m_cycles);
         self.dmg_state.memory.increment_timers(remaining_m_cycles);
     }
 
@@ -223,9 +222,10 @@ impl JitRuntime {
     #[unsafe(no_mangle)]
     pub extern "C" fn read_byte_mem(
         address: u16,
-        delta_m_cycles: u16,
+        total_m_cycles: u16,
         runtime: &mut JitRuntime,
     ) -> u8 {
+        let delta_m_cycles = runtime.remaining_m_cycles(total_m_cycles);
         runtime.dmg_state.memory.increment_timers(delta_m_cycles);
         runtime.dmg_state.memory.read_byte(address)
     }
@@ -234,9 +234,10 @@ impl JitRuntime {
     pub extern "C" fn write_byte_mem(
         value: u8,
         address: u16,
-        delta_m_cycles: u16,
+        total_m_cycles: u16,
         runtime: &mut JitRuntime,
     ) {
+        let delta_m_cycles = runtime.remaining_m_cycles(total_m_cycles);
         runtime.dmg_state.memory.increment_timers(delta_m_cycles);
         runtime.dmg_state.memory.write_byte(address, value);
     }
