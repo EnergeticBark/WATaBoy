@@ -32,6 +32,7 @@ pub struct Checkpoint {
 pub struct CodegenCtx {
     pub block_size: usize,
     pub runtime_ptr: usize,
+    pub work_ram_ptr: usize,
     pub checkpoints: Vec<Checkpoint>,
     pub traced_pc: u16,
     // The number of M-Cycles since the system clock has been updated.
@@ -77,9 +78,11 @@ pub fn recompile(
     dmg_state: &mut Cpu,
     runtime_ptr: usize,
     registers_ptr: usize,
+    work_ram_ptr: usize,
 ) -> Option<WasmBlock> {
     let mut ctx = CodegenCtx {
         runtime_ptr,
+        work_ram_ptr,
         traced_pc: dmg_state.registers.pc,
         ..Default::default()
     };
