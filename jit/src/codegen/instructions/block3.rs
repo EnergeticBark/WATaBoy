@@ -299,16 +299,12 @@ impl Block3 for InstructionSink<'_> {
     fn ldh_n_a(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self {
         ctx.increment_m_cycles(1);
         let address = u16::from_le_bytes([imm, 0xFF]);
-        self.local_get(A)
-            .i32_const(i32::from(address))
-            .call_write_byte(ctx)
+        self.write_byte_static(ctx, address, |sink| sink.local_get(A))
             .insert_checkpoint(ctx)
     }
     fn ld_nn_a(&mut self, ctx: &mut CodegenCtx, imm: u16) -> &mut Self {
         ctx.increment_m_cycles(2);
-        self.local_get(A)
-            .i32_const(i32::from(imm))
-            .call_write_byte(ctx)
+        self.write_byte_static(ctx, imm, |sink| sink.local_get(A))
     }
     fn ldh_a_n(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self {
         ctx.increment_m_cycles(1);

@@ -34,9 +34,7 @@ impl Block0 for InstructionSink<'_> {
     }
 
     fn ld_rr_nn(&mut self, r16: R16, imm: u16) -> &mut Self {
-        // Name our scratch register.
-        const TEMP: u32 = PROLOGE_LENGTH;
-        self.i32_const(i32::from(imm)).set_r16(r16, TEMP)
+        self.set_r16_static(r16, imm)
     }
 
     fn ld_mem_a(&mut self, ctx: &mut CodegenCtx, r16_mem: R16Mem) -> &mut Self {
