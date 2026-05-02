@@ -23,8 +23,6 @@ const MAX_BLOCK_SIZE: usize = 500;
 #[derive(Copy, Clone)]
 pub struct Checkpoint {
     pub exit_pc: u16,
-    // The number of M-Cycles since the system clock has been updated.
-    pub remaining_m_cycles: u16,
     pub total_m_cycles: u16,
 }
 
@@ -46,7 +44,6 @@ impl CodegenCtx {
     fn add_checkpoint(&mut self) -> usize {
         self.checkpoints.push(Checkpoint {
             exit_pc: self.traced_pc,
-            remaining_m_cycles: self.delta_m_cycles,
             total_m_cycles: self.total_m_cycles,
         });
         self.checkpoints.len() - 1
