@@ -10,8 +10,6 @@ use instructions::{Block0, Block1, Block2, Block3, Prefix};
 use macros::Sm83Macros;
 use module::{empty_jit_block_function, empty_jit_block_module};
 
-use std::cell::LazyCell;
-
 use wasm_encoder::{BlockType, CodeSection, InstructionSink};
 
 #[cfg(feature = "jit-trace")]
@@ -89,17 +87,8 @@ pub fn recompile(
     #[cfg(feature = "jit-trace")]
     let mut sm83_disassembly = String::new();
 
-    // Create these lazily so we don't alloc if pc_delta ends up being 0.
-    let mut function = LazyCell::new(empty_jit_block_function);
-    let mut instruction_sink = LazyCell::new(|| {
-        let mut instruction_sink = function.instructions();
-
-        instruction_sink.read_regs(registers_ptr);
-
-        // Wrap our JIT'd instructions in a block so we can break early if needed.
-        instruction_sink.block(BlockType::Empty);
-        instruction_sink
-    });
+    let mut instruction_vec = Vec::new();
+    let mut instruction_sink = InstructionSink::new(&mut instruction_vec);
 
     loop {
         let bytecode = dmg_state.memory.read_byte(ctx.traced_pc);
@@ -348,7 +337,17 @@ pub fn recompile(
     // Encode the code section.
     let mut codes = CodeSection::new();
 
-    instruction_sink
+    let mut function = empty_jit_block_function();
+    function
+        .instructions()
+        .read_regs(registers_ptr)
+        // Wrap our JIT'd instructions in a block so we can break early if needed.
+        .block(BlockType::Empty);
+
+    function.raw(instruction_vec);
+
+    function
+        .instructions()
         // End the inner block.
         .end()
         // Add the calling convention's epilogue.
@@ -365,8 +364,8 @@ pub fn recompile(
     })
 }
 
-// Try to recompile the prefix opcode at PC. Returns true if the opcode was recompiled successfully.
-pub fn recompile_prefix(
+// Try to recompile the prefix opcode at PC.
+fn recompile_prefix(
     dmg_state: &mut Cpu,
     ctx: &mut CodegenCtx,
     instruction_sink: &mut InstructionSink,
