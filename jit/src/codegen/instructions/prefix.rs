@@ -30,12 +30,12 @@ impl Prefix for InstructionSink<'_> {
         // Name our scratch registers.
         const R8_VAL: u32 = PROLOGE_LENGTH;
         const BIT_7: u32 = PROLOGE_LENGTH + 1;
-        self.clear_flags()
+        self.clear_flags(ctx)
             .get_r8(ctx, r8)
             .local_tee(R8_VAL)
             // *** Calculate Zero Flag. ***
             .i32_eqz()
-            .set_flag(FlagBit::Zero)
+            .set_flag(ctx, FlagBit::Zero)
             /* Calculate the Carry flag:
              * (R8_VAL >> 7) == 0b0000_0001
              */
@@ -43,7 +43,7 @@ impl Prefix for InstructionSink<'_> {
             .i32_const(7)
             .i32_shr_u()
             .local_tee(BIT_7)
-            .set_flag(FlagBit::Carry)
+            .set_flag(ctx, FlagBit::Carry)
             /* Perform the shift left and set the lowest bit to BIT_7:
              * R8_VAL = ((R8_VAL << 1) | BIT_7) & 0xFF
              */
@@ -61,12 +61,12 @@ impl Prefix for InstructionSink<'_> {
         // Name our scratch registers.
         const R8_VAL: u32 = PROLOGE_LENGTH;
         const BIT_0: u32 = PROLOGE_LENGTH + 1;
-        self.clear_flags()
+        self.clear_flags(ctx)
             .get_r8(ctx, r8)
             .local_tee(R8_VAL)
             // *** Calculate Zero Flag. ***
             .i32_eqz()
-            .set_flag(FlagBit::Zero)
+            .set_flag(ctx, FlagBit::Zero)
             .local_get(R8_VAL)
             /* Calculate the Carry flag:
              * (R8_VAL & 0b0000_0001) == 0b0000_0001
@@ -74,7 +74,7 @@ impl Prefix for InstructionSink<'_> {
             .i32_const(0b0000_0001)
             .i32_and()
             .local_tee(BIT_0)
-            .set_flag(FlagBit::Carry)
+            .set_flag(ctx, FlagBit::Carry)
             /* Perform the shift right and set the highest bit to BIT_0:
              * R8_VAL = (R8_VAL >> 1) | (BIT_0 << 7)
              */
@@ -92,9 +92,9 @@ impl Prefix for InstructionSink<'_> {
         // Name our scratch registers.
         const R8_VAL: u32 = PROLOGE_LENGTH;
         const CARRY: u32 = PROLOGE_LENGTH + 1;
-        self.check_flag(FlagBit::Carry)
+        self.check_flag(ctx, FlagBit::Carry)
             .local_set(CARRY)
-            .clear_flags()
+            .clear_flags(ctx)
             .get_r8(ctx, r8)
             .local_tee(R8_VAL)
             /* Calculate the Carry flag:
@@ -104,7 +104,7 @@ impl Prefix for InstructionSink<'_> {
             .i32_and()
             .i32_const(0)
             .i32_ne()
-            .set_flag(FlagBit::Carry)
+            .set_flag(ctx, FlagBit::Carry)
             /* Perform the shift left and set the lowest bit to CARRY:
              * R8_VAL = ((R8_VAL << 1) | CARRY) & 0xFF
              */
@@ -118,7 +118,7 @@ impl Prefix for InstructionSink<'_> {
             .local_tee(R8_VAL)
             // *** Calculate Zero Flag. ***
             .i32_eqz()
-            .set_flag(FlagBit::Zero)
+            .set_flag(ctx, FlagBit::Zero)
             // *** Assign the new value to R8. ***
             .local_get(R8_VAL)
             .set_r8(ctx, r8)
@@ -128,9 +128,9 @@ impl Prefix for InstructionSink<'_> {
         // Name our scratch registers.
         const R8_VAL: u32 = PROLOGE_LENGTH;
         const CARRY: u32 = PROLOGE_LENGTH + 1;
-        self.check_flag(FlagBit::Carry)
+        self.check_flag(ctx, FlagBit::Carry)
             .local_set(CARRY)
-            .clear_flags()
+            .clear_flags(ctx)
             .get_r8(ctx, r8)
             .local_tee(R8_VAL)
             /* Calculate the Carry flag:
@@ -138,7 +138,7 @@ impl Prefix for InstructionSink<'_> {
              */
             .i32_const(0b0000_0001)
             .i32_and()
-            .set_flag(FlagBit::Carry)
+            .set_flag(ctx, FlagBit::Carry)
             /* Perform the shift right and set the highest bit to CARRY:
              * R8_VAL = (R8_VAL >> 1) | CARRY << 7)
              */
@@ -152,7 +152,7 @@ impl Prefix for InstructionSink<'_> {
             .local_tee(R8_VAL)
             // *** Calculate Zero Flag. ***
             .i32_eqz()
-            .set_flag(FlagBit::Zero)
+            .set_flag(ctx, FlagBit::Zero)
             // *** Assign the new value to R8. ***
             .local_get(R8_VAL)
             .set_r8(ctx, r8)
@@ -161,13 +161,13 @@ impl Prefix for InstructionSink<'_> {
     fn sla_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch register.
         const R8_VAL: u32 = PROLOGE_LENGTH;
-        self.clear_flags()
+        self.clear_flags(ctx)
             .get_r8(ctx, r8)
             .local_tee(R8_VAL)
             // *** Calculate Carry Flag. ***
             .i32_const(7)
             .i32_shr_u()
-            .set_flag(FlagBit::Carry)
+            .set_flag(ctx, FlagBit::Carry)
             /* Perform the shift left:
              * R8_VAL = (R8_VAL << 1) & 0xFF
              */
@@ -179,7 +179,7 @@ impl Prefix for InstructionSink<'_> {
             .local_tee(R8_VAL)
             // *** Calculate Zero Flag. ***
             .i32_eqz()
-            .set_flag(FlagBit::Zero)
+            .set_flag(ctx, FlagBit::Zero)
             // *** Assign the new value to R8. ***
             .local_get(R8_VAL)
             .set_r8(ctx, r8)
@@ -189,7 +189,7 @@ impl Prefix for InstructionSink<'_> {
         // Name our scratch register.
         const R8_VAL: u32 = PROLOGE_LENGTH;
         const BIT_7: u32 = PROLOGE_LENGTH + 1;
-        self.clear_flags()
+        self.clear_flags(ctx)
             .get_r8(ctx, r8)
             .local_tee(R8_VAL)
             /* Calculate the Carry flag:
@@ -197,7 +197,7 @@ impl Prefix for InstructionSink<'_> {
              */
             .i32_const(0b0000_0001)
             .i32_and()
-            .set_flag(FlagBit::Carry)
+            .set_flag(ctx, FlagBit::Carry)
             /* Save the value of bit 7 */
             .local_get(R8_VAL)
             .i32_const(0b1000_0000)
@@ -214,7 +214,7 @@ impl Prefix for InstructionSink<'_> {
             .local_tee(R8_VAL)
             // *** Calculate Zero Flag. ***
             .i32_eqz()
-            .set_flag(FlagBit::Zero)
+            .set_flag(ctx, FlagBit::Zero)
             // *** Assign the new value to R8. ***
             .local_get(R8_VAL)
             .set_r8(ctx, r8)
@@ -223,12 +223,12 @@ impl Prefix for InstructionSink<'_> {
     fn swap_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch register.
         const R8_VAL: u32 = PROLOGE_LENGTH;
-        self.clear_flags()
+        self.clear_flags(ctx)
             .get_r8(ctx, r8)
             .local_tee(R8_VAL)
             // *** Calculate Zero Flag. ***
             .i32_eqz()
-            .set_flag(FlagBit::Zero)
+            .set_flag(ctx, FlagBit::Zero)
             /* Perform the swap:
              * R8 = ((R8_VAL << 4) | (R8_VAL >> 4)) & 0xFF
              */
@@ -247,7 +247,7 @@ impl Prefix for InstructionSink<'_> {
     fn srl_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch registers.
         const R8_VAL: u32 = PROLOGE_LENGTH;
-        self.clear_flags()
+        self.clear_flags(ctx)
             .get_r8(ctx, r8)
             .local_tee(R8_VAL)
             /* Calculate the Carry flag:
@@ -255,7 +255,7 @@ impl Prefix for InstructionSink<'_> {
              */
             .i32_const(0b0000_0001)
             .i32_and()
-            .set_flag(FlagBit::Carry)
+            .set_flag(ctx, FlagBit::Carry)
             /* Perform the shift right:
              * R8_VAL = (R8_VAL >> 1)
              */
@@ -265,16 +265,16 @@ impl Prefix for InstructionSink<'_> {
             .local_tee(R8_VAL)
             // *** Calculate Zero Flag. ***
             .i32_eqz()
-            .set_flag(FlagBit::Zero)
+            .set_flag(ctx, FlagBit::Zero)
             // *** Assign the new value to R8. ***
             .local_get(R8_VAL)
             .set_r8(ctx, r8)
     }
 
     fn bit_b_r(&mut self, ctx: &mut CodegenCtx, bit_index: u8, r8: R8) -> &mut Self {
-        self.check_flag(FlagBit::Carry) // *** Preserve the original value of Carry on the stack. ***
-            .assign_flags(false, false, true, false)
-            .set_flag(FlagBit::Carry) // Restore Carry flag.
+        self.check_flag(ctx, FlagBit::Carry) // *** Preserve the original value of Carry on the stack. ***
+            .assign_flags(ctx, false, false, true, false)
+            .set_flag(ctx, FlagBit::Carry) // Restore Carry flag.
             .get_r8(ctx, r8)
             /* Calculate the Zero flag:
              * R8_VAL & (0b0000_0001 << bit_index) == 0
@@ -282,7 +282,7 @@ impl Prefix for InstructionSink<'_> {
             .i32_const(0b0000_0001 << bit_index)
             .i32_and()
             .i32_eqz()
-            .set_flag(FlagBit::Zero)
+            .set_flag(ctx, FlagBit::Zero)
     }
 
     fn res_b_r(&mut self, ctx: &mut CodegenCtx, bit_index: u8, r8: R8) -> &mut Self {

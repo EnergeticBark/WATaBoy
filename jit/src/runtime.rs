@@ -9,10 +9,7 @@ use interpreter::cpu::registers::Flags;
 use interpreter::joypad::ButtonsHeld;
 
 #[cfg(feature = "log-uncompiled")]
-use {
-    interpreter::cpu::opcodes::Opcode, interpreter::cpu::opcodes::PrefixOpcode,
-    std::collections::HashMap,
-};
+use {interpreter::cpu::opcodes::PrefixOpcode, std::collections::HashMap};
 
 unsafe extern "C" {
     // Compiles and instantiates a Wasm module using the bytecode in `buffer`, then adds its function to table 1 of *this* module.

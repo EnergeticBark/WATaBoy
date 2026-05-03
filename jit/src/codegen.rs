@@ -108,13 +108,13 @@ pub fn recompile(
 
                 let address = u16::from_le_bytes([first_byte, second_byte]);
                 ctx.increment_pc();
-                instruction_sink.ld_rr_nn(x, address);
+                instruction_sink.ld_rr_nn(&mut ctx, x, address);
             }
             Opcode::LdMemA { x } => _ = instruction_sink.ld_mem_a(&mut ctx, x),
             Opcode::LdAMem { x } => _ = instruction_sink.ld_a_mem(&mut ctx, x),
-            Opcode::IncRr { x } => _ = instruction_sink.inc_rr(x),
-            Opcode::DecRr { x } => _ = instruction_sink.dec_rr(x),
-            Opcode::AddHlRr { x } => _ = instruction_sink.add_hl_rr(x),
+            Opcode::IncRr { x } => _ = instruction_sink.inc_rr(&mut ctx, x),
+            Opcode::DecRr { x } => _ = instruction_sink.dec_rr(&mut ctx, x),
+            Opcode::AddHlRr { x } => _ = instruction_sink.add_hl_rr(&mut ctx, x),
             Opcode::IncR { x } => _ = instruction_sink.inc_r(&mut ctx, x),
             Opcode::DecR { x } => _ = instruction_sink.dec_r(&mut ctx, x),
             Opcode::LdRN { x } => {
@@ -122,12 +122,12 @@ pub fn recompile(
                 ctx.increment_pc();
                 instruction_sink.ld_r_n(&mut ctx, x, imm);
             }
-            Opcode::Rlca => _ = instruction_sink.rlca(),
-            Opcode::Rrca => _ = instruction_sink.rrca(),
-            Opcode::Rra => _ = instruction_sink.rra(),
-            Opcode::Cpl => _ = instruction_sink.cpl(),
-            Opcode::Scf => _ = instruction_sink.scf(),
-            Opcode::Ccf => _ = instruction_sink.ccf(),
+            Opcode::Rlca => _ = instruction_sink.rlca(&mut ctx),
+            Opcode::Rrca => _ = instruction_sink.rrca(&mut ctx),
+            Opcode::Rra => _ = instruction_sink.rra(&mut ctx),
+            Opcode::Cpl => _ = instruction_sink.cpl(&mut ctx),
+            Opcode::Scf => _ = instruction_sink.scf(&mut ctx),
+            Opcode::Ccf => _ = instruction_sink.ccf(&mut ctx),
             Opcode::JrE => {
                 let prev_pc = ctx.traced_pc - 1;
 
@@ -164,42 +164,42 @@ pub fn recompile(
             Opcode::AddN => {
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
-                instruction_sink.add_n(imm);
+                instruction_sink.add_n(&mut ctx, imm);
             }
             Opcode::AdcN => {
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
-                instruction_sink.adc_n(imm);
+                instruction_sink.adc_n(&mut ctx, imm);
             }
             Opcode::SubN => {
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
-                instruction_sink.sub_n(imm);
+                instruction_sink.sub_n(&mut ctx, imm);
             }
             Opcode::SbcN => {
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
-                instruction_sink.sbc_n(imm);
+                instruction_sink.sbc_n(&mut ctx, imm);
             }
             Opcode::AndN => {
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
-                instruction_sink.and_n(imm);
+                instruction_sink.and_n(&mut ctx, imm);
             }
             Opcode::XorN => {
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
-                instruction_sink.xor_n(imm);
+                instruction_sink.xor_n(&mut ctx, imm);
             }
             Opcode::OrN => {
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
-                instruction_sink.or_n(imm);
+                instruction_sink.or_n(&mut ctx, imm);
             }
             Opcode::CpN => {
                 let imm = dmg_state.memory.read_byte(ctx.traced_pc);
                 ctx.increment_pc();
-                instruction_sink.cp_n(imm);
+                instruction_sink.cp_n(&mut ctx, imm);
             }
             Opcode::LdhCA => _ = instruction_sink.ldh_c_a(&mut ctx),
             Opcode::LdhNA => {
@@ -286,9 +286,9 @@ pub fn recompile(
                 let e = imm.cast_signed();
 
                 ctx.increment_pc();
-                instruction_sink.ld_hl_sp_plus_e(e);
+                instruction_sink.ld_hl_sp_plus_e(&mut ctx, e);
             }
-            Opcode::LdSpHl => _ = instruction_sink.ld_sp_hl(),
+            Opcode::LdSpHl => _ = instruction_sink.ld_sp_hl(&mut ctx),
             _ => break,
         }
 
