@@ -79,11 +79,6 @@ pub fn recompile(
         ..Default::default()
     };
 
-    // Don't cache below 0x100 if the boot ROM is mounted!
-    if dmg_state.memory.boot_rom_mounted() && ctx.traced_pc < 0x100 {
-        return None;
-    }
-
     #[cfg(feature = "jit-trace")]
     let mut sm83_disassembly = String::new();
 
