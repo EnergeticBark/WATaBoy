@@ -33,6 +33,11 @@ pub(crate) fn empty_jit_block_module() -> Module {
     let params = vec![ValType::I32; 2];
     let results = vec![ValType::I32];
     types.ty().function(params, results);
+
+    let params = vec![ValType::I32];
+    let results = vec![ValType::I32];
+    types.ty().function(params, results);
+
     module.section(&types);
 
     let mut imports = ImportSection::new();
