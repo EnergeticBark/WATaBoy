@@ -9,7 +9,9 @@ mod registers;
 use instructions::{Block0, Block1, Block2, Block3, Prefix};
 use macros::Sm83Macros;
 use module::{empty_jit_block_function, empty_jit_block_module};
+use registers::LocalReg;
 
+use enumset::EnumSet;
 use wasm_encoder::{BlockType, CodeSection, InstructionSink};
 
 #[cfg(feature = "jit-trace")]
@@ -26,6 +28,7 @@ pub struct Checkpoint {
 
 #[derive(Default)]
 pub struct CodegenCtx {
+    pub regs_used: EnumSet<LocalReg>,
     pub block_size: usize,
     pub runtime_ptr: usize,
     pub work_ram_ptr: usize,
@@ -335,7 +338,7 @@ pub fn recompile(
     let mut function = empty_jit_block_function();
     function
         .instructions()
-        .read_regs(registers_ptr)
+        .prologue(registers_ptr, ctx.regs_used)
         // Wrap our JIT'd instructions in a block so we can break early if needed.
         .block(BlockType::Empty);
 
@@ -346,7 +349,7 @@ pub fn recompile(
         // End the inner block.
         .end()
         // Add the calling convention's epilogue.
-        .return_regs(registers_ptr)
+        .epilogue(registers_ptr, ctx.regs_used)
         .end();
     codes.function(&function);
     module.section(&codes);

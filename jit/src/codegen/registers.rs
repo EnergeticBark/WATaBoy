@@ -1,6 +1,8 @@
 use interpreter::cpu::opcodes::parameters::R8;
 
-#[derive(Clone, Copy)]
+use enumset::EnumSetType;
+
+#[derive(EnumSetType)]
 pub enum LocalReg {
     A,
     F,
