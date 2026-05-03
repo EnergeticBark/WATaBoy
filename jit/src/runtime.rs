@@ -105,7 +105,10 @@ impl JitRuntime {
             BlockSlot::Uncompilable => None,
             BlockSlot::Compiled(_) => Some(cache_address),
             BlockSlot::Uncompiled => {
-                if let Some(jit_block) = codegen::recompile(
+                // Don't cache below 0x100 if the boot ROM is mounted!
+                if cache_address.address < 0x100 && self.dmg_state.memory.boot_rom_mounted() {
+                    None
+                } else if let Some(jit_block) = codegen::recompile(
                     &mut self.dmg_state,
                     self.ptr,
                     self.registers_ptr,
