@@ -1,10 +1,7 @@
 use interpreter::cpu::opcodes::parameters::{R8, R16, R16Mem, R16Stack};
 use wasm_encoder::{InstructionSink, MemArg};
 
-use crate::codegen::{
-    CodegenCtx,
-    registers::{A, B, C, D, E, F, H, L, SP, r8_to_reg_param},
-};
+use crate::codegen::{CodegenCtx, registers::LocalReg};
 
 pub(crate) enum FlagBit {
     Zero = 7,
@@ -14,22 +11,26 @@ pub(crate) enum FlagBit {
 }
 
 pub(crate) trait Sm83Macros {
+    fn get_reg(&mut self, ctx: &mut CodegenCtx, reg: LocalReg) -> &mut Self;
+    fn set_reg(&mut self, ctx: &mut CodegenCtx, reg: LocalReg) -> &mut Self;
+    fn tee_reg(&mut self, ctx: &mut CodegenCtx, reg: LocalReg) -> &mut Self;
     fn get_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
     fn set_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self;
-    fn get_r16(&mut self, r16: R16) -> &mut Self;
-    fn set_r16(&mut self, r16: R16, temp_reg: u32) -> &mut Self;
-    fn set_r16_static(&mut self, r16: R16, value: u16) -> &mut Self;
+    fn get_r16(&mut self, ctx: &mut CodegenCtx, r16: R16) -> &mut Self;
+    fn set_r16(&mut self, ctx: &mut CodegenCtx, r16: R16, temp_reg: u32) -> &mut Self;
+    fn set_r16_static(&mut self, ctx: &mut CodegenCtx, r16: R16, value: u16) -> &mut Self;
     fn get_r16_mem(&mut self, ctx: &mut CodegenCtx, r16_mem: R16Mem, temp_reg: u32) -> &mut Self;
     fn set_r16_mem(&mut self, ctx: &mut CodegenCtx, r16: R16Mem, temp_reg: u32) -> &mut Self;
-    fn get_r16_stack(&mut self, r16: R16Stack) -> &mut Self;
-    fn set_r16_stack(&mut self, r16: R16Stack) -> &mut Self;
+    fn get_r16_stack(&mut self, ctx: &mut CodegenCtx, r16: R16Stack) -> &mut Self;
+    fn set_r16_stack(&mut self, ctx: &mut CodegenCtx, r16: R16Stack) -> &mut Self;
     fn pop_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
     fn push_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
-    fn clear_flags(&mut self) -> &mut Self;
+    fn clear_flags(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
     // TODO: I should probably just reuse the Flag struct defined in the interpreter here.
     #[allow(clippy::fn_params_excessive_bools)]
     fn assign_flags(
         &mut self,
+        ctx: &mut CodegenCtx,
         zero: bool,
         subtraction: bool,
         half_carry: bool,
@@ -38,30 +39,43 @@ pub(crate) trait Sm83Macros {
     #[allow(clippy::fn_params_excessive_bools)]
     fn set_flags(
         &mut self,
+        ctx: &mut CodegenCtx,
         zero: bool,
         subtraction: bool,
         half_carry: bool,
         carry: bool,
     ) -> &mut Self;
-    fn set_flag(&mut self, flag_bit: FlagBit) -> &mut Self;
-    fn check_flag(&mut self, flag_bit: FlagBit) -> &mut Self;
+    fn set_flag(&mut self, ctx: &mut CodegenCtx, flag_bit: FlagBit) -> &mut Self;
+    fn check_flag(&mut self, ctx: &mut CodegenCtx, flag_bit: FlagBit) -> &mut Self;
     fn insert_checkpoint(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
     fn read_regs(&mut self, registers_ptr: usize) -> &mut Self;
     fn return_regs(&mut self, registers_ptr: usize) -> &mut Self;
     fn read_byte_static(&mut self, ctx: &mut CodegenCtx, addr: u16) -> &mut Self;
-    fn write_byte_static<'a, F>(
+    fn write_byte_static<'a: 'b, 'b, F>(
         &'a mut self,
-        ctx: &mut CodegenCtx,
+        ctx: &'b mut CodegenCtx,
         addr: u16,
         f: F,
     ) -> &'a mut Self
     where
-        F: FnOnce(&'a mut Self) -> &'a mut Self;
+        F: FnOnce(&'a mut Self, &'b mut CodegenCtx) -> (&'a mut Self, &'b mut CodegenCtx);
     fn call_read_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
     fn call_write_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
 }
 
 impl Sm83Macros for InstructionSink<'_> {
+    fn get_reg(&mut self, ctx: &mut CodegenCtx, reg: LocalReg) -> &mut Self {
+        self.local_get(reg.to_index())
+    }
+
+    fn set_reg(&mut self, ctx: &mut CodegenCtx, reg: LocalReg) -> &mut Self {
+        self.local_set(reg.to_index())
+    }
+
+    fn tee_reg(&mut self, ctx: &mut CodegenCtx, reg: LocalReg) -> &mut Self {
+        self.local_tee(reg.to_index())
+    }
+
     /// Get the value of the specified 8-bit register.
     /// If R8 is [HL], `total_m_cycles` will increase by 1.
     /// # Signature
@@ -70,8 +84,8 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     fn get_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         match r8 {
-            R8::IndirectHL => self.get_r16(R16::Hl).call_read_byte(ctx),
-            _ => self.local_get(r8_to_reg_param(r8)),
+            R8::IndirectHL => self.get_r16(ctx, R16::Hl).call_read_byte(ctx),
+            _ => self.get_reg(ctx, r8.try_into().unwrap()),
         }
     }
 
@@ -83,8 +97,8 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     fn set_r8(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         match r8 {
-            R8::IndirectHL => self.get_r16(R16::Hl).call_write_byte(ctx),
-            _ => self.local_set(r8_to_reg_param(r8)),
+            R8::IndirectHL => self.get_r16(ctx, R16::Hl).call_write_byte(ctx),
+            _ => self.set_reg(ctx, r8.try_into().unwrap()),
         }
     }
 
@@ -93,18 +107,18 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     /// () -> (r16: i32)
     /// ```
-    fn get_r16(&mut self, r16: R16) -> &mut Self {
+    fn get_r16(&mut self, ctx: &mut CodegenCtx, r16: R16) -> &mut Self {
         let (high_reg, low_reg) = match r16 {
-            R16::Bc => (R8::B, R8::C),
-            R16::De => (R8::D, R8::E),
-            R16::Hl => (R8::H, R8::L),
+            R16::Bc => (LocalReg::B, LocalReg::C),
+            R16::De => (LocalReg::D, LocalReg::E),
+            R16::Hl => (LocalReg::H, LocalReg::L),
             R16::Sp => unimplemented!("SP isn't in the JIT prelude/epilogue yet."),
         };
 
-        self.local_get(r8_to_reg_param(high_reg))
+        self.get_reg(ctx, high_reg)
             .i32_const(8)
             .i32_shl()
-            .local_get(r8_to_reg_param(low_reg))
+            .get_reg(ctx, low_reg)
             .i32_or()
     }
 
@@ -116,12 +130,12 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     /// (value: i32) -> ()
     /// ```
-    fn set_r16(&mut self, r16: R16, temp_reg: u32) -> &mut Self {
+    fn set_r16(&mut self, ctx: &mut CodegenCtx, r16: R16, temp_reg: u32) -> &mut Self {
         let (high_reg, low_reg) = match r16 {
-            R16::Bc => (R8::B, R8::C),
-            R16::De => (R8::D, R8::E),
-            R16::Hl => (R8::H, R8::L),
-            R16::Sp => return self.local_set(SP),
+            R16::Bc => (LocalReg::B, LocalReg::C),
+            R16::De => (LocalReg::D, LocalReg::E),
+            R16::Hl => (LocalReg::H, LocalReg::L),
+            R16::Sp => return self.set_reg(ctx, LocalReg::SP),
         };
 
         self.local_tee(temp_reg)
@@ -129,27 +143,27 @@ impl Sm83Macros for InstructionSink<'_> {
             .i32_shr_u()
             .i32_const(0xFF)
             .i32_and()
-            .local_set(r8_to_reg_param(high_reg))
+            .set_reg(ctx, high_reg)
             .local_get(temp_reg)
             .i32_const(0xFF)
             .i32_and()
-            .local_set(r8_to_reg_param(low_reg))
+            .set_reg(ctx, low_reg)
     }
 
-    fn set_r16_static(&mut self, r16: R16, value: u16) -> &mut Self {
+    fn set_r16_static(&mut self, ctx: &mut CodegenCtx, r16: R16, value: u16) -> &mut Self {
         let (high_reg, low_reg) = match r16 {
-            R16::Bc => (R8::B, R8::C),
-            R16::De => (R8::D, R8::E),
-            R16::Hl => (R8::H, R8::L),
-            R16::Sp => return self.i32_const(i32::from(value)).local_set(SP),
+            R16::Bc => (LocalReg::B, LocalReg::C),
+            R16::De => (LocalReg::D, LocalReg::E),
+            R16::Hl => (LocalReg::H, LocalReg::L),
+            R16::Sp => return self.i32_const(i32::from(value)).set_reg(ctx, LocalReg::SP),
         };
 
         let [high, low] = value.to_be_bytes();
 
         self.i32_const(i32::from(high))
-            .local_set(r8_to_reg_param(high_reg))
+            .set_reg(ctx, high_reg)
             .i32_const(i32::from(low))
-            .local_set(r8_to_reg_param(low_reg))
+            .set_reg(ctx, low_reg)
     }
 
     /// Get the value at the location in memory pointed to by the specified 16-bit memory register.
@@ -162,15 +176,15 @@ impl Sm83Macros for InstructionSink<'_> {
     /// Calls `call_read_byte`.
     fn get_r16_mem(&mut self, ctx: &mut CodegenCtx, r16_mem: R16Mem, temp_reg: u32) -> &mut Self {
         let (high_reg, low_reg) = match r16_mem {
-            R16Mem::Bc => (R8::B, R8::C),
-            R16Mem::De => (R8::D, R8::E),
-            _ => (R8::H, R8::L),
+            R16Mem::Bc => (LocalReg::B, LocalReg::C),
+            R16Mem::De => (LocalReg::D, LocalReg::E),
+            _ => (LocalReg::H, LocalReg::L),
         };
 
-        self.local_get(r8_to_reg_param(high_reg))
+        self.get_reg(ctx, high_reg)
             .i32_const(8)
             .i32_shl()
-            .local_get(r8_to_reg_param(low_reg))
+            .get_reg(ctx, low_reg)
             .i32_or();
 
         if matches!(r16_mem, R16Mem::HlInc | R16Mem::HlDec) {
@@ -184,13 +198,13 @@ impl Sm83Macros for InstructionSink<'_> {
                 self.local_get(temp_reg)
                     .i32_const(1)
                     .i32_add()
-                    .set_r16(R16::Hl, temp_reg);
+                    .set_r16(ctx, R16::Hl, temp_reg);
             }
             R16Mem::HlDec => {
                 self.local_get(temp_reg)
                     .i32_const(1)
                     .i32_sub()
-                    .set_r16(R16::Hl, temp_reg);
+                    .set_r16(ctx, R16::Hl, temp_reg);
             }
             _ => (),
         }
@@ -207,15 +221,15 @@ impl Sm83Macros for InstructionSink<'_> {
     /// Calls `call_write_byte`.
     fn set_r16_mem(&mut self, ctx: &mut CodegenCtx, r16_mem: R16Mem, temp_reg: u32) -> &mut Self {
         let (high_reg, low_reg) = match r16_mem {
-            R16Mem::Bc => (R8::B, R8::C),
-            R16Mem::De => (R8::D, R8::E),
-            _ => (R8::H, R8::L),
+            R16Mem::Bc => (LocalReg::B, LocalReg::C),
+            R16Mem::De => (LocalReg::D, LocalReg::E),
+            _ => (LocalReg::H, LocalReg::L),
         };
 
-        self.local_get(r8_to_reg_param(high_reg))
+        self.get_reg(ctx, high_reg)
             .i32_const(8)
             .i32_shl()
-            .local_get(r8_to_reg_param(low_reg))
+            .get_reg(ctx, low_reg)
             .i32_or();
 
         if matches!(r16_mem, R16Mem::HlInc | R16Mem::HlDec) {
@@ -229,13 +243,13 @@ impl Sm83Macros for InstructionSink<'_> {
                 self.local_get(temp_reg)
                     .i32_const(1)
                     .i32_add()
-                    .set_r16(R16::Hl, temp_reg);
+                    .set_r16(ctx, R16::Hl, temp_reg);
             }
             R16Mem::HlDec => {
                 self.local_get(temp_reg)
                     .i32_const(1)
                     .i32_sub()
-                    .set_r16(R16::Hl, temp_reg);
+                    .set_r16(ctx, R16::Hl, temp_reg);
             }
             _ => (),
         }
@@ -247,15 +261,15 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     /// () -> (low_byte: i32, high_byte: i32)
     /// ```
-    fn get_r16_stack(&mut self, r16: R16Stack) -> &mut Self {
+    fn get_r16_stack(&mut self, ctx: &mut CodegenCtx, r16: R16Stack) -> &mut Self {
         let (high_reg, low_reg) = match r16 {
-            R16Stack::Bc => (B, C),
-            R16Stack::De => (D, E),
-            R16Stack::Hl => (H, L),
-            R16Stack::Af => (A, F),
+            R16Stack::Bc => (LocalReg::B, LocalReg::C),
+            R16Stack::De => (LocalReg::D, LocalReg::E),
+            R16Stack::Hl => (LocalReg::H, LocalReg::L),
+            R16Stack::Af => (LocalReg::A, LocalReg::F),
         };
 
-        self.local_get(low_reg).local_get(high_reg)
+        self.get_reg(ctx, low_reg).get_reg(ctx, high_reg)
     }
 
     /// Set the value of the specified 16-bit stack register.
@@ -264,16 +278,16 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     /// (high_byte: i32, low_byte: i32) -> ()
     /// ```
-    fn set_r16_stack(&mut self, r16: R16Stack) -> &mut Self {
+    fn set_r16_stack(&mut self, ctx: &mut CodegenCtx, r16: R16Stack) -> &mut Self {
         let (high_reg, low_reg) = match r16 {
-            R16Stack::Bc => (B, C),
-            R16Stack::De => (D, E),
-            R16Stack::Hl => (H, L),
+            R16Stack::Bc => (LocalReg::B, LocalReg::C),
+            R16Stack::De => (LocalReg::D, LocalReg::E),
+            R16Stack::Hl => (LocalReg::H, LocalReg::L),
             // TODO: Don't set the lower nibble of F!!!
-            R16Stack::Af => (A, F),
+            R16Stack::Af => (LocalReg::A, LocalReg::F),
         };
 
-        self.local_set(high_reg).local_set(low_reg)
+        self.set_reg(ctx, high_reg).set_reg(ctx, low_reg)
     }
 
     /// Pop an 8-bit value from the stack.
@@ -288,12 +302,12 @@ impl Sm83Macros for InstructionSink<'_> {
     /// mem[SP++]
     /// ```
     fn pop_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
-        self.local_get(SP)
+        self.get_reg(ctx, LocalReg::SP)
             .call_read_byte(ctx)
-            .local_get(SP)
+            .get_reg(ctx, LocalReg::SP)
             .i32_const(1)
             .i32_add()
-            .local_set(SP)
+            .set_reg(ctx, LocalReg::SP)
     }
 
     /// Push an 8-bit value from the stack.
@@ -309,10 +323,10 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     fn push_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
         // Pre-decrement SP.
-        self.local_get(SP)
+        self.get_reg(ctx, LocalReg::SP)
             .i32_const(1)
             .i32_sub()
-            .local_tee(SP)
+            .tee_reg(ctx, LocalReg::SP)
             .call_write_byte(ctx)
     }
 
@@ -325,8 +339,8 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     /// F = 0x00
     /// ```
-    fn clear_flags(&mut self) -> &mut Self {
-        self.i32_const(0x00).local_set(F)
+    fn clear_flags(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
+        self.i32_const(0x00).set_reg(ctx, LocalReg::F)
     }
 
     /// Unconditionally set the specified flags to true, leaving the others unmodified.
@@ -340,6 +354,7 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     fn set_flags(
         &mut self,
+        ctx: &mut CodegenCtx,
         zero: bool,
         subtraction: bool,
         half_carry: bool,
@@ -359,10 +374,10 @@ impl Sm83Macros for InstructionSink<'_> {
             flags |= 1 << FlagBit::Carry as usize;
         }
 
-        self.local_get(F)
+        self.get_reg(ctx, LocalReg::F)
             .i32_const(i32::from(flags))
             .i32_or()
-            .local_set(F)
+            .set_reg(ctx, LocalReg::F)
     }
 
     /// Assign the bits in the flag register, overwriting any previous value.
@@ -376,6 +391,7 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     fn assign_flags(
         &mut self,
+        ctx: &mut CodegenCtx,
         zero: bool,
         subtraction: bool,
         half_carry: bool,
@@ -395,7 +411,7 @@ impl Sm83Macros for InstructionSink<'_> {
             flags |= 1 << FlagBit::Carry as usize;
         }
 
-        self.i32_const(i32::from(flags)).local_set(F)
+        self.i32_const(i32::from(flags)).set_reg(ctx, LocalReg::F)
     }
 
     /// Set the selected bit in the flag register. This will only change a 0 to a 1, not vice-versa.
@@ -407,12 +423,12 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     /// F |= (top_of_stack << flag_bit)
     /// ```
-    fn set_flag(&mut self, flag_bit: FlagBit) -> &mut Self {
+    fn set_flag(&mut self, ctx: &mut CodegenCtx, flag_bit: FlagBit) -> &mut Self {
         self.i32_const(flag_bit as i32)
             .i32_shl()
-            .local_get(F)
+            .get_reg(ctx, LocalReg::F)
             .i32_or()
-            .local_set(F)
+            .set_reg(ctx, LocalReg::F)
     }
 
     /// Check if the selected flag's bit is set in the flag register.
@@ -424,8 +440,8 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     /// return (F >> flag_bit) & 1
     /// ```
-    fn check_flag(&mut self, flag_bit: FlagBit) -> &mut Self {
-        self.local_get(F)
+    fn check_flag(&mut self, ctx: &mut CodegenCtx, flag_bit: FlagBit) -> &mut Self {
+        self.get_reg(ctx, LocalReg::F)
             .i32_const(flag_bit as i32)
             .i32_shr_u()
             .i32_const(0x01)
@@ -457,7 +473,16 @@ impl Sm83Macros for InstructionSink<'_> {
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_possible_wrap)]
     fn read_regs(&mut self, registers_ptr: usize) -> &mut Self {
-        let register_mem_offsets = [F, A, C, B, E, D, L, H];
+        let register_mem_offsets = [
+            LocalReg::F,
+            LocalReg::A,
+            LocalReg::C,
+            LocalReg::B,
+            LocalReg::E,
+            LocalReg::D,
+            LocalReg::L,
+            LocalReg::H,
+        ];
         for (reg, offset) in register_mem_offsets.iter().zip(0..) {
             self.i32_const(registers_ptr as i32)
                 .i32_load8_u(MemArg {
@@ -465,7 +490,7 @@ impl Sm83Macros for InstructionSink<'_> {
                     align: 0,
                     memory_index: 0,
                 })
-                .local_set(*reg);
+                .local_set(reg.to_index());
         }
 
         self.i32_const(registers_ptr as i32)
@@ -474,7 +499,7 @@ impl Sm83Macros for InstructionSink<'_> {
                 align: 0,
                 memory_index: 0,
             })
-            .local_set(SP)
+            .local_set(LocalReg::SP.to_index())
     }
 
     /// Store all of the registers to satisfy the calling convention.
@@ -486,10 +511,19 @@ impl Sm83Macros for InstructionSink<'_> {
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_possible_wrap)]
     fn return_regs(&mut self, registers_ptr: usize) -> &mut Self {
-        let register_mem_offsets = [F, A, C, B, E, D, L, H];
+        let register_mem_offsets = [
+            LocalReg::F,
+            LocalReg::A,
+            LocalReg::C,
+            LocalReg::B,
+            LocalReg::E,
+            LocalReg::D,
+            LocalReg::L,
+            LocalReg::H,
+        ];
         for (reg, offset) in register_mem_offsets.iter().zip(0..) {
             self.i32_const(registers_ptr as i32)
-                .local_get(*reg)
+                .local_get(reg.to_index())
                 .i32_store8(MemArg {
                     offset,
                     align: 0,
@@ -498,7 +532,7 @@ impl Sm83Macros for InstructionSink<'_> {
         }
 
         self.i32_const(registers_ptr as i32)
-            .local_get(SP)
+            .local_get(LocalReg::SP.to_index())
             .i32_store16(MemArg {
                 offset: 8,
                 align: 0,
@@ -543,14 +577,20 @@ impl Sm83Macros for InstructionSink<'_> {
     /// 1. Increments M-cycles by 1.
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_possible_wrap)]
-    fn write_byte_static<'a, F>(&'a mut self, ctx: &mut CodegenCtx, addr: u16, f: F) -> &'a mut Self
+    fn write_byte_static<'a: 'b, 'b, F>(
+        &'a mut self,
+        ctx: &'b mut CodegenCtx,
+        addr: u16,
+        f: F,
+    ) -> &'a mut Self
     where
-        F: FnOnce(&'a mut Self) -> &'a mut Self,
+        F: FnOnce(&'a mut Self, &'b mut CodegenCtx) -> (&'a mut Self, &'b mut CodegenCtx),
     {
         if (0xC000..0xE000).contains(&addr) {
             self.i32_const(ctx.work_ram_ptr as i32);
 
-            let sink = f(self).i32_store8(MemArg {
+            let (sink, ctx) = f(self, ctx);
+            sink.i32_store8(MemArg {
                 offset: u64::from(addr),
                 align: 0,
                 memory_index: 0,
@@ -558,7 +598,8 @@ impl Sm83Macros for InstructionSink<'_> {
             ctx.increment_m_cycles(1);
             sink
         } else {
-            f(self).i32_const(i32::from(addr)).call_write_byte(ctx)
+            let (sink, ctx) = f(self, ctx);
+            sink.i32_const(i32::from(addr)).call_write_byte(ctx)
         }
     }
 

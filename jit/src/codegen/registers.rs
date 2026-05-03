@@ -1,24 +1,48 @@
 use interpreter::cpu::opcodes::parameters::R8;
 
-pub const A: u32 = 0;
-pub const F: u32 = 1;
-pub const B: u32 = 2;
-pub const C: u32 = 3;
-pub const D: u32 = 4;
-pub const E: u32 = 5;
-pub const H: u32 = 6;
-pub const L: u32 = 7;
-pub const SP: u32 = 8;
+#[derive(Clone, Copy)]
+pub enum LocalReg {
+    A,
+    F,
+    B,
+    C,
+    D,
+    E,
+    H,
+    L,
+    SP,
+}
 
-pub(crate) fn r8_to_reg_param(r8: R8) -> u32 {
-    match r8 {
-        R8::B => 2,
-        R8::C => 3,
-        R8::D => 4,
-        R8::E => 5,
-        R8::H => 6,
-        R8::L => 7,
-        R8::IndirectHL => unreachable!(),
-        R8::A => 0,
+impl LocalReg {
+    pub fn to_index(self) -> u32 {
+        match self {
+            LocalReg::A => 0,
+            LocalReg::F => 1,
+            LocalReg::B => 2,
+            LocalReg::C => 3,
+            LocalReg::D => 4,
+            LocalReg::E => 5,
+            LocalReg::H => 6,
+            LocalReg::L => 7,
+            LocalReg::SP => 8,
+        }
+    }
+}
+
+impl TryFrom<R8> for LocalReg {
+    type Error = &'static str;
+
+    fn try_from(value: R8) -> Result<Self, Self::Error> {
+        let local = match value {
+            R8::B => LocalReg::B,
+            R8::C => LocalReg::C,
+            R8::D => LocalReg::D,
+            R8::E => LocalReg::E,
+            R8::H => LocalReg::H,
+            R8::L => LocalReg::L,
+            R8::IndirectHL => Err("IndirectHL is not a valid LocalReg")?,
+            R8::A => LocalReg::A,
+        };
+        Ok(local)
     }
 }
