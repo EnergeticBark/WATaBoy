@@ -1,3 +1,4 @@
+use enumset::EnumSet;
 use interpreter::cpu::opcodes::parameters::{R8, R16, R16Mem, R16Stack};
 use wasm_encoder::{InstructionSink, MemArg};
 
@@ -48,8 +49,8 @@ pub(crate) trait Sm83Macros {
     fn set_flag(&mut self, ctx: &mut CodegenCtx, flag_bit: FlagBit) -> &mut Self;
     fn check_flag(&mut self, ctx: &mut CodegenCtx, flag_bit: FlagBit) -> &mut Self;
     fn insert_checkpoint(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
-    fn read_regs(&mut self, registers_ptr: usize) -> &mut Self;
-    fn return_regs(&mut self, registers_ptr: usize) -> &mut Self;
+    fn prologue(&mut self, registers_ptr: usize, regs_used: EnumSet<LocalReg>) -> &mut Self;
+    fn epilogue(&mut self, registers_ptr: usize, regs_used: EnumSet<LocalReg>) -> &mut Self;
     fn read_byte_static(&mut self, ctx: &mut CodegenCtx, addr: u16) -> &mut Self;
     fn write_byte_static<'a: 'b, 'b, F>(
         &'a mut self,
@@ -65,14 +66,17 @@ pub(crate) trait Sm83Macros {
 
 impl Sm83Macros for InstructionSink<'_> {
     fn get_reg(&mut self, ctx: &mut CodegenCtx, reg: LocalReg) -> &mut Self {
+        ctx.regs_used.insert(reg);
         self.local_get(reg.to_index())
     }
 
     fn set_reg(&mut self, ctx: &mut CodegenCtx, reg: LocalReg) -> &mut Self {
+        ctx.regs_used.insert(reg);
         self.local_set(reg.to_index())
     }
 
     fn tee_reg(&mut self, ctx: &mut CodegenCtx, reg: LocalReg) -> &mut Self {
+        ctx.regs_used.insert(reg);
         self.local_tee(reg.to_index())
     }
 
@@ -472,7 +476,7 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_possible_wrap)]
-    fn read_regs(&mut self, registers_ptr: usize) -> &mut Self {
+    fn prologue(&mut self, registers_ptr: usize, regs_used: EnumSet<LocalReg>) -> &mut Self {
         let register_mem_offsets = [
             LocalReg::F,
             LocalReg::A,
@@ -484,6 +488,10 @@ impl Sm83Macros for InstructionSink<'_> {
             LocalReg::H,
         ];
         for (reg, offset) in register_mem_offsets.iter().zip(0..) {
+            if !regs_used.contains(*reg) {
+                continue;
+            }
+
             self.i32_const(registers_ptr as i32)
                 .i32_load8_u(MemArg {
                     offset,
@@ -493,13 +501,16 @@ impl Sm83Macros for InstructionSink<'_> {
                 .local_set(reg.to_index());
         }
 
-        self.i32_const(registers_ptr as i32)
-            .i32_load16_u(MemArg {
-                offset: 8,
-                align: 0,
-                memory_index: 0,
-            })
-            .local_set(LocalReg::SP.to_index())
+        if regs_used.contains(LocalReg::SP) {
+            self.i32_const(registers_ptr as i32)
+                .i32_load16_u(MemArg {
+                    offset: 8,
+                    align: 0,
+                    memory_index: 0,
+                })
+                .local_set(LocalReg::SP.to_index());
+        }
+        self
     }
 
     /// Store all of the registers to satisfy the calling convention.
@@ -510,7 +521,7 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_possible_wrap)]
-    fn return_regs(&mut self, registers_ptr: usize) -> &mut Self {
+    fn epilogue(&mut self, registers_ptr: usize, regs_used: EnumSet<LocalReg>) -> &mut Self {
         let register_mem_offsets = [
             LocalReg::F,
             LocalReg::A,
@@ -522,6 +533,10 @@ impl Sm83Macros for InstructionSink<'_> {
             LocalReg::H,
         ];
         for (reg, offset) in register_mem_offsets.iter().zip(0..) {
+            if !regs_used.contains(*reg) {
+                continue;
+            }
+
             self.i32_const(registers_ptr as i32)
                 .local_get(reg.to_index())
                 .i32_store8(MemArg {
@@ -531,13 +546,16 @@ impl Sm83Macros for InstructionSink<'_> {
                 });
         }
 
-        self.i32_const(registers_ptr as i32)
-            .local_get(LocalReg::SP.to_index())
-            .i32_store16(MemArg {
-                offset: 8,
-                align: 0,
-                memory_index: 0,
-            })
+        if regs_used.contains(LocalReg::SP) {
+            self.i32_const(registers_ptr as i32)
+                .local_get(LocalReg::SP.to_index())
+                .i32_store16(MemArg {
+                    offset: 8,
+                    align: 0,
+                    memory_index: 0,
+                });
+        }
+        self
     }
 
     /// Read a byte from the Game Boy's memory using a static address known at compile time.

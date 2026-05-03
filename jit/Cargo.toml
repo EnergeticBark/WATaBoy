@@ -8,6 +8,7 @@ edition = "2024"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
+enumset = "1.1.10"
 wasm-encoder = "0.248.0"
 interpreter = { path = "../interpreter" }
 hw-constants = { path = "../hw-constants" }
