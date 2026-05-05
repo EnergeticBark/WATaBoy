@@ -2,6 +2,12 @@ import { buttonsHeld } from "./keyboard.js";
 import { frametimeCounter } from "./frametime.js"
 import { Runtime, LCD_WIDTH, LCD_HEIGHT } from "./runtime.js"
 
+const speedInput = document.querySelector("#speed");
+let speedMultiplier = speedInput.value;
+speedInput.addEventListener("input", () => {
+	speedMultiplier = speedInput.value;
+});
+
 const lcdImage = new ImageData(LCD_WIDTH, LCD_HEIGHT);
 // Just fill lcdImage with all white pixels at full opacity so we don't need to worry about setting alpha values later.
 lcdImage.data.fill(255);
@@ -17,7 +23,7 @@ runtime.loadRom(rom);
 
 const renderLoop = () => {
 	frametimeCounter.start();
-	for (let i = 0; i < 500; i += 1) {
+	for (let i = 0; i < speedMultiplier; i += 1) {
 		runtime.step_vblank();
 	}
 	frametimeCounter.end();

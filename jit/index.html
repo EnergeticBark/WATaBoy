@@ -9,8 +9,7 @@
 			/* 5x scale. */
 			width: 640px;
 			height: 576px;
-			/* It looks kinda funny blurry. */
-			/*image-rendering: pixelated;*/
+			image-rendering: pixelated;
 		}
 	</style>
 	<title>WATaBoy</title>
@@ -18,6 +17,7 @@
 <body>
 	<canvas id="lcd" width="160" height="144"></canvas>
 	<p id="frametimes"></p>
+	<label>Speed multiplier: <input type="number" id="speed" value="500"/></label>
 	<input type="button" id="log-uncompiled" value="Log Uncompiled" />
 </body>
 </html>
