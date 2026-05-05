@@ -3,7 +3,8 @@ use wasm_encoder::{
     Module, TypeSection, ValType,
 };
 
-pub const PROLOGE_LENGTH: u32 = 9;
+pub const SCRATCH_REG_IDX: u32 = 0;
+pub const NUM_SCRATCH_REGS: u32 = 2;
 
 pub(crate) fn empty_jit_block_module() -> Module {
     let mut module = Module::new();
@@ -71,8 +72,7 @@ pub(crate) fn empty_jit_block_module() -> Module {
     module
 }
 
-pub(crate) fn empty_jit_block_function() -> Function {
-    // Provide two locals to be used as "scratch registers".
-    let locals = vec![(PROLOGE_LENGTH + 2, ValType::I32)];
+pub(crate) fn empty_jit_block_function(num_regs: u32) -> Function {
+    let locals = vec![(NUM_SCRATCH_REGS + num_regs, ValType::I32)];
     Function::new(locals)
 }

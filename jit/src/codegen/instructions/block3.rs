@@ -1,6 +1,6 @@
 use crate::codegen::CodegenCtx;
 use crate::codegen::macros::{FlagBit, Sm83Macros};
-use crate::codegen::module::PROLOGE_LENGTH;
+use crate::codegen::module::SCRATCH_REG_IDX;
 use crate::codegen::registers::LocalReg;
 
 use interpreter::cpu::opcodes::parameters::{R16, R16Stack};
@@ -34,7 +34,7 @@ impl Block3 for InstructionSink<'_> {
     // E.g. 0x3FFF: AddN, 0x4000: 64. A bank switch could invalidate this immediate value.
     fn add_n(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self {
         // Name our scratch register.
-        const PREV_A: u32 = PROLOGE_LENGTH;
+        const PREV_A: u32 = SCRATCH_REG_IDX;
         self.clear_flags(ctx) // Maybe add a macro for *assigning* flags too so we don't have to do this separately from setting the first flag.
             // *** Store original value of A so it can be used to calculate the half-carry. ***
             .get_reg(ctx, LocalReg::A)
@@ -75,7 +75,7 @@ impl Block3 for InstructionSink<'_> {
     }
     fn adc_n(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self {
         // Name our scratch registers.
-        const PREV_CARRY: u32 = PROLOGE_LENGTH;
+        const PREV_CARRY: u32 = SCRATCH_REG_IDX;
         self.check_flag(ctx, FlagBit::Carry) // *** Store original value of Carry. ***
             .local_set(PREV_CARRY)
             .clear_flags(ctx)
@@ -120,7 +120,7 @@ impl Block3 for InstructionSink<'_> {
     }
     fn sub_n(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self {
         // Name our scratch register.
-        const PREV_A: u32 = PROLOGE_LENGTH;
+        const PREV_A: u32 = SCRATCH_REG_IDX;
         self.assign_flags(ctx, false, true, false, false) // Always set subtraction to 1.
             .get_reg(ctx, LocalReg::A)
             .local_tee(PREV_A)
@@ -154,7 +154,7 @@ impl Block3 for InstructionSink<'_> {
     }
     fn sbc_n(&mut self, ctx: &mut CodegenCtx, imm: u8) -> &mut Self {
         // Name our scratch registers.
-        const PREV_CARRY: u32 = PROLOGE_LENGTH;
+        const PREV_CARRY: u32 = SCRATCH_REG_IDX;
         self.check_flag(ctx, FlagBit::Carry) // *** Store original value of Carry. ***
             .local_set(PREV_CARRY)
             .assign_flags(ctx, false, true, false, false) // Always set subtraction to 1.
@@ -320,7 +320,7 @@ impl Block3 for InstructionSink<'_> {
     }
     fn ld_hl_sp_plus_e(&mut self, ctx: &mut CodegenCtx, e: i8) -> &mut Self {
         // Name our scratch register.
-        const TEMP: u32 = PROLOGE_LENGTH;
+        const TEMP: u32 = SCRATCH_REG_IDX;
         self.clear_flags(ctx)
             /* Calculate Half-Carry Flag:
              * ((SP & 0x0f) + (E & 0x0f)) > 0x0f
