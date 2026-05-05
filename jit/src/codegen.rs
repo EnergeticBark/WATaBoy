@@ -11,7 +11,7 @@ use macros::Sm83Macros;
 use module::{empty_jit_block_function, empty_jit_block_module};
 use registers::LocalReg;
 
-use enumset::EnumSet;
+use std::collections::HashMap;
 use wasm_encoder::{BlockType, CodeSection, InstructionSink};
 
 #[cfg(feature = "jit-trace")]
@@ -28,7 +28,8 @@ pub struct Checkpoint {
 
 #[derive(Default)]
 pub struct CodegenCtx {
-    pub regs_used: EnumSet<LocalReg>,
+    pub needs_outer_block: bool,
+    pub regs_used: HashMap<LocalReg, u32>,
     pub block_size: usize,
     pub runtime_ptr: usize,
     pub work_ram_ptr: usize,
@@ -335,21 +336,27 @@ pub fn recompile(
     // Encode the code section.
     let mut codes = CodeSection::new();
 
-    let mut function = empty_jit_block_function();
+    let mut function = empty_jit_block_function(ctx.regs_used.len() as u32);
     function
         .instructions()
-        .prologue(registers_ptr, ctx.regs_used)
+        .prologue(registers_ptr, &ctx.regs_used);
+
+    if ctx.needs_outer_block {
         // Wrap our JIT'd instructions in a block so we can break early if needed.
-        .block(BlockType::Empty);
+        function.instructions().block(BlockType::Empty);
+    }
 
     function.raw(instruction_vec);
 
+    if ctx.needs_outer_block {
+        // End the inner block.
+        function.instructions().end();
+    }
+
+    // Add the calling convention's epilogue.
     function
         .instructions()
-        // End the inner block.
-        .end()
-        // Add the calling convention's epilogue.
-        .epilogue(registers_ptr, ctx.regs_used)
+        .epilogue(registers_ptr, &ctx.regs_used)
         .end();
     codes.function(&function);
     module.section(&codes);

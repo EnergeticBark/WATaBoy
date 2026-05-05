@@ -1,8 +1,9 @@
 use interpreter::cpu::opcodes::parameters::R8;
 
-use enumset::EnumSetType;
+use crate::codegen::CodegenCtx;
+use crate::codegen::module::NUM_SCRATCH_REGS;
 
-#[derive(EnumSetType)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub enum LocalReg {
     A,
     F,
@@ -15,18 +16,15 @@ pub enum LocalReg {
     SP,
 }
 
+#[allow(clippy::cast_possible_truncation)]
 impl LocalReg {
-    pub fn to_index(self) -> u32 {
-        match self {
-            LocalReg::A => 0,
-            LocalReg::F => 1,
-            LocalReg::B => 2,
-            LocalReg::C => 3,
-            LocalReg::D => 4,
-            LocalReg::E => 5,
-            LocalReg::H => 6,
-            LocalReg::L => 7,
-            LocalReg::SP => 8,
+    pub fn to_index(self, ctx: &mut CodegenCtx) -> u32 {
+        if let Some(index) = ctx.regs_used.get(&self) {
+            *index
+        } else {
+            let index = NUM_SCRATCH_REGS + ctx.regs_used.len() as u32;
+            ctx.regs_used.insert(self, index);
+            index
         }
     }
 }
