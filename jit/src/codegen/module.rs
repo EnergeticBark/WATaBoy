@@ -4,7 +4,9 @@ use wasm_encoder::{
 };
 
 pub const SCRATCH_REG_IDX: u32 = 0;
-pub const NUM_SCRATCH_REGS: u32 = 2;
+pub const RW_ADDR_REG: u32 = 2;
+pub const WRITE_VAL_REG: u32 = 3;
+pub const NUM_SCRATCH_REGS: u32 = 4;
 
 pub(crate) fn empty_jit_block_module() -> Module {
     let mut module = Module::new();
@@ -32,6 +34,13 @@ pub(crate) fn empty_jit_block_module() -> Module {
     // Parameter: 32-bit checkpoint index, runtime pointer.
     // Returns: Boolean, whether the current block should be aborted.
     let params = vec![ValType::I32; 2];
+    let results = vec![ValType::I32];
+    types.ty().function(params, results);
+
+    // Type for the if block used in the `call_read_byte` macro.
+    // Parameter: 16-bit index into memory.
+    // Returns: 8-bit value at the specified index.
+    let params = vec![ValType::I32];
     let results = vec![ValType::I32];
     types.ty().function(params, results);
     module.section(&types);
