@@ -1,9 +1,13 @@
 use std::collections::HashMap;
 
 use interpreter::cpu::opcodes::parameters::{R8, R16, R16Mem, R16Stack};
-use wasm_encoder::{InstructionSink, MemArg};
+use wasm_encoder::{BlockType, InstructionSink, MemArg};
 
-use crate::codegen::{CodegenCtx, registers::LocalReg};
+use crate::codegen::{
+    CodegenCtx,
+    module::{RW_ADDR_REG, WRITE_VAL_REG},
+    registers::LocalReg,
+};
 
 pub(crate) enum FlagBit {
     Zero = 7,
@@ -630,9 +634,27 @@ impl Sm83Macros for InstructionSink<'_> {
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_possible_wrap)]
     fn call_read_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
-        self.i32_const(i32::from(ctx.total_m_cycles))
+        self.local_tee(RW_ADDR_REG)
+            .local_get(RW_ADDR_REG)
+            .i32_const(0xE000)
+            .i32_and()
+            .i32_const(0xC000)
+            .i32_eq();
+
+        // If addr points to work RAM (0xC000..0xE000), there are no side effects so inline the memory read.
+        self.if_(BlockType::FunctionType(4)).i32_load8_u(MemArg {
+            offset: ctx.work_ram_ptr as u64,
+            align: 0,
+            memory_index: 0,
+        });
+
+        // Otherwise, fall back to invoking the read_byte function.
+        self.else_()
+            .i32_const(i32::from(ctx.total_m_cycles))
             .i32_const(ctx.runtime_ptr as i32)
-            .call(0);
+            .call(0)
+            .end();
+
         ctx.increment_m_cycles(1);
         self
     }
@@ -647,9 +669,33 @@ impl Sm83Macros for InstructionSink<'_> {
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_possible_wrap)]
     fn call_write_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
-        self.i32_const(i32::from(ctx.total_m_cycles))
+        self.local_set(RW_ADDR_REG)
+            .local_set(WRITE_VAL_REG)
+            .local_get(RW_ADDR_REG)
+            .i32_const(0xE000)
+            .i32_and()
+            .i32_const(0xC000)
+            .i32_eq();
+
+        // If addr points to work RAM (0xC000..0xE000), there are no side effects so inline the memory store.
+        self.if_(BlockType::Empty)
+            .local_get(RW_ADDR_REG)
+            .local_get(WRITE_VAL_REG)
+            .i32_store8(MemArg {
+                offset: ctx.work_ram_ptr as u64,
+                align: 0,
+                memory_index: 0,
+            });
+
+        // Otherwise, fall back to invoking the write_byte function.
+        self.else_()
+            .local_get(WRITE_VAL_REG)
+            .local_get(RW_ADDR_REG)
+            .i32_const(i32::from(ctx.total_m_cycles))
             .i32_const(ctx.runtime_ptr as i32)
-            .call(1);
+            .call(1)
+            .end();
+
         ctx.increment_m_cycles(1);
         self
     }
