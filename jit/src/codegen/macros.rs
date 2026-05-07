@@ -4,11 +4,11 @@ use hw_constants::ROM_BANK_0_END;
 use interpreter::cpu::opcodes::parameters::{R8, R16, R16Mem, R16Stack};
 use wasm_encoder::{BlockType, InstructionSink, MemArg};
 
-use crate::codegen::{
-    CodegenCtx,
-    module::{RW_ADDR_REG, WRITE_VAL_REG},
-    registers::LocalReg,
+use crate::codegen::CodegenCtx;
+use crate::codegen::module::{
+    PROCESS_CHECKPOINT_FUNC, READ_BYTE_FUNC, RW_ADDR_REG, WRITE_BYTE_FUNC, WRITE_VAL_REG,
 };
+use crate::codegen::registers::LocalReg;
 
 pub(crate) enum FlagBit {
     Zero = 7,
@@ -472,7 +472,7 @@ impl Sm83Macros for InstructionSink<'_> {
         let checkpoint_index = ctx.add_checkpoint();
         self.i32_const(checkpoint_index as i32)
             .i32_const(ctx.runtime_ptr as i32)
-            .call(2)
+            .call(PROCESS_CHECKPOINT_FUNC)
             .br_if(0)
     }
 
@@ -673,7 +673,7 @@ impl Sm83Macros for InstructionSink<'_> {
                 // Otherwise, fall back to invoking the read_byte function.
                 self.i32_const(i32::from(ctx.total_m_cycles))
                     .i32_const(ctx.runtime_ptr as i32)
-                    .call(0);
+                    .call(READ_BYTE_FUNC);
             }
             self.end();
         }
@@ -717,7 +717,7 @@ impl Sm83Macros for InstructionSink<'_> {
             .local_get(RW_ADDR_REG)
             .i32_const(i32::from(ctx.total_m_cycles))
             .i32_const(ctx.runtime_ptr as i32)
-            .call(1)
+            .call(WRITE_BYTE_FUNC)
             .end();
 
         ctx.increment_m_cycles(1);

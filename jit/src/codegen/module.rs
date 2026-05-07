@@ -8,6 +8,10 @@ pub const RW_ADDR_REG: u32 = 2;
 pub const WRITE_VAL_REG: u32 = 3;
 pub const NUM_SCRATCH_REGS: u32 = 4;
 
+pub const READ_BYTE_FUNC: u32 = 0;
+pub const WRITE_BYTE_FUNC: u32 = 1;
+pub const PROCESS_CHECKPOINT_FUNC: u32 = 2;
+
 pub(crate) fn empty_jit_block_module() -> Module {
     let mut module = Module::new();
 
