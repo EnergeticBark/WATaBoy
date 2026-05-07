@@ -36,6 +36,7 @@ pub struct JitRuntime {
     ptr: usize,
     registers_ptr: usize,
     work_ram_ptr: usize,
+    rom_ptr: usize,
     block_start_clock: u64,
     checkpoint_index: usize,
     pub(crate) dmg_state: Cpu,
@@ -110,6 +111,7 @@ impl JitRuntime {
                     self.ptr,
                     self.registers_ptr,
                     self.work_ram_ptr,
+                    self.rom_ptr,
                 ) {
                     #[cfg(feature = "jit-trace")]
                     console_log(&wasmprinter::print_bytes(&jit_block.buffer).unwrap());
@@ -268,6 +270,7 @@ impl JitRuntime {
     #[unsafe(no_mangle)]
     pub extern "C" fn load_rom_from_buffer(&mut self) {
         self.dmg_state.memory.load_rom(&self.rom_buffer);
+        self.rom_ptr = self.dmg_state.memory.mbc.rom.as_ptr() as usize;
     }
 
     #[unsafe(no_mangle)]

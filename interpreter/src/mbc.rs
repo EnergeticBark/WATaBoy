@@ -36,7 +36,7 @@ pub struct Mbc {
     pub boot_rom_mounted: bool,
     under_boot_rom: Box<[u8; 0x100]>,
     ram_enabled: bool,
-    rom: Vec<u8>,
+    pub rom: Vec<u8>,
     ext_ram: Vec<u8>,
     pub current_rom_bank: u8,
     current_rom_bank_start: usize,
