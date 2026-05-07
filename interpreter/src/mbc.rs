@@ -2,7 +2,7 @@
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize};
 
-use hw_constants::{MEM_MAP_SIZE, io_regs::BANK};
+use hw_constants::{MEM_MAP_SIZE, ROM_BANK_0_END, io_regs::BANK};
 
 const MBC_TYPE_ADDR: usize = 0x0147;
 const RAM_SIZE_ADDR: usize = 0x0149;
@@ -138,8 +138,8 @@ impl Mbc {
 
     pub fn read_byte(&self, index: u16) -> u8 {
         let translated = match index {
-            ..0x4000 => index as usize,
-            0x4000.. => self.current_rom_bank_start + index as usize,
+            ..ROM_BANK_0_END => index as usize,
+            _ => self.current_rom_bank_start + index as usize,
         };
 
         unsafe { *self.rom.get_unchecked(translated) }

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use hw_constants::ROM_BANK_0_END;
 use interpreter::cpu::opcodes::parameters::{R8, R16, R16Mem, R16Stack};
 use wasm_encoder::{BlockType, InstructionSink, MemArg};
 
@@ -653,7 +654,7 @@ impl Sm83Macros for InstructionSink<'_> {
         self.else_();
         {
             self.local_get(RW_ADDR_REG)
-                .i32_const(0x4000)
+                .i32_const(i32::from(ROM_BANK_0_END))
                 .i32_lt_u()
                 .if_(BlockType::FunctionType(4));
             {
