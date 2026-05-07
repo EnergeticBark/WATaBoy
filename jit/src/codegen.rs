@@ -33,6 +33,7 @@ pub struct CodegenCtx {
     pub block_size: usize,
     pub runtime_ptr: usize,
     pub work_ram_ptr: usize,
+    pub rom_ptr: usize,
     pub checkpoints: Vec<Checkpoint>,
     pub traced_pc: u16,
     // The total number of M-Cycles this block of instructions has taken to execute so far.
@@ -75,10 +76,12 @@ pub fn recompile(
     runtime_ptr: usize,
     registers_ptr: usize,
     work_ram_ptr: usize,
+    rom_ptr: usize,
 ) -> Option<WasmBlock> {
     let mut ctx = CodegenCtx {
         runtime_ptr,
         work_ram_ptr,
+        rom_ptr,
         traced_pc: dmg_state.registers.pc,
         ..Default::default()
     };

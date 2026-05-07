@@ -639,21 +639,43 @@ impl Sm83Macros for InstructionSink<'_> {
             .i32_const(0xE000)
             .i32_and()
             .i32_const(0xC000)
-            .i32_eq();
+            .i32_eq()
+            .if_(BlockType::FunctionType(4));
+        {
+            // If addr points to work RAM (0xC000..0xE000), there are no side effects so inline the memory read.
+            self.i32_load8_u(MemArg {
+                offset: ctx.work_ram_ptr as u64,
+                align: 0,
+                memory_index: 0,
+            });
+        }
 
-        // If addr points to work RAM (0xC000..0xE000), there are no side effects so inline the memory read.
-        self.if_(BlockType::FunctionType(4)).i32_load8_u(MemArg {
-            offset: ctx.work_ram_ptr as u64,
-            align: 0,
-            memory_index: 0,
-        });
+        self.else_();
+        {
+            self.local_get(RW_ADDR_REG)
+                .i32_const(0x4000)
+                .i32_lt_u()
+                .if_(BlockType::FunctionType(4));
+            {
+                // Or, if addr points to ROM bank 0 (..0x4000), inline that memory read.
+                self.i32_load8_u(MemArg {
+                    offset: ctx.rom_ptr as u64,
+                    align: 0,
+                    memory_index: 0,
+                });
+            }
 
-        // Otherwise, fall back to invoking the read_byte function.
-        self.else_()
-            .i32_const(i32::from(ctx.total_m_cycles))
-            .i32_const(ctx.runtime_ptr as i32)
-            .call(0)
-            .end();
+            self.else_();
+            {
+                // Otherwise, fall back to invoking the read_byte function.
+                self.i32_const(i32::from(ctx.total_m_cycles))
+                    .i32_const(ctx.runtime_ptr as i32)
+                    .call(0)
+                    .end();
+            }
+            self.end();
+        }
+        self.end();
 
         ctx.increment_m_cycles(1);
         self
