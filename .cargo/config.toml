@@ -1,2 +1,2 @@
 [build]
-rustflags = ["-Ctarget-feature=+simd128", "-Ccodegen-units=1"]
+rustflags = ["-Ctarget-feature=+simd128", "-Ctarget-feature=+tail-call", "-Ccodegen-units=1"]

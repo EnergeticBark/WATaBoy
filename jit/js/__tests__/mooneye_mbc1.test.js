@@ -1,4 +1,4 @@
-import { testROMPath } from "./common.js";
+import { testROMPath, wasmModulePath } from "./common.js";
 import { Runtime } from "../runtime.js";
 
 // Parameters for the parameterised test.
@@ -13,7 +13,7 @@ const roms = [
 
 test.each(roms)("%p", async (romName) => {
 	const runtime = new Runtime();
-	const wasmSource = await Bun.file("./target/wasm32-unknown-unknown/release/jit.wasm").arrayBuffer();
+	const wasmSource = await Bun.file(wasmModulePath).arrayBuffer();
 	await runtime.init(wasmSource);
 	const rom = await Bun.file(testROMPath + "mooneye/mbc1/" + romName).bytes();
 	runtime.loadRom(rom);
