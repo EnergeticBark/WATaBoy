@@ -6,6 +6,8 @@ pub use post_boot::post_boot_hwio;
 
 pub const MEM_MAP_SIZE: usize = 0x10000;
 
+pub const ROM_BANK_0_END: u16 = 0x4000;
+
 pub const VRAM_START: u16 = 0x8000;
 pub const VRAM_END: u16 = 0xA000;
 pub const VRAM_SIZE: u16 = VRAM_END - VRAM_START;

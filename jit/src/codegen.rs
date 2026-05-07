@@ -1,3 +1,4 @@
+use hw_constants::ROM_BANK_0_END;
 use interpreter::cpu::opcodes::{Opcode, PrefixOpcode};
 use interpreter::cpu::{Cpu, opcodes};
 
@@ -66,6 +67,10 @@ pub struct WasmBlock {
     // Wasm bytecode.
     pub buffer: Vec<u8>,
     pub ctx: CodegenCtx,
+}
+
+fn leaving_bank_0(prev_pc: u16, pc: u16) -> bool {
+    prev_pc < ROM_BANK_0_END && pc >= ROM_BANK_0_END
 }
 
 // Try to produce a WasmBlock starting at dmg_state's current program counter.
@@ -144,8 +149,7 @@ pub fn recompile(
                 let address = ctx.traced_pc.wrapping_add_signed(i16::from(e));
 
                 let outside_rom = address >= 0x8000;
-                let from_bank0_to_switchable = prev_pc < 0x4000 && address >= 0x4000;
-                if outside_rom || from_bank0_to_switchable {
+                if outside_rom || leaving_bank_0(prev_pc, address) {
                     // Couldn't follow the jump, fall back to the interpreter.
                     ctx.traced_pc -= 1;
                     break;
@@ -248,8 +252,7 @@ pub fn recompile(
                 let address = u16::from_le_bytes([first_byte, second_byte]);
 
                 let outside_rom = address >= 0x8000;
-                let from_bank0_to_switchable = prev_pc < 0x4000 && address >= 0x4000;
-                if outside_rom || from_bank0_to_switchable {
+                if outside_rom || leaving_bank_0(prev_pc, address) {
                     // Couldn't follow the jump, fall back to the interpreter.
                     ctx.traced_pc -= 1;
                     break;
@@ -268,8 +271,7 @@ pub fn recompile(
                 let address = u16::from_le_bytes([first_byte, second_byte]);
 
                 let outside_rom = address >= 0x8000;
-                let from_bank0_to_switchable = prev_pc < 0x4000 && address >= 0x4000;
-                if outside_rom || from_bank0_to_switchable {
+                if outside_rom || leaving_bank_0(prev_pc, address) {
                     // Couldn't follow the call, fall back to the interpreter.
                     ctx.traced_pc -= 2;
                     break;
