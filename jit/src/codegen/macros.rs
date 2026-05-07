@@ -122,7 +122,7 @@ impl Sm83Macros for InstructionSink<'_> {
             R16::Bc => (LocalReg::B, LocalReg::C),
             R16::De => (LocalReg::D, LocalReg::E),
             R16::Hl => (LocalReg::H, LocalReg::L),
-            R16::Sp => unimplemented!("SP isn't in the JIT prelude/epilogue yet."),
+            R16::Sp => return self.get_reg(ctx, LocalReg::SP),
         };
 
         self.get_reg(ctx, high_reg)
