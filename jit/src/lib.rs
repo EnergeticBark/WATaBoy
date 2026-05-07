@@ -7,6 +7,9 @@ mod codegen;
 pub mod runtime;
 pub mod test_roms;
 
+#[global_allocator]
+static TALC: talc::wasm::WasmDynamicTalc = talc::wasm::new_wasm_dynamic_allocator();
+
 unsafe extern "C" {
     fn console_log_glue(buffer: *const u8, len: usize);
 }
