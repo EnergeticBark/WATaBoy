@@ -626,6 +626,8 @@ impl Sm83Macros for InstructionSink<'_> {
     }
 
     /// Read a byte from the specified address in the Game Boy's memory.
+    /// Reads from addresses <0x4000 or between 0xC000..0xE000 will be inlined.
+    /// Reading from any other address will trigger a call to the `read_byte` function imported in the module.
     /// # Signature
     /// ```
     /// (addr: i32) -> (value: i32)
@@ -671,8 +673,7 @@ impl Sm83Macros for InstructionSink<'_> {
                 // Otherwise, fall back to invoking the read_byte function.
                 self.i32_const(i32::from(ctx.total_m_cycles))
                     .i32_const(ctx.runtime_ptr as i32)
-                    .call(0)
-                    .end();
+                    .call(0);
             }
             self.end();
         }
