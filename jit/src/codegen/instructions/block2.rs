@@ -24,8 +24,7 @@ impl Block2 for InstructionSink<'_> {
     fn add_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch register.
         const R8_VAL: u32 = SCRATCH_REG_IDX;
-        self.clear_flags(ctx) // Maybe add a macro for *assigning* a flag too so we don't have to do this separately from setting the first flag.
-            .get_r8(ctx, r8)
+        self.get_r8(ctx, r8)
             .local_set(R8_VAL)
             /* Calculate Half-Carry Flag:
              * ((A & 0x0f) + (R8 & 0x0f)) > 0x0f
@@ -39,7 +38,7 @@ impl Block2 for InstructionSink<'_> {
             .i32_add()
             .i32_const(0x0f)
             .i32_gt_u()
-            .set_flag(ctx, FlagBit::HalfCarry)
+            .clear_flags_and_set(ctx, FlagBit::HalfCarry)
             /* Perform the ADD (result not yet truncated):
              * A = A + R8
              */
@@ -71,7 +70,6 @@ impl Block2 for InstructionSink<'_> {
         const R8_VAL: u32 = SCRATCH_REG_IDX + 1;
         self.check_flag(ctx, FlagBit::Carry) // *** Store original value of Carry. ***
             .local_set(PREV_CARRY)
-            .clear_flags(ctx)
             .get_r8(ctx, r8)
             .local_set(R8_VAL)
             /* Calculate Half-Carry Flag:
@@ -88,7 +86,7 @@ impl Block2 for InstructionSink<'_> {
             .i32_add()
             .i32_const(0x0f)
             .i32_gt_u()
-            .set_flag(ctx, FlagBit::HalfCarry)
+            .clear_flags_and_set(ctx, FlagBit::HalfCarry)
             /* Perform the ADD (result not yet truncated):
              * A = A + R8 + PREV_CARRY
              */
@@ -119,8 +117,7 @@ impl Block2 for InstructionSink<'_> {
     fn sub_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch register.
         const R8_VAL: u32 = SCRATCH_REG_IDX;
-        self.assign_flags(ctx, false, true, false, false) // Always set subtraction to 1.
-            .get_r8(ctx, r8)
+        self.get_r8(ctx, r8)
             .local_set(R8_VAL)
             /* Calculate Half-Carry Flag:
              * (A & 0x0f) < (R8 & 0x0f)
@@ -132,7 +129,7 @@ impl Block2 for InstructionSink<'_> {
             .i32_const(0x0f)
             .i32_and() // (R8 & 0x0f)
             .i32_lt_u()
-            .set_flag(ctx, FlagBit::HalfCarry)
+            .assign_flags_and_set(ctx, false, true, false, false, FlagBit::HalfCarry) // Always set subtraction to 1.
             /* Calculate Carry Flag:
              * A < R8
              */
@@ -160,7 +157,6 @@ impl Block2 for InstructionSink<'_> {
         const R8_VAL: u32 = SCRATCH_REG_IDX + 1;
         self.check_flag(ctx, FlagBit::Carry) // *** Store original value of Carry. ***
             .local_set(PREV_CARRY)
-            .assign_flags(ctx, false, true, false, false) // Always set subtraction to 1.
             .get_r8(ctx, r8)
             .local_set(R8_VAL)
             /* Calculate Half-Carry Flag:
@@ -175,7 +171,7 @@ impl Block2 for InstructionSink<'_> {
             .local_get(PREV_CARRY)
             .i32_add() // ((R8 & 0x0f) + PREV_CARRY)
             .i32_lt_u()
-            .set_flag(ctx, FlagBit::HalfCarry)
+            .assign_flags_and_set(ctx, false, true, false, false, FlagBit::HalfCarry) // Always set subtraction to 1.
             /* Calculate Carry Flag:
              * A < (R8 + PREV_CARRY)
              */
@@ -202,8 +198,7 @@ impl Block2 for InstructionSink<'_> {
     }
 
     fn and_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
-        self.assign_flags(ctx, false, false, true, false) // Always set half-carry to 1.
-            .get_reg(ctx, LocalReg::A)
+        self.get_reg(ctx, LocalReg::A)
             .get_r8(ctx, r8)
             /* Perform the AND:
              * A = A & R8
@@ -212,12 +207,11 @@ impl Block2 for InstructionSink<'_> {
             .tee_reg(ctx, LocalReg::A)
             // *** Calculate Zero Flag. ***
             .i32_eqz() // If the A is zero, then 1, otherwise 0.
-            .set_flag(ctx, FlagBit::Zero)
+            .assign_flags_and_set(ctx, false, false, true, false, FlagBit::Zero) // Always set half-carry to 1.
     }
 
     fn xor_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
-        self.clear_flags(ctx)
-            .get_reg(ctx, LocalReg::A)
+        self.get_reg(ctx, LocalReg::A)
             .get_r8(ctx, r8)
             /* Perform the XOR:
              * A = A ^ R8
@@ -226,12 +220,11 @@ impl Block2 for InstructionSink<'_> {
             .tee_reg(ctx, LocalReg::A)
             // *** Calculate Zero Flag. ***
             .i32_eqz() // If the A is zero, then 1, otherwise 0.
-            .set_flag(ctx, FlagBit::Zero)
+            .clear_flags_and_set(ctx, FlagBit::Zero)
     }
 
     fn or_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
-        self.clear_flags(ctx)
-            .get_reg(ctx, LocalReg::A)
+        self.get_reg(ctx, LocalReg::A)
             .get_r8(ctx, r8)
             /* Perform the OR:
              * A = A | R8
@@ -240,15 +233,14 @@ impl Block2 for InstructionSink<'_> {
             .tee_reg(ctx, LocalReg::A)
             // *** Calculate Zero Flag. ***
             .i32_eqz() // If the A is zero, then 1, otherwise 0.
-            .set_flag(ctx, FlagBit::Zero)
+            .clear_flags_and_set(ctx, FlagBit::Zero)
     }
 
     // Identical to SUB r but doesn't update A.
     fn cp_r(&mut self, ctx: &mut CodegenCtx, r8: R8) -> &mut Self {
         // Name our scratch register.
         const R8_VAL: u32 = SCRATCH_REG_IDX;
-        self.assign_flags(ctx, false, true, false, false) // Always set subtraction to 1.
-            .get_r8(ctx, r8)
+        self.get_r8(ctx, r8)
             .local_set(R8_VAL)
             /* Calculate Half-Carry Flag:
              * (A & 0x0f) < (R8 & 0x0f)
@@ -260,7 +252,7 @@ impl Block2 for InstructionSink<'_> {
             .i32_const(0x0f)
             .i32_and() // (R8 & 0x0f)
             .i32_lt_u()
-            .set_flag(ctx, FlagBit::HalfCarry)
+            .assign_flags_and_set(ctx, false, true, false, false, FlagBit::HalfCarry) // Always set subtraction to 1.
             /* Calculate Carry Flag:
              * A < R8
              */
