@@ -32,17 +32,6 @@ pub(crate) trait Sm83Macros {
     fn set_r16_stack(&mut self, ctx: &mut CodegenCtx, r16: R16Stack) -> &mut Self;
     fn pop_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
     fn push_byte(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
-    fn clear_flags(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
-    // TODO: I should probably just reuse the Flag struct defined in the interpreter here.
-    #[allow(clippy::fn_params_excessive_bools)]
-    fn assign_flags(
-        &mut self,
-        ctx: &mut CodegenCtx,
-        zero: bool,
-        subtraction: bool,
-        half_carry: bool,
-        carry: bool,
-    ) -> &mut Self;
     #[allow(clippy::fn_params_excessive_bools)]
     fn set_flags(
         &mut self,
@@ -53,6 +42,18 @@ pub(crate) trait Sm83Macros {
         carry: bool,
     ) -> &mut Self;
     fn set_flag(&mut self, ctx: &mut CodegenCtx, flag_bit: FlagBit) -> &mut Self;
+    fn clear_flags_and_set(&mut self, ctx: &mut CodegenCtx, flag_bit: FlagBit) -> &mut Self;
+    // TODO: I should probably just reuse the Flag struct defined in the interpreter here.
+    #[allow(clippy::fn_params_excessive_bools)]
+    fn assign_flags_and_set(
+        &mut self,
+        ctx: &mut CodegenCtx,
+        zero: bool,
+        subtraction: bool,
+        half_carry: bool,
+        carry: bool,
+        flag_bit: FlagBit,
+    ) -> &mut Self;
     fn check_flag(&mut self, ctx: &mut CodegenCtx, flag_bit: FlagBit) -> &mut Self;
     fn insert_checkpoint(&mut self, ctx: &mut CodegenCtx) -> &mut Self;
     fn prologue(&mut self, registers_ptr: usize, regs_used: &HashMap<LocalReg, u32>) -> &mut Self;
@@ -340,19 +341,6 @@ impl Sm83Macros for InstructionSink<'_> {
             .call_write_byte(ctx)
     }
 
-    /// Clear all bits in the flag register.
-    /// # Signature
-    /// ```
-    /// () -> ()
-    /// ```
-    /// # Pseudocode
-    /// ```
-    /// F = 0x00
-    /// ```
-    fn clear_flags(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
-        self.i32_const(0x00).set_reg(ctx, LocalReg::F)
-    }
-
     /// Unconditionally set the specified flags to true, leaving the others unmodified.
     /// # Signature
     /// ```
@@ -390,7 +378,39 @@ impl Sm83Macros for InstructionSink<'_> {
             .set_reg(ctx, LocalReg::F)
     }
 
-    /// Assign the bits in the flag register, overwriting any previous value.
+    /// Set the selected bit in the flag register. This will only change a 0 to a 1, not vice-versa.
+    /// # Signature
+    /// ```
+    /// (bool: i32) -> ()
+    /// ```
+    /// # Pseudocode
+    /// ```
+    /// F |= (top_of_stack << flag_bit)
+    /// ```
+    fn set_flag(&mut self, ctx: &mut CodegenCtx, flag_bit: FlagBit) -> &mut Self {
+        self.i32_const(flag_bit as i32)
+            .i32_shl()
+            .get_reg(ctx, LocalReg::F)
+            .i32_or()
+            .set_reg(ctx, LocalReg::F)
+    }
+
+    /// Clear all bits in the flag register then set the specified bit.
+    /// # Signature
+    /// ```
+    /// () -> ()
+    /// ```
+    /// # Pseudocode
+    /// ```
+    /// F |= (top_of_stack << flag_bit)
+    /// ```
+    fn clear_flags_and_set(&mut self, ctx: &mut CodegenCtx, flag_bit: FlagBit) -> &mut Self {
+        self.i32_const(flag_bit as i32)
+            .i32_shl()
+            .set_reg(ctx, LocalReg::F)
+    }
+
+    /// Assign the bits in the flag register, overwriting any previous value, then set the specified bit.
     /// # Signature
     /// ```
     /// () -> ()
@@ -399,13 +419,14 @@ impl Sm83Macros for InstructionSink<'_> {
     /// ```
     /// F = flag_bits
     /// ```
-    fn assign_flags(
+    fn assign_flags_and_set(
         &mut self,
         ctx: &mut CodegenCtx,
         zero: bool,
         subtraction: bool,
         half_carry: bool,
         carry: bool,
+        flag_bit: FlagBit,
     ) -> &mut Self {
         let mut flags: u8 = 0b0000_0000;
         if zero {
@@ -421,22 +442,9 @@ impl Sm83Macros for InstructionSink<'_> {
             flags |= 1 << FlagBit::Carry as usize;
         }
 
-        self.i32_const(i32::from(flags)).set_reg(ctx, LocalReg::F)
-    }
-
-    /// Set the selected bit in the flag register. This will only change a 0 to a 1, not vice-versa.
-    /// # Signature
-    /// ```
-    /// (bool: i32) -> ()
-    /// ```
-    /// # Pseudocode
-    /// ```
-    /// F |= (top_of_stack << flag_bit)
-    /// ```
-    fn set_flag(&mut self, ctx: &mut CodegenCtx, flag_bit: FlagBit) -> &mut Self {
         self.i32_const(flag_bit as i32)
             .i32_shl()
-            .get_reg(ctx, LocalReg::F)
+            .i32_const(i32::from(flags))
             .i32_or()
             .set_reg(ctx, LocalReg::F)
     }

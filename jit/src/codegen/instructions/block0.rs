@@ -74,8 +74,7 @@ impl Block0 for InstructionSink<'_> {
         const PREV_HL: u32 = SCRATCH_REG_IDX;
         const PREV_RR: u32 = SCRATCH_REG_IDX + 1;
         self.check_flag(ctx, FlagBit::Zero) // *** Preserve the original value of Zero on the stack. ***
-            .clear_flags(ctx)
-            .set_flag(ctx, FlagBit::Zero) // Restore Zero flag.
+            .clear_flags_and_set(ctx, FlagBit::Zero) // Restore Zero flag.
             // *** Store original values of HL and RR so we can calculate the half-carry first. ***
             .get_r16(ctx, R16::Hl)
             .local_tee(PREV_HL)
@@ -120,8 +119,7 @@ impl Block0 for InstructionSink<'_> {
         // Name our scratch register.
         const RESULT: u32 = SCRATCH_REG_IDX;
         self.check_flag(ctx, FlagBit::Carry) // *** Preserve the original value of Carry on the stack. ***
-            .clear_flags(ctx)
-            .set_flag(ctx, FlagBit::Carry) // Restore Carry flag.
+            .clear_flags_and_set(ctx, FlagBit::Carry) // Restore Carry flag.
             /* Perform the increment and truncate:
              * R8 = (R8 + 1) & 0xff
              */
@@ -151,8 +149,7 @@ impl Block0 for InstructionSink<'_> {
         const RESULT: u32 = SCRATCH_REG_IDX;
         const R8_VAL: u32 = SCRATCH_REG_IDX + 1;
         self.check_flag(ctx, FlagBit::Carry) // *** Preserve the original value of Carry on the stack. ***
-            .assign_flags(ctx, false, true, false, false) // Always set subtraction to 1.
-            .set_flag(ctx, FlagBit::Carry) // Restore Carry flag.
+            .assign_flags_and_set(ctx, false, true, false, false, FlagBit::Carry) // Always set subtraction to 1 and restore Carry flag.
             /* Perform the decrement and truncate:
              * R8 = (R8 - 1) & 0xff
              */
@@ -184,52 +181,49 @@ impl Block0 for InstructionSink<'_> {
     }
 
     fn rlca(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
-        // Name our scratch register.
-        const BIT_7: u32 = SCRATCH_REG_IDX;
-        self.clear_flags(ctx)
-            /* Calculate the Carry flag:
-             * (A >> 7) == 0b0000_0001
-             */
-            .get_reg(ctx, LocalReg::A)
-            .i32_const(7)
-            .i32_shr_u()
-            .local_tee(BIT_7)
-            .set_flag(ctx, FlagBit::Carry)
-            /* Perform the shift left, set the lowest bit to BIT_7, and truncate:
-             * A = ((A << 1) | BIT_7) & 0xff
+        self
+            /* Perform the shift left, set the lowest bit to bit 7, and truncate:
+             * A = ((A << 1) | A >> (8-1)) & 0xff
              */
             .get_reg(ctx, LocalReg::A)
             .i32_const(1)
             .i32_shl()
-            .local_get(BIT_7)
+            .get_reg(ctx, LocalReg::A)
+            .i32_const(8 - 1)
+            .i32_shr_u()
             .i32_or()
             .i32_const(0xff)
             .i32_and()
-            .set_reg(ctx, LocalReg::A)
+            .tee_reg(ctx, LocalReg::A)
+            /* Calculate the Carry flag:
+             * (A & 0b0000_0001) == 0b0000_0001
+             */
+            .i32_const(0b0000_0001)
+            .i32_and()
+            .clear_flags_and_set(ctx, FlagBit::Carry)
     }
 
     fn rrca(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
-        // Name our scratch register.
-        const BIT_0: u32 = SCRATCH_REG_IDX;
-        self.clear_flags(ctx)
+        self
             /* Calculate the Carry flag:
              * A & 0b0000_0001 == 0b0000_0001
              */
             .get_reg(ctx, LocalReg::A)
             .i32_const(0b0000_0001)
             .i32_and()
-            .local_tee(BIT_0)
-            .set_flag(ctx, FlagBit::Carry)
+            .clear_flags_and_set(ctx, FlagBit::Carry)
             /* Perform the shift right and set the highest bit to BIT_0:
-             * A = (A >> 1) | (BIT_0 << 7)
+             * A = (A >> 1) | (A << (8-1)) & 0xff
              */
             .get_reg(ctx, LocalReg::A)
             .i32_const(1)
             .i32_shr_u()
-            .local_get(BIT_0)
-            .i32_const(7)
+            .get_reg(ctx, LocalReg::A)
+            .i32_const(8 - 1)
             .i32_shl()
             .i32_or()
+            .i32_const(0xff)
+            .i32_and()
             .set_reg(ctx, LocalReg::A)
     }
 
@@ -238,14 +232,13 @@ impl Block0 for InstructionSink<'_> {
         const PREV_CARRY: u32 = SCRATCH_REG_IDX;
         self.check_flag(ctx, FlagBit::Carry) // *** Store original value of Carry. ***
             .local_set(PREV_CARRY)
-            .clear_flags(ctx)
             /* Calculate the Carry flag:
              * A & 0b0000_0001 == 0b0000_0001
              */
             .get_reg(ctx, LocalReg::A)
             .i32_const(0b0000_0001)
             .i32_and()
-            .set_flag(ctx, FlagBit::Carry)
+            .clear_flags_and_set(ctx, FlagBit::Carry)
             /* Perform the shift right and set the highest bit to PREV_CARRY:
              * A = (A >> 1) | (PREV_CARRY << 7)
              */
@@ -273,15 +266,13 @@ impl Block0 for InstructionSink<'_> {
     fn scf(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
         self // *** Preserve the original value of Zero on the stack. ***
             .check_flag(ctx, FlagBit::Zero)
-            .assign_flags(ctx, false, false, false, true)
-            .set_flag(ctx, FlagBit::Zero) // Restore Zero flag.
+            .assign_flags_and_set(ctx, false, false, false, true, FlagBit::Zero) // Restore Zero flag.
     }
 
     fn ccf(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
         self.check_flag(ctx, FlagBit::Carry) // *** Preserve the original value of Carry and Zero on the stack. ***
             .check_flag(ctx, FlagBit::Zero)
-            .clear_flags(ctx)
-            .set_flag(ctx, FlagBit::Zero) // Restore Zero flag.
+            .clear_flags_and_set(ctx, FlagBit::Zero) // Restore Zero flag.
             /* Negate the Carry flag:
              * Carry = Carry == 0
              */
