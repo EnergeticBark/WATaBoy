@@ -25,7 +25,7 @@ export const Runtime = class {
 	async init(source) {
 		const importObj = {env: {
 			console_log_glue: this.console_log_glue,
-			instantiate_and_link_module: this.instantiate_and_link_module,
+			link_new_module_glue: this.link_new_module_glue,
 			__indirect_function_table: this.__indirect_function_table
 		}};
 		
@@ -33,7 +33,6 @@ export const Runtime = class {
 		this.instance = instance;
 		this.lowestSafeFuncIdx = findLowestSafeFuncIdx(this.__indirect_function_table);
 		this.jitRuntimePtr = instance.exports.make_runtime();
-		instance.exports.set_ptr(this.jitRuntimePtr, this.jitRuntimePtr);
 	}
 	
 	console_log_glue = (stringPtr, stringLen) => {
@@ -42,11 +41,11 @@ export const Runtime = class {
 		console.log(message);
 	}
 	
-	instantiate_and_link_module = (bufferPtr, bufferLen) => {
-		console.log("Instantiate and link called...");
+	link_new_module_glue = (bufferPtr, bufferLen) => {
+		console.log("Link new module called...");
 		
 		const bytecode = new Uint8Array(this.instance.exports.memory.buffer, bufferPtr, bufferLen);
-		const anotherMod = new WebAssembly.Module(bytecode);
+		const newModule = new WebAssembly.Module(bytecode);
 		
 		const importObj = {env: {
 			runtime_mem: this.instance.exports.memory,
@@ -54,11 +53,11 @@ export const Runtime = class {
 			read_byte: this.instance.exports.read_byte_mem,
 			write_byte: this.instance.exports.write_byte_mem,
 		}};
-		const anotherInstance = new WebAssembly.Instance(anotherMod, importObj);
+		const newInstance = new WebAssembly.Instance(newModule, importObj);
 		
 		// This used to call the grow method, but that's busted in WebKit.
 		// See: https://bugs.webkit.org/show_bug.cgi?id=290681
-		this.__indirect_function_table.set(this.lowestSafeFuncIdx, anotherInstance.exports.execute_block)
+		this.__indirect_function_table.set(this.lowestSafeFuncIdx, newInstance.exports.execute_block)
 		
 		const prevIdx = this.lowestSafeFuncIdx;
 		this.lowestSafeFuncIdx += 1;

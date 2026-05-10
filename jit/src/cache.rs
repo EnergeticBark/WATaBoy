@@ -1,24 +1,42 @@
 // TODO: If block_cache becomes more complicated than just a HashMap move it to this file.
 // Possibly alongside lowestSafeFuncIndex calculations.
 
+use bitfield_struct::bitfield;
 use std::ops::{Index, IndexMut};
 
-use crate::codegen::Checkpoint;
+#[cfg(feature = "jit-trace")]
+use crate::console_log;
 
-pub struct CompiledBlock {
+use crate::codegen::{Checkpoint, WasmBlock};
+use crate::link_new_module;
+
+pub(crate) struct CompiledBlock {
     // Func index for the runtime's Wasm table.
     pub func_idx: i32,
     pub checkpoints: Vec<Checkpoint>,
 }
 
-pub enum BlockSlot {
+impl CompiledBlock {
+    pub(crate) fn new(wasm_block: WasmBlock) -> Self {
+        #[cfg(feature = "jit-trace")]
+        console_log(&wasmprinter::print_bytes(&wasm_block.buffer).unwrap());
+
+        let func_idx = link_new_module(&wasm_block.buffer);
+        CompiledBlock {
+            func_idx,
+            checkpoints: wasm_block.ctx.checkpoints,
+        }
+    }
+}
+
+pub(crate) enum BlockSlot {
     Uncompiled,
     Compiled(CompiledBlock),
     Uncompilable,
 }
 
 impl BlockSlot {
-    pub fn unwrap_compiled_block(&self) -> &CompiledBlock {
+    pub(crate) fn unwrap_compiled_block(&self) -> &CompiledBlock {
         if let Self::Compiled(compiled_block) = self {
             compiled_block
         } else {
@@ -27,7 +45,15 @@ impl BlockSlot {
     }
 }
 
-pub struct BlockCache(Vec<BlockSlot>);
+#[bitfield(u32, order = Msb)]
+pub(crate) struct CacheAddress {
+    #[bits(8)]
+    __: u8, // Padding
+    pub(crate) bank_number: u8,
+    pub(crate) address: u16,
+}
+
+pub(crate) struct BlockCache(Vec<BlockSlot>);
 
 impl Default for BlockCache {
     fn default() -> Self {
@@ -40,16 +66,16 @@ impl Default for BlockCache {
     }
 }
 
-impl Index<usize> for BlockCache {
+impl Index<CacheAddress> for BlockCache {
     type Output = BlockSlot;
 
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.0[index]
+    fn index(&self, index: CacheAddress) -> &Self::Output {
+        &self.0[index.into_bits() as usize]
     }
 }
 
-impl IndexMut<usize> for BlockCache {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.0[index]
+impl IndexMut<CacheAddress> for BlockCache {
+    fn index_mut(&mut self, index: CacheAddress) -> &mut Self::Output {
+        &mut self.0[index.into_bits() as usize]
     }
 }

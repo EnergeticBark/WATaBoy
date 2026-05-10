@@ -37,12 +37,12 @@ pub struct CodegenCtx {
     pub rom_ptr: usize,
     pub checkpoints: Vec<Checkpoint>,
     pub traced_pc: u16,
-    // The total number of M-Cycles this block of instructions has taken to execute so far.
+    /// The total number of M-Cycles this block of instructions has taken to execute so far.
     pub total_m_cycles: u16,
 }
 
 impl CodegenCtx {
-    // Add a checkpoint at the current point in the trace and return its index.
+    /// Add a checkpoint at the current point in the trace and return its index.
     fn add_checkpoint(&mut self) -> usize {
         self.checkpoints.push(Checkpoint {
             exit_pc: self.traced_pc,
@@ -69,312 +69,312 @@ pub struct WasmBlock {
     pub ctx: CodegenCtx,
 }
 
-fn leaving_bank_0(prev_pc: u16, pc: u16) -> bool {
-    prev_pc < ROM_BANK_0_END && pc >= ROM_BANK_0_END
-}
+impl WasmBlock {
+    /// Starting at `dmg_state`'s current program counter, read one opcode at a time until a branching instruction is reached.
+    /// ## Returns
+    /// An Option containing either a `Some(WasmBlock)` or `None` if no instructions could be recompiled.
+    #[allow(clippy::too_many_lines)]
+    pub(crate) fn recompile(
+        dmg_state: &mut Cpu,
+        runtime_ptr: usize,
+        rom_ptr: usize,
+    ) -> Option<WasmBlock> {
+        let work_ram_ptr = dmg_state.memory.buffer.as_ptr() as usize;
+        let registers_ptr = &raw const dmg_state.registers as usize;
 
-// Try to produce a WasmBlock starting at dmg_state's current program counter.
-// TODO: Read one opcode at a time until a branching statement is reached. -> Codegen Wasm for each instruction.
-#[allow(clippy::too_many_lines)]
-pub fn recompile(
-    dmg_state: &mut Cpu,
-    runtime_ptr: usize,
-    registers_ptr: usize,
-    work_ram_ptr: usize,
-    rom_ptr: usize,
-) -> Option<WasmBlock> {
-    let mut ctx = CodegenCtx {
-        runtime_ptr,
-        work_ram_ptr,
-        rom_ptr,
-        traced_pc: dmg_state.registers.pc,
-        ..Default::default()
-    };
+        let mut ctx = CodegenCtx {
+            runtime_ptr,
+            work_ram_ptr,
+            rom_ptr,
+            traced_pc: dmg_state.registers.pc,
+            ..Default::default()
+        };
 
-    #[cfg(feature = "jit-trace")]
-    let mut sm83_disassembly = String::new();
+        #[cfg(feature = "jit-trace")]
+        let mut sm83_disassembly = String::new();
 
-    let mut instruction_vec = Vec::new();
-    let mut instruction_sink = InstructionSink::new(&mut instruction_vec);
+        let mut instruction_vec = Vec::new();
+        let mut instruction_sink = InstructionSink::new(&mut instruction_vec);
 
-    loop {
-        let bytecode = dmg_state.memory.read_byte(ctx.traced_pc);
-        let opcode = Opcode::decode(bytecode).unwrap();
+        loop {
+            let bytecode = dmg_state.memory.read_byte(ctx.traced_pc);
+            let opcode = Opcode::decode(bytecode).unwrap();
 
-        // Always increment 1 M-cycle and PC for fetching the first byte.
-        ctx.increment_m_cycles(1);
-        ctx.increment_pc();
+            // Always increment 1 M-cycle and PC for fetching the first byte.
+            ctx.increment_m_cycles(1);
+            ctx.increment_pc();
 
-        if ctx.block_size >= MAX_BLOCK_SIZE {
-            break;
+            if ctx.block_size >= MAX_BLOCK_SIZE {
+                break;
+            }
+
+            match opcode {
+                // Block 0
+                // Need to use fully-qualified syntax to call *our* nop function.
+                Opcode::Nop => _ = <InstructionSink as Block0>::nop(&mut instruction_sink),
+                Opcode::LdRrNn { x } => {
+                    let first_byte = dmg_state.memory.read_byte(ctx.traced_pc);
+                    ctx.increment_pc();
+                    let second_byte = dmg_state.memory.read_byte(ctx.traced_pc);
+
+                    let address = u16::from_le_bytes([first_byte, second_byte]);
+                    ctx.increment_pc();
+                    instruction_sink.ld_rr_nn(&mut ctx, x, address);
+                }
+                Opcode::LdMemA { x } => _ = instruction_sink.ld_mem_a(&mut ctx, x),
+                Opcode::LdAMem { x } => _ = instruction_sink.ld_a_mem(&mut ctx, x),
+                Opcode::IncRr { x } => _ = instruction_sink.inc_rr(&mut ctx, x),
+                Opcode::DecRr { x } => _ = instruction_sink.dec_rr(&mut ctx, x),
+                Opcode::AddHlRr { x } => _ = instruction_sink.add_hl_rr(&mut ctx, x),
+                Opcode::IncR { x } => _ = instruction_sink.inc_r(&mut ctx, x),
+                Opcode::DecR { x } => _ = instruction_sink.dec_r(&mut ctx, x),
+                Opcode::LdRN { x } => {
+                    let imm = dmg_state.memory.read_byte(ctx.traced_pc);
+                    ctx.increment_pc();
+                    instruction_sink.ld_r_n(&mut ctx, x, imm);
+                }
+                Opcode::Rlca => _ = instruction_sink.rlca(&mut ctx),
+                Opcode::Rrca => _ = instruction_sink.rrca(&mut ctx),
+                Opcode::Rra => _ = instruction_sink.rra(&mut ctx),
+                Opcode::Cpl => _ = instruction_sink.cpl(&mut ctx),
+                Opcode::Scf => _ = instruction_sink.scf(&mut ctx),
+                Opcode::Ccf => _ = instruction_sink.ccf(&mut ctx),
+                Opcode::JrE => {
+                    let prev_pc = ctx.traced_pc - 1;
+
+                    let e = dmg_state.memory.read_byte(ctx.traced_pc).cast_signed();
+                    ctx.increment_pc();
+
+                    let address = ctx.traced_pc.wrapping_add_signed(i16::from(e));
+
+                    let outside_rom = address >= 0x8000;
+                    if outside_rom || leaving_bank_0(prev_pc, address) {
+                        // Couldn't follow the jump, fall back to the interpreter.
+                        ctx.traced_pc -= 1;
+                        break;
+                    }
+
+                    ctx.traced_pc = address;
+                }
+
+                // Block 1
+                Opcode::LdRR { x, y } => _ = instruction_sink.ld_r_r(&mut ctx, x, y),
+
+                // Block 2
+                Opcode::AddR { x } => _ = instruction_sink.add_r(&mut ctx, x),
+                Opcode::AdcR { x } => _ = instruction_sink.adc_r(&mut ctx, x),
+                Opcode::SubR { x } => _ = instruction_sink.sub_r(&mut ctx, x),
+                Opcode::SbcR { x } => _ = instruction_sink.sbc_r(&mut ctx, x),
+                Opcode::AndR { x } => _ = instruction_sink.and_r(&mut ctx, x),
+                Opcode::XorR { x } => _ = instruction_sink.xor_r(&mut ctx, x),
+                Opcode::OrR { x } => _ = instruction_sink.or_r(&mut ctx, x),
+                Opcode::CpR { x } => _ = instruction_sink.cp_r(&mut ctx, x),
+
+                // Block 3
+                Opcode::AddN => {
+                    let imm = dmg_state.memory.read_byte(ctx.traced_pc);
+                    ctx.increment_pc();
+                    instruction_sink.add_n(&mut ctx, imm);
+                }
+                Opcode::AdcN => {
+                    let imm = dmg_state.memory.read_byte(ctx.traced_pc);
+                    ctx.increment_pc();
+                    instruction_sink.adc_n(&mut ctx, imm);
+                }
+                Opcode::SubN => {
+                    let imm = dmg_state.memory.read_byte(ctx.traced_pc);
+                    ctx.increment_pc();
+                    instruction_sink.sub_n(&mut ctx, imm);
+                }
+                Opcode::SbcN => {
+                    let imm = dmg_state.memory.read_byte(ctx.traced_pc);
+                    ctx.increment_pc();
+                    instruction_sink.sbc_n(&mut ctx, imm);
+                }
+                Opcode::AndN => {
+                    let imm = dmg_state.memory.read_byte(ctx.traced_pc);
+                    ctx.increment_pc();
+                    instruction_sink.and_n(&mut ctx, imm);
+                }
+                Opcode::XorN => {
+                    let imm = dmg_state.memory.read_byte(ctx.traced_pc);
+                    ctx.increment_pc();
+                    instruction_sink.xor_n(&mut ctx, imm);
+                }
+                Opcode::OrN => {
+                    let imm = dmg_state.memory.read_byte(ctx.traced_pc);
+                    ctx.increment_pc();
+                    instruction_sink.or_n(&mut ctx, imm);
+                }
+                Opcode::CpN => {
+                    let imm = dmg_state.memory.read_byte(ctx.traced_pc);
+                    ctx.increment_pc();
+                    instruction_sink.cp_n(&mut ctx, imm);
+                }
+                Opcode::LdhCA => _ = instruction_sink.ldh_c_a(&mut ctx),
+                Opcode::LdhNA => {
+                    let imm = dmg_state.memory.read_byte(ctx.traced_pc);
+                    ctx.increment_pc();
+                    instruction_sink.ldh_n_a(&mut ctx, imm);
+                }
+                Opcode::LdNnA => {
+                    let first_byte = dmg_state.memory.read_byte(ctx.traced_pc);
+                    ctx.increment_pc();
+                    let second_byte = dmg_state.memory.read_byte(ctx.traced_pc);
+
+                    let address = u16::from_le_bytes([first_byte, second_byte]);
+
+                    ctx.increment_pc();
+                    instruction_sink.ld_nn_a(&mut ctx, address);
+                }
+                Opcode::LdhAN => {
+                    let imm = dmg_state.memory.read_byte(ctx.traced_pc);
+                    ctx.increment_pc();
+                    instruction_sink.ldh_a_n(&mut ctx, imm);
+                }
+                Opcode::LdANn => {
+                    let first_byte = dmg_state.memory.read_byte(ctx.traced_pc);
+                    ctx.increment_pc();
+                    let second_byte = dmg_state.memory.read_byte(ctx.traced_pc);
+
+                    let address = u16::from_le_bytes([first_byte, second_byte]);
+                    ctx.increment_pc();
+                    instruction_sink.ld_a_nn(&mut ctx, address);
+                }
+                Opcode::JpNn => {
+                    let prev_pc = ctx.traced_pc - 1;
+
+                    let first_byte = dmg_state.memory.read_byte(ctx.traced_pc);
+                    ctx.increment_pc();
+                    let second_byte = dmg_state.memory.read_byte(ctx.traced_pc);
+
+                    let address = u16::from_le_bytes([first_byte, second_byte]);
+
+                    let outside_rom = address >= 0x8000;
+                    if outside_rom || leaving_bank_0(prev_pc, address) {
+                        // Couldn't follow the jump, fall back to the interpreter.
+                        ctx.traced_pc -= 1;
+                        break;
+                    }
+
+                    ctx.traced_pc = address;
+                }
+                Opcode::CallNn => {
+                    let prev_pc = ctx.traced_pc - 1;
+
+                    let first_byte = dmg_state.memory.read_byte(ctx.traced_pc);
+                    ctx.increment_pc();
+                    let second_byte = dmg_state.memory.read_byte(ctx.traced_pc);
+                    ctx.increment_pc();
+
+                    let address = u16::from_le_bytes([first_byte, second_byte]);
+
+                    let outside_rom = address >= 0x8000;
+                    if outside_rom || leaving_bank_0(prev_pc, address) {
+                        // Couldn't follow the call, fall back to the interpreter.
+                        ctx.traced_pc -= 2;
+                        break;
+                    }
+
+                    instruction_sink.call_nn(&mut ctx);
+
+                    ctx.traced_pc = address;
+                }
+                Opcode::PopRr { x } => _ = instruction_sink.pop_rr(&mut ctx, x),
+                Opcode::PushRr { x } => _ = instruction_sink.push_rr(&mut ctx, x),
+                Opcode::Prefix => recompile_prefix(
+                    dmg_state,
+                    &mut ctx,
+                    &mut instruction_sink,
+                    #[cfg(feature = "jit-trace")]
+                    &mut sm83_disassembly,
+                ),
+                Opcode::LdHlSpPlusE => {
+                    let imm = dmg_state.memory.read_byte(ctx.traced_pc);
+                    let e = imm.cast_signed();
+
+                    ctx.increment_pc();
+                    instruction_sink.ld_hl_sp_plus_e(&mut ctx, e);
+                }
+                Opcode::LdSpHl => _ = instruction_sink.ld_sp_hl(&mut ctx),
+                _ => break,
+            }
+
+            // Add the number of cycles this instruction took to total_m_cycles.
+            // TODO: Remember to handle any context dependent instructions separately!!
+            // TODO: PopRr and PushRr tick manually here, but not in the interpreter.
+            // Remove this if statement once the interpreter ticks them manually.
+            if !matches!(
+                opcode,
+                Opcode::PopRr { .. }
+                    | Opcode::PushRr { .. }
+                    | Opcode::LdMemA { .. }
+                    | Opcode::LdAMem { .. }
+                    | Opcode::CallNn
+            ) {
+                ctx.increment_m_cycles(opcodes::cycles::m_cycles(opcode).saturating_sub(1));
+            }
+
+            #[cfg(feature = "jit-trace")]
+            sm83_disassembly.push_str(&format!("{:?}\n", opcode));
+
+            ctx.block_size += 1;
+            if ctx.block_size >= MAX_BLOCK_SIZE {
+                break;
+            }
         }
 
-        match opcode {
-            // Block 0
-            // Need to use fully-qualified syntax to call *our* nop function.
-            Opcode::Nop => _ = <InstructionSink as Block0>::nop(&mut instruction_sink),
-            Opcode::LdRrNn { x } => {
-                let first_byte = dmg_state.memory.read_byte(ctx.traced_pc);
-                ctx.increment_pc();
-                let second_byte = dmg_state.memory.read_byte(ctx.traced_pc);
+        // The final instruction couldn't be added to the block, so retroactively decrement the M-cycle and PC used to fetch it.
+        ctx.total_m_cycles -= 1;
+        ctx.traced_pc -= 1;
 
-                let address = u16::from_le_bytes([first_byte, second_byte]);
-                ctx.increment_pc();
-                instruction_sink.ld_rr_nn(&mut ctx, x, address);
-            }
-            Opcode::LdMemA { x } => _ = instruction_sink.ld_mem_a(&mut ctx, x),
-            Opcode::LdAMem { x } => _ = instruction_sink.ld_a_mem(&mut ctx, x),
-            Opcode::IncRr { x } => _ = instruction_sink.inc_rr(&mut ctx, x),
-            Opcode::DecRr { x } => _ = instruction_sink.dec_rr(&mut ctx, x),
-            Opcode::AddHlRr { x } => _ = instruction_sink.add_hl_rr(&mut ctx, x),
-            Opcode::IncR { x } => _ = instruction_sink.inc_r(&mut ctx, x),
-            Opcode::DecR { x } => _ = instruction_sink.dec_r(&mut ctx, x),
-            Opcode::LdRN { x } => {
-                let imm = dmg_state.memory.read_byte(ctx.traced_pc);
-                ctx.increment_pc();
-                instruction_sink.ld_r_n(&mut ctx, x, imm);
-            }
-            Opcode::Rlca => _ = instruction_sink.rlca(&mut ctx),
-            Opcode::Rrca => _ = instruction_sink.rrca(&mut ctx),
-            Opcode::Rra => _ = instruction_sink.rra(&mut ctx),
-            Opcode::Cpl => _ = instruction_sink.cpl(&mut ctx),
-            Opcode::Scf => _ = instruction_sink.scf(&mut ctx),
-            Opcode::Ccf => _ = instruction_sink.ccf(&mut ctx),
-            Opcode::JrE => {
-                let prev_pc = ctx.traced_pc - 1;
-
-                let e = dmg_state.memory.read_byte(ctx.traced_pc).cast_signed();
-                ctx.increment_pc();
-
-                let address = ctx.traced_pc.wrapping_add_signed(i16::from(e));
-
-                let outside_rom = address >= 0x8000;
-                if outside_rom || leaving_bank_0(prev_pc, address) {
-                    // Couldn't follow the jump, fall back to the interpreter.
-                    ctx.traced_pc -= 1;
-                    break;
-                }
-
-                ctx.traced_pc = address;
-            }
-
-            // Block 1
-            Opcode::LdRR { x, y } => _ = instruction_sink.ld_r_r(&mut ctx, x, y),
-
-            // Block 2
-            Opcode::AddR { x } => _ = instruction_sink.add_r(&mut ctx, x),
-            Opcode::AdcR { x } => _ = instruction_sink.adc_r(&mut ctx, x),
-            Opcode::SubR { x } => _ = instruction_sink.sub_r(&mut ctx, x),
-            Opcode::SbcR { x } => _ = instruction_sink.sbc_r(&mut ctx, x),
-            Opcode::AndR { x } => _ = instruction_sink.and_r(&mut ctx, x),
-            Opcode::XorR { x } => _ = instruction_sink.xor_r(&mut ctx, x),
-            Opcode::OrR { x } => _ = instruction_sink.or_r(&mut ctx, x),
-            Opcode::CpR { x } => _ = instruction_sink.cp_r(&mut ctx, x),
-
-            // Block 3
-            Opcode::AddN => {
-                let imm = dmg_state.memory.read_byte(ctx.traced_pc);
-                ctx.increment_pc();
-                instruction_sink.add_n(&mut ctx, imm);
-            }
-            Opcode::AdcN => {
-                let imm = dmg_state.memory.read_byte(ctx.traced_pc);
-                ctx.increment_pc();
-                instruction_sink.adc_n(&mut ctx, imm);
-            }
-            Opcode::SubN => {
-                let imm = dmg_state.memory.read_byte(ctx.traced_pc);
-                ctx.increment_pc();
-                instruction_sink.sub_n(&mut ctx, imm);
-            }
-            Opcode::SbcN => {
-                let imm = dmg_state.memory.read_byte(ctx.traced_pc);
-                ctx.increment_pc();
-                instruction_sink.sbc_n(&mut ctx, imm);
-            }
-            Opcode::AndN => {
-                let imm = dmg_state.memory.read_byte(ctx.traced_pc);
-                ctx.increment_pc();
-                instruction_sink.and_n(&mut ctx, imm);
-            }
-            Opcode::XorN => {
-                let imm = dmg_state.memory.read_byte(ctx.traced_pc);
-                ctx.increment_pc();
-                instruction_sink.xor_n(&mut ctx, imm);
-            }
-            Opcode::OrN => {
-                let imm = dmg_state.memory.read_byte(ctx.traced_pc);
-                ctx.increment_pc();
-                instruction_sink.or_n(&mut ctx, imm);
-            }
-            Opcode::CpN => {
-                let imm = dmg_state.memory.read_byte(ctx.traced_pc);
-                ctx.increment_pc();
-                instruction_sink.cp_n(&mut ctx, imm);
-            }
-            Opcode::LdhCA => _ = instruction_sink.ldh_c_a(&mut ctx),
-            Opcode::LdhNA => {
-                let imm = dmg_state.memory.read_byte(ctx.traced_pc);
-                ctx.increment_pc();
-                instruction_sink.ldh_n_a(&mut ctx, imm);
-            }
-            Opcode::LdNnA => {
-                let first_byte = dmg_state.memory.read_byte(ctx.traced_pc);
-                ctx.increment_pc();
-                let second_byte = dmg_state.memory.read_byte(ctx.traced_pc);
-
-                let address = u16::from_le_bytes([first_byte, second_byte]);
-
-                ctx.increment_pc();
-                instruction_sink.ld_nn_a(&mut ctx, address);
-            }
-            Opcode::LdhAN => {
-                let imm = dmg_state.memory.read_byte(ctx.traced_pc);
-                ctx.increment_pc();
-                instruction_sink.ldh_a_n(&mut ctx, imm);
-            }
-            Opcode::LdANn => {
-                let first_byte = dmg_state.memory.read_byte(ctx.traced_pc);
-                ctx.increment_pc();
-                let second_byte = dmg_state.memory.read_byte(ctx.traced_pc);
-
-                let address = u16::from_le_bytes([first_byte, second_byte]);
-                ctx.increment_pc();
-                instruction_sink.ld_a_nn(&mut ctx, address);
-            }
-            Opcode::JpNn => {
-                let prev_pc = ctx.traced_pc - 1;
-
-                let first_byte = dmg_state.memory.read_byte(ctx.traced_pc);
-                ctx.increment_pc();
-                let second_byte = dmg_state.memory.read_byte(ctx.traced_pc);
-
-                let address = u16::from_le_bytes([first_byte, second_byte]);
-
-                let outside_rom = address >= 0x8000;
-                if outside_rom || leaving_bank_0(prev_pc, address) {
-                    // Couldn't follow the jump, fall back to the interpreter.
-                    ctx.traced_pc -= 1;
-                    break;
-                }
-
-                ctx.traced_pc = address;
-            }
-            Opcode::CallNn => {
-                let prev_pc = ctx.traced_pc - 1;
-
-                let first_byte = dmg_state.memory.read_byte(ctx.traced_pc);
-                ctx.increment_pc();
-                let second_byte = dmg_state.memory.read_byte(ctx.traced_pc);
-                ctx.increment_pc();
-
-                let address = u16::from_le_bytes([first_byte, second_byte]);
-
-                let outside_rom = address >= 0x8000;
-                if outside_rom || leaving_bank_0(prev_pc, address) {
-                    // Couldn't follow the call, fall back to the interpreter.
-                    ctx.traced_pc -= 2;
-                    break;
-                }
-
-                instruction_sink.call_nn(&mut ctx);
-
-                ctx.traced_pc = address;
-            }
-            Opcode::PopRr { x } => _ = instruction_sink.pop_rr(&mut ctx, x),
-            Opcode::PushRr { x } => _ = instruction_sink.push_rr(&mut ctx, x),
-            Opcode::Prefix => recompile_prefix(
-                dmg_state,
-                &mut ctx,
-                &mut instruction_sink,
-                #[cfg(feature = "jit-trace")]
-                &mut sm83_disassembly,
-            ),
-            Opcode::LdHlSpPlusE => {
-                let imm = dmg_state.memory.read_byte(ctx.traced_pc);
-                let e = imm.cast_signed();
-
-                ctx.increment_pc();
-                instruction_sink.ld_hl_sp_plus_e(&mut ctx, e);
-            }
-            Opcode::LdSpHl => _ = instruction_sink.ld_sp_hl(&mut ctx),
-            _ => break,
-        }
-
-        // Add the number of cycles this instruction took to total_m_cycles.
-        // TODO: Remember to handle any context dependent instructions separately!!
-        // TODO: PopRr and PushRr tick manually here, but not in the interpreter.
-        // Remove this if statement once the interpreter ticks them manually.
-        if !matches!(
-            opcode,
-            Opcode::PopRr { .. }
-                | Opcode::PushRr { .. }
-                | Opcode::LdMemA { .. }
-                | Opcode::LdAMem { .. }
-                | Opcode::CallNn
-        ) {
-            ctx.increment_m_cycles(opcodes::cycles::m_cycles(opcode).saturating_sub(1));
+        if ctx.block_size < MIN_BLOCK_SIZE {
+            return None;
         }
 
         #[cfg(feature = "jit-trace")]
-        sm83_disassembly.push_str(&format!("{:?}\n", opcode));
+        console_log(&sm83_disassembly);
 
-        ctx.block_size += 1;
-        if ctx.block_size >= MAX_BLOCK_SIZE {
-            break;
+        let mut module = empty_jit_block_module();
+
+        // Encode the code section.
+        let mut codes = CodeSection::new();
+
+        let mut function = empty_jit_block_function(ctx.regs_used.len() as u32);
+        function
+            .instructions()
+            .prologue(registers_ptr, &ctx.regs_used);
+
+        if ctx.needs_outer_block {
+            // Wrap our JIT'd instructions in a block so we can break early if needed.
+            function.instructions().block(BlockType::Empty);
         }
+
+        function.raw(instruction_vec);
+
+        if ctx.needs_outer_block {
+            // End the inner block.
+            function.instructions().end();
+        }
+
+        // Add the calling convention's epilogue.
+        function
+            .instructions()
+            .epilogue(registers_ptr, &ctx.regs_used)
+            .end();
+        codes.function(&function);
+        module.section(&codes);
+
+        ctx.add_checkpoint();
+
+        Some(WasmBlock {
+            buffer: module.finish(),
+            ctx,
+        })
     }
-
-    // The final instruction couldn't be added to the block, so retroactively decrement the M-cycle and PC used to fetch it.
-    ctx.total_m_cycles -= 1;
-    ctx.traced_pc -= 1;
-
-    if ctx.block_size < MIN_BLOCK_SIZE {
-        return None;
-    }
-
-    #[cfg(feature = "jit-trace")]
-    console_log(&sm83_disassembly);
-
-    let mut module = empty_jit_block_module();
-
-    // Encode the code section.
-    let mut codes = CodeSection::new();
-
-    let mut function = empty_jit_block_function(ctx.regs_used.len() as u32);
-    function
-        .instructions()
-        .prologue(registers_ptr, &ctx.regs_used);
-
-    if ctx.needs_outer_block {
-        // Wrap our JIT'd instructions in a block so we can break early if needed.
-        function.instructions().block(BlockType::Empty);
-    }
-
-    function.raw(instruction_vec);
-
-    if ctx.needs_outer_block {
-        // End the inner block.
-        function.instructions().end();
-    }
-
-    // Add the calling convention's epilogue.
-    function
-        .instructions()
-        .epilogue(registers_ptr, &ctx.regs_used)
-        .end();
-    codes.function(&function);
-    module.section(&codes);
-
-    ctx.add_checkpoint();
-
-    Some(WasmBlock {
-        buffer: module.finish(),
-        ctx,
-    })
 }
 
-// Try to recompile the prefix opcode at PC.
+/// Recompile the prefix opcode at PC.
 fn recompile_prefix(
     dmg_state: &mut Cpu,
     ctx: &mut CodegenCtx,
@@ -404,4 +404,8 @@ fn recompile_prefix(
 
     #[cfg(feature = "jit-trace")]
     sm83_disassembly.push_str(&format!("{:?}\n", prefix_opcode));
+}
+
+fn leaving_bank_0(prev_pc: u16, pc: u16) -> bool {
+    prev_pc < ROM_BANK_0_END && pc >= ROM_BANK_0_END
 }
