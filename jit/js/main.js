@@ -19,16 +19,24 @@ const runtime = new Runtime();
 const wasmSource = await (await fetch("../target/wasm32-unknown-unknown/release/jit-opt.wasm")).bytes();
 await runtime.init(wasmSource);
 
-const renderLoop = () => {
-	frametimeCounter.start();
-	for (let i = 0; i < speedMultiplier; i += 1) {
-		runtime.step_vblank();
-	}
-	frametimeCounter.end();
-	runtime.updateLcd(lcdImage);
-	ctx.putImageData(lcdImage, 0, 0);
-	runtime.updateJoypad(buttonsHeld);
-
+let nextFrame;
+const renderLoop = (timestamp) => {
+	// Cap the animation framerate to 60fps.
+	if (timestamp >= nextFrame) {
+		nextFrame += 1000 / 60;
+		
+		frametimeCounter.start();
+	
+		for (let i = 0; i < speedMultiplier; i += 1) {
+			runtime.step_vblank();
+		}
+		
+		frametimeCounter.end();
+		runtime.updateLcd(lcdImage);
+		ctx.putImageData(lcdImage, 0, 0);
+		runtime.updateJoypad(buttonsHeld);
+    }
+	
 	requestAnimationFrame(renderLoop);
 };
 
@@ -46,7 +54,8 @@ loadRomButton.addEventListener("click", async () => {
 	runtime.loadRom(rom);
 	
 	// Start the render loop.
-	renderLoop();
+	nextFrame = document.timeline.currentTime;
+	renderLoop(nextFrame);
 });
 
 const logUncompiledButton = document.querySelector("#log-uncompiled");
