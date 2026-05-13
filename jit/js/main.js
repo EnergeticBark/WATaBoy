@@ -16,7 +16,7 @@ const lcdCanvas = document.querySelector("#lcd");
 const ctx = lcdCanvas.getContext("2d", { alpha: false });
 
 const runtime = new Runtime();
-const wasmSource = await (await fetch("../target/wasm32-unknown-unknown/release/jit-opt.wasm")).bytes();
+const wasmSource = await (await fetch("../target/wasm32-unknown-unknown/release/jit.wasm")).bytes();
 await runtime.init(wasmSource);
 
 let nextFrame;
