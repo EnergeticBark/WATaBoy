@@ -416,9 +416,14 @@ impl Ppu {
         // 8 extra pixels for scrolling, plus another 16.
         let mut line_buffer = [Pixel::from_bits(0); SCREEN_WIDTH as usize + 24];
 
-        self.coarse_background(&mut line_buffer);
-        self.coarse_window(&mut line_buffer);
-        self.coarse_objects(&mut line_buffer);
+        if self.registers.lcdc.bg_and_window_enabled() {
+            self.coarse_background(&mut line_buffer);
+            self.coarse_window(&mut line_buffer);
+        }
+
+        if self.registers.lcdc.obj_enabled() {
+            self.coarse_objects(&mut line_buffer);
+        }
 
         let line_start = self.line_number as usize * SCREEN_WIDTH as usize;
         let line_end = line_start + SCREEN_WIDTH as usize;
