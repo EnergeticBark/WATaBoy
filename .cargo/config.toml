@@ -1,2 +1,5 @@
 [build]
+rustflags = ["-Ccodegen-units=1"]
+
+[target.wasm32-unknown-unknown]
 rustflags = ["-Ctarget-feature=+simd128", "-Ctarget-feature=+tail-call", "-Ccodegen-units=1"]
