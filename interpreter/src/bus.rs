@@ -1,6 +1,6 @@
-mod woke_counters;
-#[cfg(feature = "woke-counters")]
-use woke_counters::WokeCounter;
+mod waking_counters;
+#[cfg(feature = "waking-counters")]
+use waking_counters::WakingCounter;
 
 use std::hint::cold_path;
 
@@ -30,14 +30,10 @@ pub struct AddressBus {
     pub buttons_held: ButtonsHeld,
     pub clock: u64,
     pub next_interrupt: u64,
-    #[cfg(feature = "woke-counters")]
-    pub woke_ppu_reads: WokeCounter,
-    #[cfg(feature = "woke-counters")]
-    pub woke_ppu_writes: WokeCounter,
-    #[cfg(feature = "woke-counters")]
-    pub woke_timers_reads: WokeCounter,
-    #[cfg(feature = "woke-counters")]
-    pub woke_timers_writes: WokeCounter,
+    #[cfg(feature = "waking-counters")]
+    pub waking_reads: WakingCounter,
+    #[cfg(feature = "waking-counters")]
+    pub waking_writes: WakingCounter,
 }
 
 impl AddressBus {
@@ -60,8 +56,8 @@ impl AddressBus {
             | OBP1
             | WY
             | WX => {
-                #[cfg(feature = "woke-counters")]
-                self.woke_ppu_reads.log_access(index);
+                #[cfg(feature = "waking-counters")]
+                self.waking_reads.log_access(index);
 
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.read_byte(index, self.clock)
@@ -71,8 +67,8 @@ impl AddressBus {
 
             // Delegate reads to the timers
             DIV | TIMA | TMA | TAC => {
-                #[cfg(feature = "woke-counters")]
-                self.woke_timers_reads.log_access(index);
+                #[cfg(feature = "waking-counters")]
+                self.waking_reads.log_access(index);
 
                 self.timers
                     .catch_up(self.clock, &mut self.buffer[IF as usize]);
@@ -80,8 +76,8 @@ impl AddressBus {
             }
 
             IF => {
-                #[cfg(feature = "woke-counters")]
-                self.woke_timers_reads.log_access(index);
+                #[cfg(feature = "waking-counters")]
+                self.waking_reads.log_access(index);
 
                 // TODO: I should probably catch up the PPU here too...
                 // 3/25/25 update: Actually, I could *selectively* update components here based on which bits will actually change. >:3
@@ -117,8 +113,8 @@ impl AddressBus {
 
             // Delegate writes to VRAM and OAM to the PPU.
             VRAM_START..VRAM_END | OAM_START..OAM_END => {
-                #[cfg(feature = "woke-counters")]
-                self.woke_ppu_writes.log_access(index);
+                #[cfg(feature = "waking-counters")]
+                self.waking_writes.log_access(index);
 
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.write_byte(index, value, self.clock);
@@ -158,8 +154,8 @@ impl AddressBus {
 
             // Delegate writes to the timers.
             DIV | TIMA | TMA | TAC => {
-                #[cfg(feature = "woke-counters")]
-                self.woke_timers_writes.log_access(index);
+                #[cfg(feature = "waking-counters")]
+                self.waking_writes.log_access(index);
 
                 self.timers
                     .catch_up(self.clock, &mut self.buffer[IF as usize]);
@@ -168,8 +164,8 @@ impl AddressBus {
             }
 
             IF => {
-                #[cfg(feature = "woke-counters")]
-                self.woke_ppu_writes.log_access(index);
+                #[cfg(feature = "waking-counters")]
+                self.waking_writes.log_access(index);
 
                 // If we don't catch up the components now, the value we're writing may get overwritten by a stale flag when we catch up later.
                 // TODO: I should probably catch up the timers here too...
@@ -192,8 +188,8 @@ impl AddressBus {
             // we don't actually need to catch up the component, because nothing has changed.
             // Pokemon Blue updates the value of SCX, SCY, and WY on the title screen what seems several times per frame.
             STAT | LYC => {
-                #[cfg(feature = "woke-counters")]
-                self.woke_ppu_writes.log_access(index);
+                #[cfg(feature = "waking-counters")]
+                self.waking_writes.log_access(index);
 
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.write_byte(index, value, self.clock);
@@ -206,8 +202,8 @@ impl AddressBus {
                 self.ppu_est_next_intr();
             }
             LCDC | SCY | SCX | BGP | OBP0 | OBP1 | WY | WX => {
-                #[cfg(feature = "woke-counters")]
-                self.woke_ppu_writes.log_access(index);
+                #[cfg(feature = "waking-counters")]
+                self.waking_writes.log_access(index);
 
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.write_byte(index, value, self.clock);
@@ -220,10 +216,8 @@ impl AddressBus {
                 self.buffer[index as usize] = value | 0b1111_1111;
             }
             IE => {
-                #[cfg(feature = "woke-counters")]
-                self.woke_ppu_writes.log_access(index);
-                #[cfg(feature = "woke-counters")]
-                self.woke_timers_writes.log_access(index);
+                #[cfg(feature = "waking-counters")]
+                self.waking_writes.log_access(index);
 
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.timers
@@ -328,14 +322,10 @@ impl Default for AddressBus {
             buttons_held: ButtonsHeld::default(),
             clock: 0,
             next_interrupt: 0,
-			#[cfg(feature = "woke-counters")]
-			woke_ppu_reads: WokeCounter::default(),
-			#[cfg(feature = "woke-counters")]
-			woke_ppu_writes: WokeCounter::default(),
-			#[cfg(feature = "woke-counters")]
-			woke_timers_reads: WokeCounter::default(),
-			#[cfg(feature = "woke-counters")]
-			woke_timers_writes: WokeCounter::default(),
+			#[cfg(feature = "waking-counters")]
+			waking_reads: WakingCounter::default(),
+			#[cfg(feature = "waking-counters")]
+			waking_writes: WakingCounter::default(),
         }
     }
 }

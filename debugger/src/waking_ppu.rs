@@ -21,7 +21,7 @@ pub fn show(ui: &mut egui::Ui, dmg_state: &Cpu) {
             }
         })
         .body(|body| {
-            draw_woke_ppu_body(body, &dmg_state.memory.woke_ppu_reads.0);
+            draw_waking_ppu_body(body, &dmg_state.memory.waking_reads.0);
         });
 
     let name = "Waking Writes";
@@ -37,17 +37,12 @@ pub fn show(ui: &mut egui::Ui, dmg_state: &Cpu) {
             }
         })
         .body(|body| {
-            draw_woke_ppu_body(body, &dmg_state.memory.woke_ppu_writes.0);
+            draw_waking_ppu_body(body, &dmg_state.memory.waking_writes.0);
         });
 }
 
-fn draw_woke_ppu_body(body: TableBody<'_>, ppu_accesses: &HashMap<u16, u64>) {
-    let kv_pairs = ppu_accesses.iter().collect::<Vec<_>>();
-
-    body.rows(ROW_HEIGHT, kv_pairs.len(), |mut row| {
-        let row_index = row.index();
-        let (&key, value) = kv_pairs[row_index];
-
+fn draw_waking_ppu_body(body: TableBody<'_>, waking_accesses: &HashMap<u16, u64>) {
+    let filter_ppu_addresses = |(&key, &val)| {
         let key_name = match key {
             VRAM_START..VRAM_END => "VRAM",
             OAM_START..OAM_END => "OAM",
@@ -64,11 +59,22 @@ fn draw_woke_ppu_body(body: TableBody<'_>, ppu_accesses: &HashMap<u16, u64>) {
             WY => "WY",
             WX => "WX",
             IE => "IE",
-            _ => unreachable!(),
+            _ => return None,
         };
+        Some((key_name, val))
+    };
+
+    let kv_pairs = waking_accesses
+        .iter()
+        .filter_map(filter_ppu_addresses)
+        .collect::<Vec<(&'static str, u64)>>();
+
+    body.rows(ROW_HEIGHT, kv_pairs.len(), |mut row| {
+        let row_index = row.index();
+        let (key, value) = kv_pairs[row_index];
 
         row.col(|ui| {
-            ui.label(key_name);
+            ui.label(key);
         });
         row.col(|ui| {
             ui.label(value.to_string());

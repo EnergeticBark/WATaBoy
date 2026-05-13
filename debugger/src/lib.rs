@@ -6,7 +6,7 @@ mod oam;
 mod registers;
 mod tile_map;
 mod tiles;
-mod woke_ppu;
-mod woke_timers;
+mod waking_ppu;
+mod waking_timers;
 
 pub use app::DebuggerApp;

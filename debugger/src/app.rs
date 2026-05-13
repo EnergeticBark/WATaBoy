@@ -4,17 +4,17 @@ use crate::oam::draw_oam_table;
 use crate::registers::draw_register_table;
 use crate::tile_map::{draw_tile_map_0, draw_tile_map_1};
 use crate::tiles::draw_tile_table;
-use crate::{interrupts, woke_ppu, woke_timers};
+use crate::{interrupts, waking_ppu, waking_timers};
 use eframe::epaint::textures::TextureOptions;
 use eframe::epaint::{Color32, ColorImage};
 use egui::{Key, Slider, TextureHandle, Ui};
 use hw_constants::{SCREEN_HEIGHT, SCREEN_WIDTH, TILE_MAP_SIZE, TILE_SIZE};
-use log::error;
-use rkyv::deserialize;
-use rkyv::rancor::Error;
 use interpreter::cpu::opcodes::Opcode;
 use interpreter::cpu::{ArchivedCpu, Cpu};
 use interpreter::joypad::ButtonsHeld;
+use log::error;
+use rkyv::deserialize;
+use rkyv::rancor::Error;
 use std::fs::File;
 use std::io::{Read, Write};
 
@@ -32,8 +32,8 @@ pub struct DebuggerApp {
     buttons_held: ButtonsHeld,
     logger_open: bool,
     interrupts_open: bool,
-    woke_ppu_open: bool,
-    woke_timers_open: bool,
+    waking_ppu_open: bool,
+    waking_timers_open: bool,
 }
 
 impl DebuggerApp {
@@ -89,8 +89,8 @@ impl DebuggerApp {
             buttons_held: ButtonsHeld::default(),
             logger_open: false,
             interrupts_open: false,
-            woke_ppu_open: false,
-            woke_timers_open: false,
+            waking_ppu_open: false,
+            waking_timers_open: false,
         }
     }
 
@@ -123,8 +123,8 @@ impl DebuggerApp {
             ui.menu_button("Tools", |ui| {
                 self.logger_open |= ui.button("Show Logger").clicked();
                 self.interrupts_open |= ui.button("Show Interrupts").clicked();
-                self.woke_ppu_open |= ui.button("Show Woke PPU").clicked();
-                self.woke_timers_open |= ui.button("Show Woke Timers").clicked();
+                self.waking_ppu_open |= ui.button("Show Waking PPU").clicked();
+                self.waking_timers_open |= ui.button("Show Waking Timers").clicked();
             });
         });
     }
@@ -163,15 +163,15 @@ impl eframe::App for DebuggerApp {
             .show(ui, |ui| {
                 interrupts::show(ui, &self.dmg_state);
             });
-        egui::Window::new("Woke PPU")
-            .open(&mut self.woke_ppu_open)
+        egui::Window::new("Waking PPU")
+            .open(&mut self.waking_ppu_open)
             .show(ui, |ui| {
-                woke_ppu::show(ui, &self.dmg_state);
+                waking_ppu::show(ui, &self.dmg_state);
             });
-        egui::Window::new("Woke Timers")
-            .open(&mut self.woke_timers_open)
+        egui::Window::new("Waking Timers")
+            .open(&mut self.waking_timers_open)
             .show(ui, |ui| {
-                woke_timers::show(ui, &self.dmg_state);
+                waking_timers::show(ui, &self.dmg_state);
             });
 
         egui::Window::new("PPU Output").show(ui, |ui| {
