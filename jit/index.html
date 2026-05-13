@@ -4,6 +4,10 @@
 	<meta charset="UTF-8">
 	<script type="module" src="js/main.js"></script>
 	<style>
+		fieldset {
+			max-width: fit-content;
+		}
+	
 		#lcd {
 			border: 1px solid;
 			/* 5x scale. */
@@ -11,13 +15,35 @@
 			height: 576px;
 			image-rendering: pixelated;
 		}
+		
+		kbd > kbd {
+		  border-radius: 3px;
+		  padding: 1px 2px 0;
+		  border: 1px solid black;
+		  box-shadow: 0 1px 1px darkgray;
+		}
 	</style>
 	<title>WATaBoy</title>
 </head>
 <body>
+	<fieldset>
+	<legend>Choose a Game Boy ROM</legend>
+	<label>ROM: <input type="file" id="rom" /></label>
+	<input type="button" id="load-rom" value="Load ROM" />
+	</fieldset>
+	
 	<canvas id="lcd" width="160" height="144"></canvas>
 	<p id="frametimes"></p>
 	<label>Speed multiplier: <input type="number" id="speed" value="500"/></label>
 	<input type="button" id="log-uncompiled" value="Log Uncompiled" />
+	<p>Controls:</p>
+	<p>
+		A: <kbd><kbd>Z</kbd></kbd>,
+		B: <kbd><kbd>X</kbd></kbd>,
+		Start: <kbd><kbd>Enter</kbd></kbd>,
+		Select: <kbd><kbd>Backspace</kbd></kbd>,
+		D-pad: <kbd><kbd>&uarr;</kbd></kbd> <kbd><kbd>&darr;</kbd></kbd> <kbd><kbd>&larr;</kbd></kbd> <kbd><kbd>&rarr;</kbd></kbd>
+	</p>
+
 </body>
 </html>
