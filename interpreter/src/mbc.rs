@@ -9,7 +9,7 @@ const RAM_SIZE_ADDR: usize = 0x0149;
 
 const RAM_BANK_SIZE: usize = 0x2000;
 
-const MGB_BOOT_ROM: &[u8; 0x100] = include_bytes!("../mgb_boot.bin");
+const MGB_BOOT_ROM: &[u8; 0x100] = include_bytes!("../bootix_mgb.bin");
 
 // TODO: Add the other MBC types.
 #[derive(Default)]

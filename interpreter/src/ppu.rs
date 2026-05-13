@@ -1321,7 +1321,8 @@ mod tests {
         assert_eq!(mode_3_dots, 182);
     }
 
-    use std::fs::File;
+    // Tests that log PPU state changes for comparing against other emulators.
+    /*use std::fs::File;
     use std::io::Write;
 
     #[test]
@@ -1332,10 +1333,10 @@ mod tests {
         let filename = "my_lcd_on_vars.csv";
         let mut file = File::create(filename).unwrap();
         writeln!(
-			&mut file,
-			"Dot, LY, LY for LYC, STAT Mode, OAM R Blocked, OAM W Blocked, VRAM R Blocked, VRAM W Blocked"
-		)
-		.unwrap();
+            &mut file,
+            "Dot, LY, LY for LYC, STAT Mode, OAM R Blocked, OAM W Blocked, VRAM R Blocked, VRAM W Blocked"
+        )
+        .unwrap();
 
         // TWO FRAMES
         let mut previous_line_sans_dot = String::new();
@@ -1394,28 +1395,6 @@ mod tests {
     }
 
     #[test]
-    fn lcd_on_funny_ly() {
-        let mut ppu = Ppu::default();
-        ppu.write_byte(LCDC, 0x81, 0); // Enable the LCD
-
-        let filename = "my_lcd_on_funny_ly.csv";
-        let mut file = File::create(filename).unwrap();
-        writeln!(&mut file, "Dot, LY").unwrap();
-
-        // TWO FRAMES
-        let mut previous_line_sans_dot = String::new();
-        for dot in 0..u64::from(DOTS_PER_FRAME) * 2 {
-            let output_line = format!("{dot}, {}", ppu.compute_ly(dot));
-            if let Some((_, line_sans_dot)) = output_line.split_once(", ")
-                && line_sans_dot != previous_line_sans_dot
-            {
-                previous_line_sans_dot = line_sans_dot.into();
-                writeln!(&mut file, "{output_line}").unwrap();
-            }
-        }
-    }
-
-    #[test]
     fn lcd_on_vars_scx1() {
         let mut ppu = Ppu::default();
         ppu.write_byte(LCDC, 0x81, 0); // Enable the LCD
@@ -1424,10 +1403,10 @@ mod tests {
         let filename = "my_lcd_on_vars_scx1.csv";
         let mut file = File::create(filename).unwrap();
         writeln!(
-			&mut file,
-			"Dot, LY, LY for LYC, STAT Mode, STAT for I, OAM R Blocked, OAM W Blocked, VRAM R Blocked, VRAM W Blocked"
-		)
-		.unwrap();
+            &mut file,
+            "Dot, LY, LY for LYC, STAT Mode, STAT for I, OAM R Blocked, OAM W Blocked, VRAM R Blocked, VRAM W Blocked"
+        )
+        .unwrap();
 
         // TWO FRAMES
         let mut previous_line_sans_dot = String::new();
@@ -1468,10 +1447,10 @@ mod tests {
         let filename = "my_vars.csv";
         let mut file = File::create(filename).unwrap();
         writeln!(
-			&mut file,
-			"Dot, LY, LY for LYC, STAT Mode, OAM R Blocked, OAM W Blocked, VRAM R Blocked, VRAM W Blocked"
-		)
-		.unwrap();
+            &mut file,
+            "Dot, LY, LY for LYC, STAT Mode, OAM R Blocked, OAM W Blocked, VRAM R Blocked, VRAM W Blocked"
+        )
+        .unwrap();
 
         let initial_clock = u64::from(DOTS_PER_SCANLINE) - 65;
         ppu.mode = PpuMode::LastLine3;
@@ -1505,5 +1484,5 @@ mod tests {
             let mut interrupt_flags = 0;
             ppu.catch_up(initial_clock + dot + 1, &mut interrupt_flags);
         }
-    }
+    }*/
 }

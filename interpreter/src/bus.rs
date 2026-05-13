@@ -314,18 +314,19 @@ impl AddressBus {
 impl Default for AddressBus {
     fn default() -> Self {
         Self {
-			// TODO: Ughhh, make this all zeros again after I delegate SRAM reads to MBC. Has to be like this for Blargg's.
-            buffer: /*vec![0; MEM_MAP_SIZE].into_boxed_slice().try_into().unwrap()*/hw_constants::post_boot_hwio(),
+            // TODO: Ughhh, make this all zeros again after I delegate SRAM reads to MBC. Has to be like this for Blargg's.
+            buffer: hw_constants::post_boot_hwio(),
+            //buffer: vec![0; MEM_MAP_SIZE].into_boxed_slice().try_into().unwrap(),
             timers: Timers::default(),
             ppu: Ppu::default(),
             mbc: Mbc::default(),
             buttons_held: ButtonsHeld::default(),
             clock: 0,
             next_interrupt: 0,
-			#[cfg(feature = "waking-counters")]
-			waking_reads: WakingCounter::default(),
-			#[cfg(feature = "waking-counters")]
-			waking_writes: WakingCounter::default(),
+            #[cfg(feature = "waking-counters")]
+            waking_reads: WakingCounter::default(),
+            #[cfg(feature = "waking-counters")]
+            waking_writes: WakingCounter::default(),
         }
     }
 }

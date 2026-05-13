@@ -5,7 +5,8 @@ import { Runtime } from "../runtime.js";
 // The first param is the rom name, the second param is the line in the tile map where "Passed" will appear. 
 const roms = [
 	"div_timing.gb",
-	"boot_div-dmgABCmgb.gb",
+	// TODO: Implement boot ROM skipping so I can pass this without distributing the original mgb boot ROM.
+	//"boot_div-dmgABCmgb.gb",
 	//"boot_hwio-dmgABCmgb.gb",
 	"boot_regs-mgb.gb"
 ];
