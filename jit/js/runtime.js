@@ -3,35 +3,18 @@ export const LCD_HEIGHT = 144;
 
 const utf8decoder = new TextDecoder();
 
-const findLowestSafeFuncIdx = (table) => {
-	// Start with an index of 1, because Rust's linker leaves index 0 as null for some reason.
-	for (let tableIndex = 1; tableIndex < table.length; tableIndex += 1) {
-		if (table.get(tableIndex) === null) {
-			return tableIndex;
-		}
-	}
-}
-
 export const Runtime = class {
-	__indirect_function_table;
-	lowestSafeFuncIdx;
 	instance;
 	jitRuntimePtr;
-	
-	constructor() {
-		this.__indirect_function_table = new WebAssembly.Table({ initial: 100000, element: "anyfunc" });
-	}
 	
 	async init(source) {
 		const importObj = {env: {
 			console_log_glue: this.console_log_glue,
 			link_new_module_glue: this.link_new_module_glue,
-			__indirect_function_table: this.__indirect_function_table
 		}};
 		
 		const {instance} = await WebAssembly.instantiate(source, importObj);
 		this.instance = instance;
-		this.lowestSafeFuncIdx = findLowestSafeFuncIdx(this.__indirect_function_table);
 		this.jitRuntimePtr = instance.exports.make_runtime();
 	}
 	
@@ -44,9 +27,11 @@ export const Runtime = class {
 	link_new_module_glue = (bufferPtr, bufferLen) => {
 		console.log("Link new module called...");
 		
+		// Read the Wasm bytecode from the JIT runtime's memory.
 		const bytecode = new Uint8Array(this.instance.exports.memory.buffer, bufferPtr, bufferLen);
-		const newModule = new WebAssembly.Module(bytecode);
 		
+		// Compile and instantiate the bytecode into a new instance.
+		const newModule = new WebAssembly.Module(bytecode);
 		const importObj = {env: {
 			runtime_mem: this.instance.exports.memory,
 			process_checkpoint: this.instance.exports.process_checkpoint,
@@ -55,13 +40,15 @@ export const Runtime = class {
 		}};
 		const newInstance = new WebAssembly.Instance(newModule, importObj);
 		
-		// This used to call the grow method, but that's busted in WebKit.
+		// Add the instance's "execute_block" function to our JIT runtime's function table.
+		// We should be able to get rid of `set` and just pass `execute_block` as the 2nd argument to `grow`, but that's busted in WebKit.
 		// See: https://bugs.webkit.org/show_bug.cgi?id=290681
-		this.__indirect_function_table.set(this.lowestSafeFuncIdx, newInstance.exports.execute_block)
+		this.instance.exports.__indirect_function_table.grow(1)
+		const newFuncIdx = this.instance.exports.__indirect_function_table.length - 1;
+		this.instance.exports.__indirect_function_table.set(newFuncIdx, newInstance.exports.execute_block)
 		
-		const prevIdx = this.lowestSafeFuncIdx;
-		this.lowestSafeFuncIdx += 1;
-		return prevIdx;
+		// Return the index of the function we've just linked in.
+		return newFuncIdx;
 	}
 	
 	// Load the ROM file.
