@@ -13,7 +13,7 @@ use log::{info, trace};
 
 use std::collections::VecDeque;
 use std::simd::cmp::SimdPartialEq;
-use std::simd::{Select, Simd, u8x16};
+use std::simd::{Select, Simd, simd_swizzle, u8x2, u8x16};
 
 use hw_constants::io_regs::{BGP, LCDC, LY, LYC, OBP0, OBP1, SCX, SCY, STAT, WX, WY};
 use hw_constants::{
@@ -107,6 +107,42 @@ fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
     if render_bg { bg_pixel } else { obj_pixel }
 }
 
+fn two_tile_bit_planes_to_mask(tile_1: u8, tile_2: u8) -> std::simd::Mask<i8, 16> {
+    // Broadcast the tile 1 bit plane into the first 8 lanes, and broadcast the tile 2 bit plane into the next 8 lanes.
+    // [tile_1 x 8, tile_2 x 8]
+    let bitplanes = simd_swizzle!(
+        u8x2::from_array([tile_1, tile_2]),
+        [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1]
+    );
+
+    let ones_mask = u8x16::from_array([
+        // Masks for each bit of the tile 1 bit plane.
+        0b1000_0000, // 7th bit
+        0b0100_0000, // 6th bit
+        0b0010_0000, // 5th bit
+        0b0001_0000, // 4th bit
+        0b0000_1000, // 3rd bit
+        0b0000_0100, // 2nd bit
+        0b0000_0010, // 1st bit
+        0b0000_0001, // 0th bit
+        // Masks for each bit of the tile 2 bit plane.
+        0b1000_0000, // 7th bit
+        0b0100_0000, // 6th bit
+        0b0010_0000, // 5th bit
+        0b0001_0000, // 4th bit
+        0b0000_1000, // 3rd bit
+        0b0000_0100, // 2nd bit
+        0b0000_0010, // 1st bit
+        0b0000_0001, // 0th bit
+    ]);
+
+    // Mask off each individual bit of tile_1 and tile_2 in our 16 lanes.
+    let masked_bit_planes = bitplanes & ones_mask;
+
+    // Produce an SIMD "Mask" of booleans, by comparing each of the 16 bytes against 0.
+    masked_bit_planes.simd_ne(u8x16::splat(0))
+}
+
 impl Ppu {
     fn compute_ly(&self, cpu_clock: u64) -> u8 {
         if matches!(self.mode, PpuMode::Disabled) {
@@ -179,45 +215,24 @@ impl Ppu {
             ])
         });
 
-        let low_ones = u8x16::splat(0b0000_0001);
-        let high_ones = u8x16::splat(0b0000_0010);
-        let ones = u8x16::from_array([
-            0b1000_0000,
-            0b0100_0000,
-            0b0010_0000,
-            0b0001_0000,
-            0b0000_1000,
-            0b0000_0100,
-            0b0000_0010,
-            0b0000_0001,
-            0b1000_0000,
-            0b0100_0000,
-            0b0010_0000,
-            0b0001_0000,
-            0b0000_1000,
-            0b0000_0100,
-            0b0000_0010,
-            0b0000_0001,
-        ]);
-
         let tile_data_chunks = tile_data.array_chunks();
         let (line_chunks, _) = line_buffer.as_chunks_mut();
         tile_data_chunks.zip(line_chunks.iter_mut()).for_each(
-            |([low_high, low_high2], line_chunk)| {
-                let [low, high] = low_high.to_le_bytes();
-                let [low2, high2] = low_high2.to_le_bytes();
+            |([tile_1_bit_planes, tile_2_bit_planes], line_chunk)| {
+                let [low_bit_plane_1, high_bit_plane_1] = tile_1_bit_planes.to_le_bytes();
+                let [low_bit_plane_2, high_bit_plane_2] = tile_2_bit_planes.to_le_bytes();
 
-                let low_bits = u8x16::splat(low).shift_elements_left::<8>(low2) & ones;
-                let low_mask = low_bits.simd_ne(u8x16::splat(0));
-                let low_bits_as_bytes = low_mask.select(low_ones, u8x16::splat(0));
+                let low_color_ids = two_tile_bit_planes_to_mask(low_bit_plane_1, low_bit_plane_2)
+                    .select(u8x16::splat(0b0000_0001), u8x16::splat(0));
 
-                let high_bits = u8x16::splat(high).shift_elements_left::<8>(high2) & ones;
-                let high_mask = high_bits.simd_ne(u8x16::splat(0));
-                let high_bits_as_bytes = high_mask.select(high_ones, u8x16::splat(0));
+                let high_color_ids =
+                    two_tile_bit_planes_to_mask(high_bit_plane_1, high_bit_plane_2)
+                        .select(u8x16::splat(0b0000_0010), u8x16::splat(0));
 
-                let tile_data = low_bits_as_bytes | high_bits_as_bytes;
+                // Bitwise OR our 16 low colour IDs and 16 high colour IDs together to get the 16 colour IDs for these two tiles.
+                let color_ids = low_color_ids | high_color_ids;
 
-                *line_chunk = tile_data.to_array().map(Pixel::from_bits);
+                *line_chunk = color_ids.to_array().map(Pixel::from_bits);
             },
         );
     }
@@ -275,53 +290,31 @@ impl Ppu {
             ])
         });
 
-        let low_ones = u8x16::splat(0b0000_0001);
-        let high_ones = u8x16::splat(0b0000_0010);
-        let ones = u8x16::from_array([
-            0b1000_0000,
-            0b0100_0000,
-            0b0010_0000,
-            0b0001_0000,
-            0b0000_1000,
-            0b0000_0100,
-            0b0000_0010,
-            0b0000_0001,
-            0b1000_0000,
-            0b0100_0000,
-            0b0010_0000,
-            0b0001_0000,
-            0b0000_1000,
-            0b0000_0100,
-            0b0000_0010,
-            0b0000_0001,
-        ]);
-
         let tile_data_chunks = tile_data.array_chunks();
         let scrolled_left = self.registers.scx & 7;
         let (line_chunks, _) =
             line_buffer[self.registers.wx as usize + 1 + scrolled_left as usize..].as_chunks_mut();
         tile_data_chunks.zip(line_chunks.iter_mut()).for_each(
-            |([low_high, low_high2], line_chunk)| {
-                let [low, high] = low_high.to_le_bytes();
-                let [low2, high2] = low_high2.to_le_bytes();
+            |([tile_1_bit_planes, tile_2_bit_planes], line_chunk)| {
+                let [low_bit_plane_1, high_bit_plane_1] = tile_1_bit_planes.to_le_bytes();
+                let [low_bit_plane_2, high_bit_plane_2] = tile_2_bit_planes.to_le_bytes();
 
-                let low_bits = u8x16::splat(low).shift_elements_left::<8>(low2) & ones;
-                let low_mask = low_bits.simd_ne(u8x16::splat(0));
-                let low_bits_as_bytes = low_mask.select(low_ones, u8x16::splat(0));
+                let low_color_ids = two_tile_bit_planes_to_mask(low_bit_plane_1, low_bit_plane_2)
+                    .select(u8x16::splat(0b0000_0001), u8x16::splat(0));
 
-                let high_bits = u8x16::splat(high).shift_elements_left::<8>(high2) & ones;
-                let high_mask = high_bits.simd_ne(u8x16::splat(0));
-                let high_bits_as_bytes = high_mask.select(high_ones, u8x16::splat(0));
+                let high_color_ids =
+                    two_tile_bit_planes_to_mask(high_bit_plane_1, high_bit_plane_2)
+                        .select(u8x16::splat(0b0000_0010), u8x16::splat(0));
 
-                let tile_data = low_bits_as_bytes | high_bits_as_bytes;
+                // Bitwise OR our 16 low colour IDs and 16 high colour IDs together to get the 16 colour IDs for these two tiles.
+                let color_ids = low_color_ids | high_color_ids;
 
-                *line_chunk = tile_data.to_array().map(Pixel::from_bits);
+                *line_chunk = color_ids.to_array().map(Pixel::from_bits);
             },
         );
     }
 
     // Draw object tiles.
-
     fn coarse_objects(&self, line_buffer: &mut [Pixel; SCREEN_WIDTH as usize + 24]) {
         // Draw object tiles.
         for obj in &self.obj_buffer {
