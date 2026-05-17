@@ -5,3 +5,6 @@ members = ["hw-constants", "debugger", "interpreter", "jit", "native-interp"]
 [profile.release]
 #debug = true
 lto = true
+
+[profile.bench]
+lto = true

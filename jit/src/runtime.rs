@@ -272,30 +272,41 @@ impl JitRuntime {
         }
 
         let pc = self.dmg_state.registers.pc;
-        // Only cache from ROM banks for now.
-        if pc < 0x8000
-            && let Some(cache_address) = self.has_compiled_block()
-            && self.wont_be_interrupted(cache_address)
-        {
-            self.execute_compiled_block(cache_address);
 
-            #[cfg(feature = "log-uncompiled")]
-            {
-                self.not_too_long += 1;
+        cfg_select! {
+            feature = "disable-jit" => {
+                // Always use the interpreter if JIT is disabled.
+                let bytecode = self.dmg_state.memory.read_byte(pc);
+                let opcode = Opcode::decode(bytecode).unwrap();
+                self.dmg_state.execute_op(opcode).unwrap();
             }
-        } else {
-            #[cfg(feature = "log-uncompiled")]
-            if pc < 0x8000
-                && let Some(cache_address) = self.has_compiled_block()
-                && !self.wont_be_interrupted(cache_address)
-            {
-                self.too_long += 1;
-            }
+            _ => {
+                // Only cache from ROM banks for now.
+                if pc < 0x8000
+                    && let Some(cache_address) = self.has_compiled_block()
+                    && self.wont_be_interrupted(cache_address)
+                {
+                    self.execute_compiled_block(cache_address);
 
-            // Fallback to interpreter.
-            let bytecode = self.dmg_state.memory.read_byte(pc);
-            let opcode = Opcode::decode(bytecode).unwrap();
-            self.dmg_state.execute_op(opcode).unwrap();
+                    #[cfg(feature = "log-uncompiled")]
+                    {
+                        self.not_too_long += 1;
+                    }
+                } else {
+                    #[cfg(feature = "log-uncompiled")]
+                    if pc < 0x8000
+                        && let Some(cache_address) = self.has_compiled_block()
+                        && !self.wont_be_interrupted(cache_address)
+                    {
+                        self.too_long += 1;
+                    }
+
+                    // Fallback to interpreter.
+                    let bytecode = self.dmg_state.memory.read_byte(pc);
+                    let opcode = Opcode::decode(bytecode).unwrap();
+                    self.dmg_state.execute_op(opcode).unwrap();
+                }
+            }
         }
     }
 }

@@ -4,6 +4,10 @@ version = "0.1.0"
 authors = ["Seth Humphries <seth@humphri.es>"]
 edition = "2024"
 
+[[bench]]
+name = "ten_seconds"
+harness = false
+
 [dependencies]
 hw-constants = { path = "../hw-constants" }
 bitfield-struct = "0.13.0"
