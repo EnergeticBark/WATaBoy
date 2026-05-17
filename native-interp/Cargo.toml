@@ -1,0 +1,15 @@
+[package]
+name = "native-interp"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+pixels = "0.16"
+env_logger = "0.11"
+error-iter = "0.4"
+log = "0.4"
+winit = "0.30"
+winit_input_helper = "0.17"
+
+interpreter = { path = "../interpreter" }
+hw-constants = { path = "../hw-constants" }

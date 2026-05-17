@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["hw-constants", "debugger", "interpreter", "jit"]
+members = ["hw-constants", "debugger", "interpreter", "jit", "native-interp"]
 
 [profile.release]
 debug = true
