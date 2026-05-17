@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use error_iter::ErrorIter as _;
+use interpreter::joypad::ButtonsHeld;
 use log::error;
 use pixels::{Error, Pixels, SurfaceTexture};
 use winit::dpi::LogicalSize;
@@ -22,6 +23,7 @@ const HEIGHT: u32 = 144;
 
 pub struct AppState {
     mgb_state: Cpu,
+    buttons_held: ButtonsHeld,
     next_vblank: u64,
     prev_frametimes: VecDeque<u128>,
 }
@@ -34,6 +36,7 @@ impl Default for AppState {
                 cpu.memory.load_rom(TEST_ROM);
                 cpu
             },
+            buttons_held: ButtonsHeld::default(),
             next_vblank: 0,
             prev_frametimes: VecDeque::new(),
         }
@@ -82,6 +85,17 @@ fn main() -> Result<(), Error> {
                         elwt.exit();
                         return;
                     }
+					
+					app_state.buttons_held = ButtonsHeld {
+						start: input.key_held(KeyCode::Enter),
+						select: input.key_held(KeyCode::Backspace),
+						b: input.key_held(KeyCode::KeyX),
+						a: input.key_held(KeyCode::KeyZ),
+						down: input.key_held(KeyCode::ArrowDown),
+						up: input.key_held(KeyCode::ArrowUp),
+						left: input.key_held(KeyCode::ArrowLeft),
+						right: input.key_held(KeyCode::ArrowRight),
+					};
 
                     // Resize the window
                     if let Some(size) = input.window_resized()
@@ -108,6 +122,7 @@ fn main() -> Result<(), Error> {
                     let now = Instant::now();
                     for _ in 0..500 {
                         app_state.step_vblank();
+						app_state.mgb_state.memory.buttons_held = app_state.buttons_held;
                     }
                     let frametime = now.elapsed().as_millis();
                     app_state.prev_frametimes.push_front(frametime);
