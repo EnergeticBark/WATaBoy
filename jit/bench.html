@@ -18,7 +18,6 @@
 		const hz = document.querySelector("#ghz");
 		const lcdCanvas = document.querySelector("#lcd");
 		
-		
 		const ctx = lcdCanvas.getContext("2d", { alpha: false });
 		
 		const lcdImage = new ImageData(LCD_WIDTH, LCD_HEIGHT);
@@ -27,9 +26,21 @@
 		const runtime = new Runtime();
 		const wasmSource = await (await fetch("../target/wasm32-unknown-unknown/release/jit.wasm")).bytes();
 		await runtime.init(wasmSource);
+		
+		const romFieldset = document.querySelector("fieldset");
+		const romInput = document.querySelector("#rom");
+		const loadRomButton = document.querySelector("#load-rom");
+		loadRomButton.addEventListener("click", async () => {
+			// Gotta refresh to load a new ROM.
+			romFieldset.disabled = true;
 			
-		const rom = await (await fetch("./Pokemon - Blue Version (USA, Europe) (SGB Enhanced).sgb")).bytes();
-		runtime.loadRom(rom);
+			// Read bytes from the selected file.
+			const file = romInput.files[0];
+			const rom = await file.bytes();
+			
+			runtime.loadRom(rom);
+		});
+		
 		
 		const showResults = (framesEmulated) => {
 			const numberFormat = new Intl.NumberFormat({ maximumSignificantDigits: 6 });
@@ -69,6 +80,11 @@
 <body>
 	<h1>WATaBoy: SM83 -> Wasm dynamic recompiler.</h1>
 	<h2 style="color: red;">BENCHMARK PAGE</h2>
+	<fieldset style="max-width: fit-content;">
+	<legend>Choose a Game Boy ROM</legend>
+	<label>ROM: <input type="file" id="rom" /></label>
+	<input type="button" id="load-rom" value="Load ROM" />
+	</fieldset>
 	
 	<button>Run Benchmark</button>
 	<p>Frames emulated: <output id="framecount"></output></p>
