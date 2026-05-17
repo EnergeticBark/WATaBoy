@@ -23,7 +23,7 @@ eframe = { version = "0.34.1", default-features = false, features = [
     "glow", # Use the glow rendering backend. Alternative: "wgpu".
     "persistence", # Enable restoring app state when restarting the app.
 ] }
-log = "0.4.29"
+log = "0.4"
 egui_logger = "0.10.0"
 rkyv = "0.8.16"
 
