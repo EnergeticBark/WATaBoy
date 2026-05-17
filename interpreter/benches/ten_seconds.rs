@@ -3,8 +3,8 @@ use std::time::{Duration, Instant};
 
 use interpreter::cpu::Cpu;
 
-const DURATION_SECS: u32 = 10;
-const CYCLES_PER_FRAME: u32 = 70224;
+const DURATION_SECS: u64 = 10;
+const CYCLES_PER_FRAME: u64 = 70224;
 const ONE_GHZ: f64 = 1e+9;
 const GB_REFRESH_RATE: f64 = 59.73;
 
@@ -31,7 +31,7 @@ fn run_10_seconds_wall_clock(rom: &[u8]) {
     let mut frames_emulated = 0;
 
     let start_time = Instant::now();
-    let end_time = start_time + Duration::from_secs(u64::from(DURATION_SECS));
+    let end_time = start_time + Duration::from_secs(DURATION_SECS);
 
     while Instant::now() < end_time {
         app_state.step_vblank();
@@ -42,17 +42,17 @@ fn run_10_seconds_wall_clock(rom: &[u8]) {
 
     println!(
         "Frames per second: {}\n",
-        f64::from(frames_emulated) / f64::from(DURATION_SECS)
+        frames_emulated as f64 / DURATION_SECS as f64
     );
 
     println!(
         "Emulation speed relative to Game Boy: {}x\n",
-        f64::from(frames_emulated) / f64::from(DURATION_SECS) / GB_REFRESH_RATE
+        frames_emulated as f64 / DURATION_SECS as f64 / GB_REFRESH_RATE
     );
 
     println!(
         "Emulated master clock cycles per second: {}GHz\n",
-        f64::from(frames_emulated * CYCLES_PER_FRAME) / f64::from(DURATION_SECS) / ONE_GHZ
+        (frames_emulated * CYCLES_PER_FRAME) as f64 / DURATION_SECS as f64 / ONE_GHZ
     );
 }
 
