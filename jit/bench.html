@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<script type="module">
+		import { Runtime, LCD_WIDTH, LCD_HEIGHT } from "./js/runtime.js"
+		
+		const DURATION_SECS = 10;
+		
+		const button = document.querySelector("button");
+		const frameCount = document.querySelector("output");
+		const lcdCanvas = document.querySelector("#lcd");
+		
+		const ctx = lcdCanvas.getContext("2d", { alpha: false });
+		
+		const lcdImage = new ImageData(LCD_WIDTH, LCD_HEIGHT);
+		lcdImage.data.fill(255);
+		
+		const runtime = new Runtime();
+		const wasmSource = await (await fetch("../target/wasm32-unknown-unknown/release/jit.wasm")).bytes();
+		await runtime.init(wasmSource);
+			
+		const rom = await (await fetch("./Pokemon - Blue Version (USA, Europe) (SGB Enhanced).sgb")).bytes();
+		runtime.loadRom(rom);
+		
+		button.addEventListener("click", () => {
+			let startTimestamp = performance.now();
+			let endTimestamp = startTimestamp + 1000 * DURATION_SECS;
+			let framesEmulated = 0;
+			
+			while (performance.now() < endTimestamp) {
+				runtime.step_vblank();
+				framesEmulated += 1;
+			}
+			
+			button.disabled = true;
+			frameCount.textContent = framesEmulated;
+			
+			// Sanity check: show the final frame.
+			runtime.updateLcd(lcdImage);
+			ctx.putImageData(lcdImage, 0, 0);
+		});
+	</script>
+	<title>WATaBoy - BENCHMARK</title>
+</head>
+<body>
+	<h1>WATaBoy: SM83 -> Wasm dynamic recompiler.</h1>
+	<h2 style="color: red;">BENCHMARK PAGE</h2>
+	
+	<button>Run Benchmark</button>
+	<p id="framecount">Frames emulated: <output></output></p>
+	<p>Final frame:</p>
+	<canvas id="lcd" width="160" height="144" style="border: 1px solid; image-rendering: pixelated;"></canvas>
+</body>
+</html>
