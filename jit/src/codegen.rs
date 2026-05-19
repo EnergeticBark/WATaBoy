@@ -15,7 +15,7 @@ use registers::LocalReg;
 use std::collections::HashMap;
 use wasm_encoder::{BlockType, CodeSection, InstructionSink};
 
-#[cfg(feature = "jit-trace")]
+#[cfg(feature = "log-traces")]
 use crate::console_log;
 
 const MIN_BLOCK_SIZE: usize = 1;
@@ -90,7 +90,7 @@ impl WasmBlock {
             ..Default::default()
         };
 
-        #[cfg(feature = "jit-trace")]
+        #[cfg(feature = "log-traces")]
         let mut sm83_disassembly = String::new();
 
         let mut instruction_vec = Vec::new();
@@ -286,7 +286,7 @@ impl WasmBlock {
                     dmg_state,
                     &mut ctx,
                     &mut instruction_sink,
-                    #[cfg(feature = "jit-trace")]
+                    #[cfg(feature = "log-traces")]
                     &mut sm83_disassembly,
                 ),
                 Opcode::LdHlSpPlusE => {
@@ -315,7 +315,7 @@ impl WasmBlock {
                 ctx.increment_m_cycles(opcodes::cycles::m_cycles(opcode).saturating_sub(1));
             }
 
-            #[cfg(feature = "jit-trace")]
+            #[cfg(feature = "log-traces")]
             sm83_disassembly.push_str(&format!("{:?}\n", opcode));
 
             ctx.block_size += 1;
@@ -332,7 +332,7 @@ impl WasmBlock {
             return None;
         }
 
-        #[cfg(feature = "jit-trace")]
+        #[cfg(feature = "log-traces")]
         console_log(&sm83_disassembly);
 
         let mut module = empty_jit_block_module();
@@ -379,7 +379,7 @@ fn recompile_prefix(
     dmg_state: &mut Cpu,
     ctx: &mut CodegenCtx,
     instruction_sink: &mut InstructionSink,
-    #[cfg(feature = "jit-trace")] sm83_disassembly: &mut String,
+    #[cfg(feature = "log-traces")] sm83_disassembly: &mut String,
 ) {
     let bytecode = dmg_state.memory.read_byte(ctx.traced_pc);
     let prefix_opcode = PrefixOpcode::decode(bytecode);
@@ -402,7 +402,7 @@ fn recompile_prefix(
         PrefixOpcode::SetBR { b, x } => instruction_sink.set_b_r(ctx, b.into(), x),
     };
 
-    #[cfg(feature = "jit-trace")]
+    #[cfg(feature = "log-traces")]
     sm83_disassembly.push_str(&format!("{:?}\n", prefix_opcode));
 }
 

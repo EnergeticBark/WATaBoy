@@ -4,7 +4,7 @@
 use bitfield_struct::bitfield;
 use std::ops::{Index, IndexMut};
 
-#[cfg(feature = "jit-trace")]
+#[cfg(feature = "log-traces")]
 use crate::console_log;
 
 use crate::codegen::{Checkpoint, WasmBlock};
@@ -18,7 +18,7 @@ pub(crate) struct CompiledBlock {
 
 impl CompiledBlock {
     pub(crate) fn new(wasm_block: WasmBlock) -> Self {
-        #[cfg(feature = "jit-trace")]
+        #[cfg(feature = "log-traces")]
         console_log(&wasmprinter::print_bytes(&wasm_block.buffer).unwrap());
 
         let func_idx = link_new_module(&wasm_block.buffer);
