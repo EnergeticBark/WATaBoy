@@ -240,16 +240,11 @@ impl Block3 for InstructionSink<'_> {
             .i32_const(i32::from(imm))
             .i32_lt_u() // If A < IMM (underflow), then 1, otherwise 0.
             .set_flag(ctx, FlagBit::Carry)
-            /* Perform the SUB:
-             * (A - IMM) & 0xff
-             */
+            // *** Calculate Zero Flag. ***
             .get_reg(ctx, LocalReg::A)
             .i32_const(i32::from(imm))
-            .i32_sub()
-            .i32_const(0xff)
-            .i32_and()
-            // *** Calculate Zero Flag. ***
-            .i32_eqz() // If the result is zero, then 1, otherwise 0.
+            .i32_eq()
+            // If A == IMM, then 1, otherwise 0.
             .set_flag(ctx, FlagBit::Zero)
     }
     fn call_nn(&mut self, ctx: &mut CodegenCtx) -> &mut Self {
