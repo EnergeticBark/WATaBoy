@@ -260,16 +260,10 @@ impl Block2 for InstructionSink<'_> {
             .local_get(R8_VAL)
             .i32_lt_u() // If A < R8 (underflow), then 1, otherwise 0.
             .set_flag(ctx, FlagBit::Carry)
-            /* Perform the SUB:
-             * (A - R8) & 0xff
-             */
+            // *** Calculate Zero Flag. ***
             .get_reg(ctx, LocalReg::A)
             .local_get(R8_VAL)
-            .i32_sub()
-            .i32_const(0xff)
-            .i32_and()
-            // *** Calculate Zero Flag. ***
-            .i32_eqz() // If the result is zero, then 1, otherwise 0.
+            .i32_eq() // If A == R8_VAL, then 1, otherwise 0.
             .set_flag(ctx, FlagBit::Zero)
     }
 }
