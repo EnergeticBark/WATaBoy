@@ -24,8 +24,9 @@ impl MbcKind {
         // Based on this table: https://gbdev.io/pandocs/The_Cartridge_Header.html#0147--cartridge-type
         // TODO: Technically, 0x00 should probably be a RomOnly type.
         match value {
-            0x00..0x04 => MbcKind::Mbc1,
-            0x11..0x14 => MbcKind::Mbc3,
+            0x00..=0x03 => MbcKind::Mbc1,
+            0x05..=0x06 => unimplemented!("MBC2"),
+            0x11..=0x13 => MbcKind::Mbc3,
             _ => unimplemented!(),
         }
     }
@@ -70,6 +71,9 @@ impl Mbc {
             ext_ram,
             ..Default::default()
         };
+
+        // Evaluate the kind of MBC just so we can panic now if it's invalid.
+        mbc.kind();
 
         // Backup the first 0x100 bytes and mount the boot ROM.
         mbc.under_boot_rom.copy_from_slice(&mbc.rom[..0x100]);
