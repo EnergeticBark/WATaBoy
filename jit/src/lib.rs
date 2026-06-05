@@ -10,6 +10,7 @@ pub mod test_roms;
 #[global_allocator]
 static TALC: talc::wasm::WasmDynamicTalc = talc::wasm::new_wasm_dynamic_allocator();
 
+#[link(wasm_import_module = "env")]
 unsafe extern "C" {
     fn link_new_module_glue(buffer: *const u8, len: usize) -> i32;
 
