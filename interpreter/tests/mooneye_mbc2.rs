@@ -19,3 +19,9 @@ fn test_bits_unused() {
     let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/mbc2/bits_unused.gb"));
     assert_eq!(bcdehl, FIBONACCI);
 }
+
+#[test]
+fn test_ram() {
+    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/mbc2/ram.gb"));
+    assert_eq!(bcdehl, FIBONACCI);
+}

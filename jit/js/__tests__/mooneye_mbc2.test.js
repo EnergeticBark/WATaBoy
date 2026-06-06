@@ -7,6 +7,7 @@ const roms = [
 	"bits_ramg.gb",
 	"bits_romb.gb",
 	"bits_unused.gb",
+	"ram.gb",
 ];
 
 test.each(roms)("%p", async (romName) => {

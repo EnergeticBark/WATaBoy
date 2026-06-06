@@ -1,12 +1,8 @@
 {
-  "extension" : {
-    "identifier" : "xyz.valknight.rust",
-    "name" : "Rust 3 (??)"
-  },
-  "extensionTemplate" : "cargo",
-  "extensionValues" : {
-    "xyz.valknight.rust.cargo.build.args" : "--package interpreter",
-    "xyz.valknight.rust.cargo.build.subcommand" : "test",
-    "xyz.valknight.rust.cargo.run.subcommand" : "test"
+  "actions" : {
+    "run" : {
+      "enabled" : true,
+      "script" : "cargo test --package interpreter"
+    }
   }
 }
