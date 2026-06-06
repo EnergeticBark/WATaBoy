@@ -1,5 +1,6 @@
 mod mbc1;
 mod mbc2;
+mod mbc3;
 
 #[cfg(feature = "mbc-logging")]
 use log::info;
@@ -9,6 +10,7 @@ use hw_constants::io_regs::BANK;
 
 use mbc1::Mbc1;
 use mbc2::Mbc2;
+use mbc3::Mbc3;
 
 const MBC_TYPE_ADDR: usize = 0x0147;
 #[cfg(feature = "mbc-logging")]
@@ -23,7 +25,7 @@ enum Mbc {
     RomOnly,
     Mbc1(Mbc1),
     Mbc2(Mbc2),
-    Mbc3,
+    Mbc3(Mbc3),
 }
 
 #[derive(Archive, Deserialize, Serialize)]
@@ -40,7 +42,7 @@ impl MbcDispatcher {
         let mbc = match rom[MBC_TYPE_ADDR] {
             0x00..=0x03 => Mbc::Mbc1(Mbc1::from_rom(rom)),
             0x05..=0x06 => Mbc::Mbc2(Mbc2::from_rom(rom)),
-            0x11..=0x13 => unimplemented!("MBC3"),
+            0x11..=0x13 => Mbc::Mbc3(Mbc3::from_rom(rom)),
             _ => unimplemented!(),
         };
 
@@ -76,7 +78,13 @@ impl MbcDispatcher {
                     .copy_from_slice(&mbc2.rom[..0x100]);
                 mbc2.rom[..0x100].copy_from_slice(MGB_BOOT_ROM);
             }
-            _ => unimplemented!(),
+            Mbc::Mbc3(ref mut mbc3) => {
+                dispatcher
+                    .under_boot_rom
+                    .copy_from_slice(&mbc3.rom[..0x100]);
+                mbc3.rom[..0x100].copy_from_slice(MGB_BOOT_ROM);
+            }
+            Mbc::RomOnly => unimplemented!(),
         }
 
         dispatcher
@@ -86,7 +94,8 @@ impl MbcDispatcher {
         match &self.mbc {
             Mbc::Mbc1(mbc1) => mbc1.read_byte(index),
             Mbc::Mbc2(mbc2) => mbc2.read_byte(index),
-            _ => unreachable!(),
+            Mbc::Mbc3(mbc3) => mbc3.read_byte(index),
+            Mbc::RomOnly => unreachable!(),
         }
     }
 
@@ -101,7 +110,11 @@ impl MbcDispatcher {
                     mbc2.rom[..0x100].copy_from_slice(&self.under_boot_rom[..0x100]);
                     self.boot_rom_mounted = false;
                 }
-                _ => unimplemented!(),
+                Mbc::Mbc3(ref mut mbc3) => {
+                    mbc3.rom[..0x100].copy_from_slice(&self.under_boot_rom[..0x100]);
+                    self.boot_rom_mounted = false;
+                }
+                Mbc::RomOnly => unimplemented!(),
             }
             return;
         }
@@ -109,7 +122,8 @@ impl MbcDispatcher {
         match &mut self.mbc {
             Mbc::Mbc1(mbc1) => mbc1.write_byte(index, value),
             Mbc::Mbc2(mbc2) => mbc2.write_byte(index, value),
-            _ => unreachable!(),
+            Mbc::Mbc3(mbc3) => mbc3.write_byte(index, value),
+            Mbc::RomOnly => unreachable!(),
         }
     }
 
@@ -117,7 +131,8 @@ impl MbcDispatcher {
         match &self.mbc {
             Mbc::Mbc1(mbc1) => mbc1.rom.as_ptr(),
             Mbc::Mbc2(mbc2) => mbc2.rom.as_ptr(),
-            _ => unimplemented!(),
+            Mbc::Mbc3(mbc3) => mbc3.rom.as_ptr(),
+            Mbc::RomOnly => unimplemented!(),
         }
     }
 
@@ -125,7 +140,8 @@ impl MbcDispatcher {
         match &self.mbc {
             Mbc::Mbc1(mbc1) => mbc1.current_rom_bank,
             Mbc::Mbc2(mbc2) => mbc2.current_rom_bank,
-            _ => unimplemented!(),
+            Mbc::Mbc3(mbc3) => mbc3.current_rom_bank,
+            Mbc::RomOnly => unimplemented!(),
         }
     }
 }
