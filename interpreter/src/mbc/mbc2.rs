@@ -78,6 +78,8 @@ impl Mbc2 {
                 self.update_rom_bank(lower_val_nibble);
             }
 
+            0x4000..0x8000 => (),
+
             // MBC2: SRAM
             SRAM_START..SRAM_END => {
                 // Only allow writes if SRAM has been enabled.
