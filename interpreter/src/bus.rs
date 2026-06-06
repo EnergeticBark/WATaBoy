@@ -7,7 +7,7 @@ use std::hint::cold_path;
 use crate::addressable::Addressable;
 use crate::cpu::InterruptBits;
 use crate::joypad::{ButtonsHeld, Joyp};
-use crate::mbc::Mbc;
+use crate::mbc::MbcDispatcher;
 use crate::ppu::Ppu;
 use crate::timers::Timers;
 
@@ -25,7 +25,7 @@ pub struct AddressBus {
     pub timers: Timers,
     #[rkyv(with = Skip)]
     pub ppu: Ppu,
-    pub mbc: Mbc,
+    pub mbc: MbcDispatcher,
     #[rkyv(with = Skip)]
     pub buttons_held: ButtonsHeld,
     pub clock: u64,
@@ -38,7 +38,7 @@ pub struct AddressBus {
 
 impl AddressBus {
     pub fn load_rom(&mut self, rom: &[u8]) {
-        self.mbc = Mbc::from_rom(rom);
+        self.mbc = MbcDispatcher::from_rom(rom);
     }
 
     fn read_special(&mut self, index: u16) -> u8 {
@@ -319,7 +319,7 @@ impl Default for AddressBus {
             //buffer: vec![0; MEM_MAP_SIZE].into_boxed_slice().try_into().unwrap(),
             timers: Timers::default(),
             ppu: Ppu::default(),
-            mbc: Mbc::default(),
+            mbc: MbcDispatcher::default(),
             buttons_held: ButtonsHeld::default(),
             clock: 0,
             next_interrupt: 0,
