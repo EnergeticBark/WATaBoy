@@ -1,15 +1,17 @@
 mod mbc1;
+mod mbc2;
 
 #[cfg(feature = "mbc-logging")]
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize};
 
-use hw_constants::MEM_MAP_SIZE;
 use hw_constants::io_regs::BANK;
 
 use mbc1::Mbc1;
+use mbc2::Mbc2;
 
 const MBC_TYPE_ADDR: usize = 0x0147;
+#[cfg(feature = "mbc-logging")]
 const RAM_SIZE_ADDR: usize = 0x0149;
 
 const MGB_BOOT_ROM: &[u8; 0x100] = include_bytes!("../bootix_mgb.bin");
@@ -20,6 +22,7 @@ enum Mbc {
     #[default]
     RomOnly,
     Mbc1(Mbc1),
+    Mbc2(Mbc2),
     Mbc3,
 }
 
@@ -36,7 +39,7 @@ impl MbcDispatcher {
         // TODO: Technically, 0x00 should probably be a RomOnly type.
         let mbc = match rom[MBC_TYPE_ADDR] {
             0x00..=0x03 => Mbc::Mbc1(Mbc1::from_rom(rom)),
-            0x05..=0x06 => unimplemented!("MBC2"),
+            0x05..=0x06 => Mbc::Mbc2(Mbc2::from_rom(rom)),
             0x11..=0x13 => unimplemented!("MBC3"),
             _ => unimplemented!(),
         };
@@ -67,6 +70,12 @@ impl MbcDispatcher {
                     .copy_from_slice(&mbc1.rom[..0x100]);
                 mbc1.rom[..0x100].copy_from_slice(MGB_BOOT_ROM);
             }
+            Mbc::Mbc2(ref mut mbc2) => {
+                dispatcher
+                    .under_boot_rom
+                    .copy_from_slice(&mbc2.rom[..0x100]);
+                mbc2.rom[..0x100].copy_from_slice(MGB_BOOT_ROM);
+            }
             _ => unimplemented!(),
         }
 
@@ -76,25 +85,47 @@ impl MbcDispatcher {
     pub fn read_byte(&self, index: u16) -> u8 {
         match &self.mbc {
             Mbc::Mbc1(mbc1) => mbc1.read_byte(index),
+            Mbc::Mbc2(mbc2) => mbc2.read_byte(index),
             _ => unreachable!(),
         }
     }
 
-    pub fn write_byte(&mut self, memory: &mut [u8; MEM_MAP_SIZE], index: u16, value: u8) {
+    pub fn write_byte(&mut self, index: u16, value: u8) {
         if index == BANK {
             match self.mbc {
                 Mbc::Mbc1(ref mut mbc1) => {
                     mbc1.rom[..0x100].copy_from_slice(&self.under_boot_rom[..0x100]);
                     self.boot_rom_mounted = false;
-                    return;
+                }
+                Mbc::Mbc2(ref mut mbc2) => {
+                    mbc2.rom[..0x100].copy_from_slice(&self.under_boot_rom[..0x100]);
+                    self.boot_rom_mounted = false;
                 }
                 _ => unimplemented!(),
             }
+            return;
         }
 
         match &mut self.mbc {
-            Mbc::Mbc1(mbc1) => mbc1.write_byte(memory, index, value),
+            Mbc::Mbc1(mbc1) => mbc1.write_byte(index, value),
+            Mbc::Mbc2(mbc2) => mbc2.write_byte(index, value),
             _ => unreachable!(),
+        }
+    }
+
+    pub fn rom_base_ptr(&self) -> *const u8 {
+        match &self.mbc {
+            Mbc::Mbc1(mbc1) => mbc1.rom.as_ptr(),
+            Mbc::Mbc2(mbc2) => mbc2.rom.as_ptr(),
+            _ => unimplemented!(),
+        }
+    }
+
+    pub fn current_rom_bank(&self) -> u8 {
+        match &self.mbc {
+            Mbc::Mbc1(mbc1) => mbc1.current_rom_bank,
+            Mbc::Mbc2(mbc2) => mbc2.current_rom_bank,
+            _ => unimplemented!(),
         }
     }
 }

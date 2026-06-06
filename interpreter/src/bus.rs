@@ -93,13 +93,14 @@ impl AddressBus {
     // Maybe see if there's a better way to do this? Keywords: "fast-mem" maybe?
     #[inline(never)]
     pub fn read_byte(&mut self, index: u16) -> u8 {
-        if index < VRAM_START {
+        match index {
             // Delegate reads to the MBC.
-            self.mbc.read_byte(index)
-        } else {
+            ..VRAM_START | 0xA000..0xC000 => self.mbc.read_byte(index),
             // Delegate reads to the PPU/timers.
-            cold_path();
-            self.read_special(index)
+            _ => {
+                cold_path();
+                self.read_special(index)
+            }
         }
     }
 
@@ -107,8 +108,7 @@ impl AddressBus {
         match index {
             // Delegate write in the ROM range and the SRAM range to the MBC.
             0x0000..0x8000 | 0xA000..0xC000 | BANK => {
-                self.mbc
-                    .write_byte(self.buffer.as_mut_array().unwrap(), index, value);
+                self.mbc.write_byte(index, value);
             }
 
             // Delegate writes to VRAM and OAM to the PPU.

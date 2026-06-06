@@ -105,7 +105,7 @@ impl JitRuntime {
     #[unsafe(no_mangle)]
     pub extern "C" fn load_rom_from_buffer(&mut self) {
         self.dmg_state.memory.load_rom(&self.rom_buffer);
-        self.rom_ptr = self.dmg_state.memory.mbc.rom.as_ptr() as usize;
+        self.rom_ptr = self.dmg_state.memory.mbc.rom_base_ptr() as usize;
     }
 
     #[unsafe(no_mangle)]
@@ -200,7 +200,7 @@ impl JitRuntime {
     fn current_cache_address(&self) -> CacheAddress {
         let pc = self.dmg_state.registers.pc;
         let bank_number = match pc {
-            0x4000..0x8000 => self.dmg_state.memory.mbc.current_rom_bank,
+            0x4000..0x8000 => self.dmg_state.memory.mbc.current_rom_bank(),
             _ => 0,
         };
 
