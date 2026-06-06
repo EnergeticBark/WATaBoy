@@ -12,6 +12,9 @@ pub const VRAM_START: u16 = 0x8000;
 pub const VRAM_END: u16 = 0xA000;
 pub const VRAM_SIZE: u16 = VRAM_END - VRAM_START;
 
+pub const SRAM_START: u16 = 0xA000;
+pub const SRAM_END: u16 = 0xC000;
+
 pub const OAM_START: u16 = 0xFE00;
 pub const OAM_END: u16 = 0xFEA0;
 pub const OAM_SIZE: u16 = OAM_END - OAM_START;
