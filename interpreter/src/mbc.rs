@@ -47,19 +47,6 @@ pub struct Mbc {
 
 impl Mbc {
     pub fn from_rom(rom: &[u8]) -> Self {
-        #[cfg(feature = "mbc-logging")]
-        {
-            const ROM_SIZE_ADDR: usize = 0x0148;
-
-            info!(target: "mbc_events", "MBC Type: {}", self.rom[MBC_TYPE_ADDR]);
-            info!(target: "mbc_events",
-                "ROM size: {}, Banks: {}",
-                self.rom[ROM_SIZE_ADDR],
-                2 << self.rom[ROM_SIZE_ADDR]
-            );
-            info!(target: "mbc_events", "SRAM size: {}", self.ram_size());
-        }
-
         let ext_ram = match rom[RAM_SIZE_ADDR] {
             2 => vec![0; RAM_BANK_SIZE],
             3 => vec![0; RAM_BANK_SIZE * 4],
@@ -71,6 +58,19 @@ impl Mbc {
             ext_ram,
             ..Default::default()
         };
+
+        #[cfg(feature = "mbc-logging")]
+        {
+            const ROM_SIZE_ADDR: usize = 0x0148;
+
+            info!(target: "mbc_events", "MBC Type: {}", mbc.rom[MBC_TYPE_ADDR]);
+            info!(target: "mbc_events",
+                "ROM size: {}, Banks: {}",
+                mbc.rom[ROM_SIZE_ADDR],
+                2 << mbc.rom[ROM_SIZE_ADDR]
+            );
+            info!(target: "mbc_events", "SRAM size: {}", mbc.ram_size());
+        }
 
         // Evaluate the kind of MBC just so we can panic now if it's invalid.
         mbc.kind();
