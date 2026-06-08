@@ -4,7 +4,6 @@ mod mbc3;
 
 #[cfg(feature = "mbc-logging")]
 use log::info;
-use rkyv::{Archive, Deserialize, Serialize};
 
 use hw_constants::io_regs::BANK;
 
@@ -19,7 +18,7 @@ const RAM_SIZE_ADDR: usize = 0x0149;
 const MGB_BOOT_ROM: &[u8; 0x100] = include_bytes!("../bootix_mgb.bin");
 
 // TODO: Add the other MBC types.
-#[derive(Archive, Deserialize, Serialize, Default)]
+#[derive(Default)]
 enum Mbc {
     #[default]
     RomOnly,
@@ -28,7 +27,6 @@ enum Mbc {
     Mbc3(Mbc3),
 }
 
-#[derive(Archive, Deserialize, Serialize)]
 pub struct MbcDispatcher {
     pub boot_rom_mounted: bool,
     under_boot_rom: Box<[u8; 0x100]>,
