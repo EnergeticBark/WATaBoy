@@ -39,11 +39,12 @@ impl MbcDispatcher {
     pub fn from_rom(rom: &[u8]) -> Self {
         // Based on this table: https://gbdev.io/pandocs/The_Cartridge_Header.html#0147--cartridge-type
         // TODO: Technically, 0x00 should probably be a RomOnly type.
-        let mbc = match rom[MBC_TYPE_ADDR] {
+        let mbc_type = rom[MBC_TYPE_ADDR];
+        let mbc = match mbc_type {
             0x00..=0x03 => Mbc::Mbc1(Mbc1::from_rom(rom)),
             0x05..=0x06 => Mbc::Mbc2(Mbc2::from_rom(rom)),
-            0x11..=0x13 => Mbc::Mbc3(Mbc3::from_rom(rom)),
-            _ => unimplemented!(),
+            0x0F..=0x13 => Mbc::Mbc3(Mbc3::from_rom(rom)),
+            _ => unimplemented!("Unsupported MBC type: {mbc_type}"),
         };
 
         #[cfg(feature = "mbc-logging")]
