@@ -2,6 +2,13 @@
 resolver = "3"
 members = ["hw-constants", "debugger", "interpreter", "jit", "native-interp"]
 
+# Custom profile for the debugger GUI.
+# We need this because `egui` runs too slow without optimisations *and* takes too long to build with LTO.
+[profile.dev-debugger]
+inherits = "dev"
+[profile.dev-debugger.package."*"]
+opt-level = 3
+
 [profile.release]
 #debug = true
 lto = true
