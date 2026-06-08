@@ -5,7 +5,8 @@
   },
   "extensionTemplate" : "cargo",
   "extensionValues" : {
-    "xyz.valknight.rust.cargo.build.args" : "--package debugger",
-    "xyz.valknight.rust.cargo.run.args" : "--package debugger"
-  }
+    "xyz.valknight.rust.cargo.build.args" : "--package debugger --profile dev-debugger",
+    "xyz.valknight.rust.cargo.run.args" : "--package debugger --profile dev-debugger"
+  },
+  "openLogOnRun" : "fail"
 }
