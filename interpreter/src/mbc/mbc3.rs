@@ -1,3 +1,5 @@
+use std::time::{Duration, SystemTime};
+
 use bitfield_struct::bitfield;
 #[cfg(feature = "mbc-logging")]
 use log::info;
@@ -35,35 +37,89 @@ struct RtcRegs {
 }
 
 impl RtcRegs {
+    fn update(&mut self, secs: u64) {
+        let minutes = secs / 60;
+        let hours = minutes / 60;
+        let days = hours / 24;
+
+        self.seconds = (secs % 60) as u8;
+        self.minutes = (minutes % 60) as u8;
+        self.hours = (hours % 24) as u8;
+        self.days_lo = (days & 0xFF) as u8;
+
+        // Set `day_msb` to the 8th bit of `days`.
+        self.days_hi.set_day_msb(days & (1 << 8) != 0);
+    }
+}
+
+struct Rtc {
+    duration: Duration,
+    last_ticked: SystemTime,
+    regs: RtcRegs,
+}
+
+impl Default for Rtc {
+    fn default() -> Self {
+        Self {
+            duration: Duration::default(),
+            last_ticked: SystemTime::now(),
+            regs: RtcRegs::default(),
+        }
+    }
+}
+
+impl Rtc {
+    fn update(&mut self) {
+        let new_time = SystemTime::now();
+        let delta = new_time
+            .duration_since(self.last_ticked)
+            .expect("Clock went backwards...");
+        self.duration += delta;
+
+        // Update the register values if the RTC isn't halted.
+        if !self.regs.days_hi.halt() {
+            self.regs.update(self.duration.as_secs());
+        }
+
+        self.last_ticked = new_time;
+    }
+
     fn read(&self, selected: u8) -> u8 {
         match selected {
-            0x08 => self.seconds,
-            0x09 => self.minutes,
-            0x0A => self.hours,
-            0x0B => self.days_lo,
-            0x0C => self.days_hi.into_bits(),
+            0x08 => self.regs.seconds,
+            0x09 => self.regs.minutes,
+            0x0A => self.regs.hours,
+            0x0B => self.regs.days_lo,
+            0x0C => self.regs.days_hi.into_bits(),
             _ => unreachable!(),
         }
     }
 
     fn write(&mut self, selected: u8, value: u8) {
         match selected {
-            0x08 => self.seconds = value,
-            0x09 => self.minutes = value,
-            0x0A => self.hours = value,
-            0x0B => self.days_lo = value,
-            0x0C => self.days_hi = DaysHi::from_bits(value),
+            0x08 => self.regs.seconds = value,
+            0x09 => self.regs.minutes = value,
+            0x0A => self.regs.hours = value,
+            0x0B => self.regs.days_lo = value,
+            0x0C => {
+                let new_days_hi = DaysHi::from_bits(value);
+                if self.regs.days_hi.halt() && !new_days_hi.halt() {
+                    self.last_ticked = SystemTime::now();
+                }
+
+                self.regs.days_hi = new_days_hi;
+            }
             _ => unreachable!(),
         }
     }
 }
 
-#[derive(Archive, Deserialize, Serialize)]
 pub(crate) struct Mbc3 {
     ram_and_rtc_enabled: bool,
     pub rom: Vec<u8>,
     sram: Vec<u8>,
-    rtc_regs: RtcRegs,
+    rtc: Rtc,
+    rtc_latch: bool,
     pub current_rom_bank: u8,
     current_rom_bank_start: usize,
     sram_bank_or_rtc_reg: u8,
@@ -141,7 +197,7 @@ impl Mbc3 {
                             let sram_index = index as usize - 0xA000;
                             sram[sram_index]
                         }
-                        0x8..0xD => self.rtc_regs.read(self.sram_bank_or_rtc_reg),
+                        0x8..0xD => self.rtc.read(self.sram_bank_or_rtc_reg),
                         _ => unreachable!(),
                     }
                 } else {
@@ -172,12 +228,20 @@ impl Mbc3 {
             0x2000..0x4000 => self.update_rom_bank(value),
             // MBC3: SRAM Bank Number or RTC Register Select
             0x4000..0x6000 => self.update_sram_bank_or_rtc_reg(value),
+            // MBC3: RTC Latch
+            0x6000..0x8000 => match value {
+                0 => self.rtc_latch = false,
+                1 => {
+                    // Low to high transition.
+                    if !self.rtc_latch {
+                        // Update the RTC.
+                        self.rtc.update();
+                    }
 
-            // TODO: implement RTC latch!!!
-            0x6000..0x8000 => {
-                //println!("Wrote {value:X} to latch");
-                //unimplemented!("Latch Clock Data")
-            }
+                    self.rtc_latch = true;
+                }
+                _ => (),
+            },
 
             // MBC3: SRAM
             SRAM_START..SRAM_END => {
@@ -189,7 +253,7 @@ impl Mbc3 {
                             let sram_index = index as usize - 0xA000;
                             sram[sram_index] = value;
                         }
-                        0x8..0xD => self.rtc_regs.write(self.sram_bank_or_rtc_reg, value),
+                        0x8..0xD => self.rtc.write(self.sram_bank_or_rtc_reg, value),
                         _ => unreachable!(),
                     }
                 }
@@ -205,7 +269,8 @@ impl Default for Mbc3 {
             ram_and_rtc_enabled: false,
             rom: Vec::new(),
             sram: Vec::new(),
-            rtc_regs: RtcRegs::default(),
+            rtc: Rtc::default(),
+            rtc_latch: true,
             current_rom_bank: 1,
             current_rom_bank_start: 0,
             sram_bank_or_rtc_reg: 0,
