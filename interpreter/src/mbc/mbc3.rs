@@ -1,3 +1,4 @@
+use bitfield_struct::bitfield;
 #[cfg(feature = "mbc-logging")]
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize};
@@ -12,14 +13,60 @@ const RAM_BANK_SIZE: usize = 0x2000;
 // See: https://gbdev.io/pandocs/MBC3.html#2000-3fff---rom-bank-number-write-only
 const MBC3_ROM_BANK_MASK: u8 = 0b0111_1111;
 
+// Structs to support the RTC.
+#[bitfield(u8, order = Msb)]
+#[derive(Archive, Deserialize, Serialize)]
+struct DaysHi {
+    days_carry: bool,
+    halt: bool,
+    #[bits(5)]
+    __: u8,
+    day_msb: bool,
+}
+
+// The day counter is 9 bits, with the lower 8 in `days_lo` and the most significant in `days_hi`.
+#[derive(Default, Archive, Deserialize, Serialize)]
+struct RtcRegs {
+    seconds: u8,
+    minutes: u8,
+    hours: u8,
+    days_lo: u8,
+    days_hi: DaysHi,
+}
+
+impl RtcRegs {
+    fn read(&self, selected: u8) -> u8 {
+        match selected {
+            0x08 => self.seconds,
+            0x09 => self.minutes,
+            0x0A => self.hours,
+            0x0B => self.days_lo,
+            0x0C => self.days_hi.into_bits(),
+            _ => unreachable!(),
+        }
+    }
+
+    fn write(&mut self, selected: u8, value: u8) {
+        match selected {
+            0x08 => self.seconds = value,
+            0x09 => self.minutes = value,
+            0x0A => self.hours = value,
+            0x0B => self.days_lo = value,
+            0x0C => self.days_hi = DaysHi::from_bits(value),
+            _ => unreachable!(),
+        }
+    }
+}
+
 #[derive(Archive, Deserialize, Serialize)]
 pub(crate) struct Mbc3 {
-    ram_enabled: bool,
+    ram_and_rtc_enabled: bool,
     pub rom: Vec<u8>,
     sram: Vec<u8>,
+    rtc_regs: RtcRegs,
     pub current_rom_bank: u8,
     current_rom_bank_start: usize,
-    current_sram_bank: u8,
+    sram_bank_or_rtc_reg: u8,
 }
 
 impl Mbc3 {
@@ -43,6 +90,9 @@ impl Mbc3 {
     }
 
     fn update_rom_bank(&mut self, bank_number: u8) {
+        #[cfg(feature = "mbc-logging")]
+        info!(target: "mbc_events", "Switching ROM bank using value: {bank_number}");
+
         let mut bank_number = bank_number & MBC3_ROM_BANK_MASK;
         if bank_number == 0 {
             bank_number = 1;
@@ -54,18 +104,17 @@ impl Mbc3 {
         self.current_rom_bank_start = 0x4000 * (bank_number as usize - 1);
     }
 
-    fn update_sram_bank(&mut self, bank_number: u8) {
-        let mut bank_number = bank_number;
+    fn update_sram_bank_or_rtc_reg(&mut self, mut value: u8) {
         #[cfg(feature = "mbc-logging")]
-        info!(target: "mbc_events", "Switching to SRAM bank #{bank_number}");
+        info!(target: "mbc_events", "Switching to SRAM bank or RTC reg using value #{value}");
 
-        if self.ram_size() == 2 {
-            bank_number = 0;
+        if value < 0x8 && self.ram_size() == 2 {
+            value = 0;
             #[cfg(feature = "mbc-logging")]
             info!(target: "mbc_events", "Only 1 SRAM bank, constraining to 0...");
         }
 
-        self.current_sram_bank = bank_number;
+        self.sram_bank_or_rtc_reg = value;
     }
 
     fn nth_sram_bank(&self, bank_number: u8) -> &[u8; RAM_BANK_SIZE] {
@@ -84,11 +133,17 @@ impl Mbc3 {
         match index {
             ..ROM_BANK_0_END => unsafe { *self.rom.get_unchecked(index as usize) },
             SRAM_START..SRAM_END => {
-                // Only allow reads if SRAM has been enabled.
-                if self.ram_enabled {
-                    let sram = self.nth_sram_bank(self.current_sram_bank);
-                    let sram_index = index as usize - 0xA000;
-                    sram[sram_index]
+                // Only allow reads if SRAM or RTC has been enabled.
+                if self.ram_and_rtc_enabled {
+                    match self.sram_bank_or_rtc_reg {
+                        0x0..0x8 => {
+                            let sram = self.nth_sram_bank(self.sram_bank_or_rtc_reg);
+                            let sram_index = index as usize - 0xA000;
+                            sram[sram_index]
+                        }
+                        0x8..0xD => self.rtc_regs.read(self.sram_bank_or_rtc_reg),
+                        _ => unreachable!(),
+                    }
                 } else {
                     0xFF
                 }
@@ -104,45 +159,39 @@ impl Mbc3 {
         match index {
             // MBC3: Ram Enable
             0x0000..0x2000 => {
-                if value & 0x0F == 0xA {
-                    #[cfg(feature = "mbc-logging")]
-                    info!(target: "mbc_events", "Enabling SRAM...");
-                    self.ram_enabled = true;
-                    return;
-                }
+                self.ram_and_rtc_enabled = value & 0x0F == 0xA;
 
                 #[cfg(feature = "mbc-logging")]
-                info!(target: "mbc_events", "Disabling SRAM...");
-                self.ram_enabled = false;
+                if self.ram_and_rtc_enabled {
+                    info!(target: "mbc_events", "Enabling SRAM...");
+                } else {
+                    info!(target: "mbc_events", "Disabling SRAM...");
+                }
             }
             // MBC3: ROM Bank Number
-            0x2000..0x4000 => {
-                #[cfg(feature = "mbc-logging")]
-                info!(target: "mbc_events", "Switching ROM bank using value: {value}");
-
-                self.update_rom_bank(value);
-            }
+            0x2000..0x4000 => self.update_rom_bank(value),
             // MBC3: SRAM Bank Number or RTC Register Select
-            0x4000..0x6000 => {
-                #[cfg(feature = "mbc-logging")]
-                info!(target: "mbc_events", "Switching SRAM bank using value: {value}");
+            0x4000..0x6000 => self.update_sram_bank_or_rtc_reg(value),
 
-                match value {
-                    0x0..0x8 => self.update_sram_bank(value),
-                    0x8..0xD => unimplemented!("RTC Register Select"),
-                    _ => unreachable!(),
-                }
+            // TODO: implement RTC latch!!!
+            0x6000..0x8000 => {
+                //println!("Wrote {value:X} to latch");
+                //unimplemented!("Latch Clock Data")
             }
-
-            0x6000..0x8000 => unimplemented!("Latch Clock Data"),
 
             // MBC3: SRAM
             SRAM_START..SRAM_END => {
                 // Only allow writes if the MBC RAM has been enabled.
-                if self.ram_enabled {
-                    let sram = self.nth_sram_bank_mut(self.current_sram_bank);
-                    let sram_index = index as usize - 0xA000;
-                    sram[sram_index] = value;
+                if self.ram_and_rtc_enabled {
+                    match self.sram_bank_or_rtc_reg {
+                        0x0..0x8 => {
+                            let sram = self.nth_sram_bank_mut(self.sram_bank_or_rtc_reg);
+                            let sram_index = index as usize - 0xA000;
+                            sram[sram_index] = value;
+                        }
+                        0x8..0xD => self.rtc_regs.write(self.sram_bank_or_rtc_reg, value),
+                        _ => unreachable!(),
+                    }
                 }
             }
             _ => unreachable!(),
@@ -153,12 +202,13 @@ impl Mbc3 {
 impl Default for Mbc3 {
     fn default() -> Self {
         Self {
-            ram_enabled: false,
+            ram_and_rtc_enabled: false,
             rom: Vec::new(),
             sram: Vec::new(),
+            rtc_regs: RtcRegs::default(),
             current_rom_bank: 1,
             current_rom_bank_start: 0,
-            current_sram_bank: 0,
+            sram_bank_or_rtc_reg: 0,
         }
     }
 }
