@@ -809,41 +809,45 @@ impl Ppu {
 
         self.next_vblank_interrupt = if ie.vblank() {
             // VBlank always happens on this dot.
-            let vblank_dot = 144 * i64::from(DOTS_PER_SCANLINE) + 4;
+            const VBLANK_DOT: i64 = 144 * DOTS_PER_SCANLINE as i64 + 4;
 
-            let mut dots_from_vblank = vblank_dot - current_dot;
-            if dots_from_vblank.is_negative() {
-                dots_from_vblank += i64::from(DOTS_PER_FRAME);
+            let mut dots_until_vblank = VBLANK_DOT - current_dot;
+            // If we already passed VBlank this frame, then get number of dots until VBlank on the next frame.
+            if dots_until_vblank.is_negative() {
+                dots_until_vblank += i64::from(DOTS_PER_FRAME);
             }
 
-            self.clock + dots_from_vblank.cast_unsigned()
+            self.clock + dots_until_vblank.cast_unsigned()
         } else {
             u64::MAX
         };
 
         self.next_lcd_interrupt = if ie.lcd() {
             let stat = self.registers.stat;
-            let next_lyc_interrupt = if stat.lyc_int_select() {
-                let lyc = self.registers.lyc;
+            let lyc = self.registers.lyc;
 
-                if lyc >= 153 {
-                    // TODO: Special timing for ly_to_compare_lyc 153.
-                    0
+            // TODO: This needs more testing, but it passes the test ROMs.
+            let next_lyc_interrupt = if stat.lyc_int_select() && lyc <= 153 {
+                // LY=LYC is predicted to happen on this dot.
+                let lyc_dot = if lyc == 0 {
+                    // Line 0 has special timing.
+                    // See: TCAGBD.pdf section 8.9.1.
+                    153 * i64::from(DOTS_PER_SCANLINE) + 12
                 } else {
-                    // TODO: This needs more testing, but it passes the test ROMs.
-                    // LYC happens on this dot.
-                    let lyc_dot = i64::from(lyc) * i64::from(DOTS_PER_SCANLINE) + 4;
+                    i64::from(lyc) * i64::from(DOTS_PER_SCANLINE) + 4
+                };
 
-                    let mut dots_from_lyc = lyc_dot - current_dot;
-                    if dots_from_lyc.is_negative() {
-                        dots_from_lyc += i64::from(DOTS_PER_FRAME);
-                    }
-
-                    self.clock + dots_from_lyc.cast_unsigned()
+                let mut dots_until_lyc = lyc_dot - current_dot;
+                // If we already passed LY=LYC this frame, then get number of dots until LY=LYC on the next frame.
+                if dots_until_lyc.is_negative() {
+                    dots_until_lyc += i64::from(DOTS_PER_FRAME);
                 }
+
+                self.clock + dots_until_lyc.cast_unsigned()
             } else {
                 u64::MAX
             };
+            // TODO: Actual mode prediction...
             let next_mode2_interrupt = if stat.mode2_int_select() { 0 } else { u64::MAX };
             let next_mode1_interrupt = if stat.mode1_int_select() { 0 } else { u64::MAX };
             let next_mode0_interrupt = if stat.mode0_int_select() { 0 } else { u64::MAX };
@@ -857,7 +861,6 @@ impl Ppu {
         };
 
         self.next_vblank_interrupt.min(self.next_lcd_interrupt)
-        // TODO: actual prediction...
     }
 
     #[must_use]
@@ -881,7 +884,7 @@ impl Ppu {
     fn transition_hblank(&mut self) {
         self.mode = PpuMode::HBlank;
         #[cfg(feature = "ppu-logging")]
-        trace!(target: "ppu_hblank", "Set to Mode 0 on dot: {}, (Drew for {} dots)", self.dots_this_line(), self.dots_this_line() - OAM_SCAN_DOTS);
+        trace!(target: "ppu_hblank", "Set to Mode 0 on dot: {}, (Drew for {} dots)", self.dots_this_line, self.dots_this_line - 80);
 
         self.x = 0;
         // Reset each of the fetchers.
@@ -925,7 +928,7 @@ impl Ppu {
         // Low to high transition on the STAT interrupt line.
         if !prev_stat_line && self.stat_interrupt_line {
             #[cfg(feature = "ppu-logging")]
-            info!(target: "lcd_int", "LCD interrupt flag set on dot: {}", self.dots_this_line());
+            info!(target: "lcd_int", "LCD interrupt flag set on dot: {}", self.dots_this_line);
             // Request the LCD interrupt.
             *interrupt_flags |= 0b0000_0010;
         }
@@ -934,7 +937,7 @@ impl Ppu {
     fn disable(&mut self) {
         if !self.is_disabled() {
             #[cfg(feature = "ppu-logging")]
-            info!(target: "ppu_disabled", "Disabled on dot: {}", self.dot_counter);
+            info!(target: "ppu_disabled", "Disabled on dot: {}", u32::from(self.line_number) * u32::from(DOTS_PER_SCANLINE) + u32::from(self.dots_this_line));
 
             // Reset the PPU state, preserving only some of its state.
             *self = Ppu {
