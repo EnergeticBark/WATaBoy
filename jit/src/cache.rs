@@ -47,9 +47,7 @@ impl BlockSlot {
 
 #[bitfield(u32, order = Msb)]
 pub(crate) struct CacheAddress {
-    #[bits(8)]
-    __: u8, // Padding
-    pub(crate) bank_number: u8,
+    pub(crate) bank_number: u16,
     pub(crate) address: u16,
 }
 
