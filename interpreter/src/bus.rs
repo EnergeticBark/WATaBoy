@@ -185,10 +185,14 @@ impl AddressBus {
             // Delegate PPU registers to the PPU.
             LY => (),
             // Still needed until I can update interrupts without passing in all memory :(.
+
+            // LCDC needs to update the STAT interrupt because enabling the PPU restarts the LY=LYC comparison check.
+            // See: https://github.com/Gekkio/mooneye-test-suite/blob/443f6e1f2a8d83ad9da051cbb960311c5aaaea66/acceptance/ppu/stat_lyc_onoff.s#L169
+
             // TODO: HEY!!! Optimization idea: if we're writing a value that's identical to the current value,
             // we don't actually need to catch up the component, because nothing has changed.
             // Pokemon Blue updates the value of SCX, SCY, and WY on the title screen what seems several times per frame.
-            STAT | LYC => {
+            LCDC | STAT | LYC => {
                 #[cfg(feature = "waking-counters")]
                 self.waking_writes.log_access(index);
 
@@ -202,7 +206,7 @@ impl AddressBus {
 
                 self.ppu_est_next_intr();
             }
-            LCDC | SCY | SCX | BGP | OBP0 | OBP1 | WY | WX => {
+            SCY | SCX | BGP | OBP0 | OBP1 | WY | WX => {
                 #[cfg(feature = "waking-counters")]
                 self.waking_writes.log_access(index);
 
