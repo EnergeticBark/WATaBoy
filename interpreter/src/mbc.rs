@@ -153,11 +153,11 @@ impl MbcDispatcher {
         }
     }
 
-    pub fn current_rom_bank(&self) -> u8 {
+    pub fn current_rom_bank(&self) -> u16 {
         match &self.mbc {
-            Mbc::Mbc1(mbc1) => mbc1.current_rom_bank,
-            Mbc::Mbc2(mbc2) => mbc2.current_rom_bank,
-            Mbc::Mbc3(mbc3) => mbc3.current_rom_bank,
+            Mbc::Mbc1(mbc1) => u16::from(mbc1.current_rom_bank),
+            Mbc::Mbc2(mbc2) => u16::from(mbc2.current_rom_bank),
+            Mbc::Mbc3(mbc3) => u16::from(mbc3.current_rom_bank),
             Mbc::Mbc5(mbc5) => mbc5.current_rom_bank,
             Mbc::RomOnly => unimplemented!(),
         }
