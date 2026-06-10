@@ -9,6 +9,79 @@ export const buttonsHeld = {
 	right: false,
 };
 
+// Prevent double-tap to zoom on mobile Safari.
+document.addEventListener("dblclick", (event) => event.preventDefault());
+
+const buttons = document.querySelector("#buttons");
+buttons.addEventListener("touchstart", (event) => {
+	if (!event.target.classList.contains("touch-button")) {
+		return;
+	}
+	
+	switch (event.target.id) {
+		case "start-button":
+			buttonsHeld.start = true;
+			break;
+		case "select-button":
+			buttonsHeld.select = true;
+			break;
+		case "b-button":
+			buttonsHeld.b = true;
+			break;
+		case "a-button":
+			buttonsHeld.a = true;
+			break;
+		case "down-button":
+			buttonsHeld.down = true;
+			break;
+		case "up-button":
+			buttonsHeld.up = true;
+			break;
+		case "left-button":
+			buttonsHeld.left = true;
+			break;
+		case "right-button":
+			buttonsHeld.right = true;
+	}
+	
+	event.target.style.backgroundColor = "green";
+});
+
+buttons.addEventListener("touchend", (event) => {
+	if (!event.target.classList.contains("touch-button")) {
+		return;
+	}
+	
+	switch (event.target.id) {
+		case "start-button":
+			buttonsHeld.start = false;
+			break;
+		case "select-button":
+			buttonsHeld.select = false;
+			break;
+		case "b-button":
+			buttonsHeld.b = false;
+			break;
+		case "a-button":
+			buttonsHeld.a = false;
+			break;
+		case "down-button":
+			buttonsHeld.down = false;
+			break;
+		case "up-button":
+			buttonsHeld.up = false;
+			break;
+		case "left-button":
+			buttonsHeld.left = false;
+			break;
+		case "right-button":
+			buttonsHeld.right = false;
+	}
+	
+	event.target.style.backgroundColor = null;
+});
+
+
 document.addEventListener("keydown", (event) => {
 	switch (event.key) {
 		case "Enter":
