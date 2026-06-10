@@ -11,9 +11,9 @@
 	
 		#lcd {
 			border: 1px solid;
-			/* 5x scale. */
-			width: 640px;
-			height: 576px;
+			/* 2x scale. */
+			width: 320px;
+			height: 288px;
 			image-rendering: pixelated;
 		}
 		
@@ -29,6 +29,32 @@
 			overflow: auto;
 			border: 1px solid black;
 		}
+		
+		#buttons {
+			touch-action: none;
+			-webkit-user-select: none;
+			display: grid;
+			grid-template-areas:
+			  ".    up     .     .     ."
+			  "left .      right b     a"
+			  ".    down   .     .     ."
+			  ".    select .     start .";
+			grid-template-columns: repeat(5, minmax(3rem, 1fr));
+		}
+		
+		.touch-button {
+			border: 1px solid black;
+			aspect-ratio: 1;
+		}
+		
+		#up-button { grid-area: up; }
+		#down-button { grid-area: down; }
+		#left-button { grid-area: left; }
+		#right-button { grid-area: right; }
+		#a-button { grid-area: a; }
+		#b-button { grid-area: b; }
+		#start-button { grid-area: start; }
+		#select-button { grid-area: select; }
 	</style>
 	<title>WATaBoy</title>
 </head>
@@ -41,6 +67,17 @@
 	</fieldset>
 	
 	<canvas id="lcd" width="160" height="144"></canvas>
+	<div id="buttons">
+		<div id="up-button" class="touch-button">up</div>
+		<div id="down-button" class="touch-button">down</div>
+		<div id="left-button" class="touch-button">left</div>
+		<div id="right-button" class="touch-button">right</div>
+		<div id="b-button" class="touch-button">b</div>
+		<div id="a-button" class="touch-button">a</div>
+		<div id="start-button" class="touch-button">start</div>
+		<div id="select-button" class="touch-button">select</div>
+	</div>
+	
 	<!--<input type="button" id="log-uncompiled" value="Log Uncompiled" />-->
 	<h2>Controls:</h2>
 	<p>
