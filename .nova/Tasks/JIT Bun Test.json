@@ -1,8 +1,13 @@
 {
   "actions" : {
+    "build" : {
+      "script" : "cargo build --package jit -Zbuild-std=core,std,alloc,proc_macro,panic_abort --target=wasm32-unknown-unknown --release\nwasm-opt target\/wasm32-unknown-unknown\/release\/jit.wasm -o target\/wasm32-unknown-unknown\/release\/jit.wasm -O"
+    },
     "run" : {
       "enabled" : true,
       "script" : "bun test"
     }
-  }
+  },
+  "buildBeforeRunning" : true,
+  "openLogOnRun" : "start"
 }

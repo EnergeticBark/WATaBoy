@@ -15,7 +15,17 @@ lcdImage.data.fill(255);
 const lcdCanvas = document.querySelector("#lcd");
 const ctx = lcdCanvas.getContext("2d", { alpha: false });
 
+const errorLogContainer = document.querySelector("#error-log");
+const errorLog = document.querySelector("#error-log output");
+
 const runtime = new Runtime();
+// Override the default error callback to show errors on the page.
+runtime.errorCallback = (message) => {
+	console.error(message);
+	errorLog.textContent += message;
+	errorLogContainer.hidden = false;
+}
+
 const wasmSource = await (await fetch("../target/wasm32-unknown-unknown/release/jit.wasm")).bytes();
 await runtime.init(wasmSource);
 

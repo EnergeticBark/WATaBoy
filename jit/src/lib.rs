@@ -14,6 +14,7 @@ static TALC: talc::wasm::WasmDynamicTalc = talc::wasm::new_wasm_dynamic_allocato
 unsafe extern "C" {
     fn link_new_module_glue(buffer: *const u8, len: usize) -> i32;
 
+    fn console_error_glue(buffer: *const u8, len: usize);
     fn console_log_glue(buffer: *const u8, len: usize);
 }
 
@@ -22,6 +23,13 @@ unsafe extern "C" {
 /// The index of the newly linked function.
 fn link_new_module(buffer: &[u8]) -> i32 {
     unsafe { link_new_module_glue(buffer.as_ptr(), buffer.len()) }
+}
+
+/// Log the UTF-8 contents of `buffer` to the embedder's console.
+fn console_error(message: &str) {
+    unsafe {
+        console_error_glue(message.as_ptr(), message.len());
+    }
 }
 
 /// Log the UTF-8 contents of `buffer` to the embedder's console.
