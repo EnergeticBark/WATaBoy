@@ -41,10 +41,8 @@
 	</fieldset>
 	
 	<canvas id="lcd" width="160" height="144"></canvas>
-	<p id="frametimes"></p>
-	<label>Speed multiplier: <input type="number" id="speed" value="500"></label>
 	<!--<input type="button" id="log-uncompiled" value="Log Uncompiled" />-->
-	<p>Controls:</p>
+	<h2>Controls:</h2>
 	<p>
 		A: <kbd><kbd>Z</kbd></kbd>,
 		B: <kbd><kbd>X</kbd></kbd>,
@@ -52,10 +50,15 @@
 		Select: <kbd><kbd>Backspace</kbd></kbd>,
 		D-pad: <kbd><kbd>&uarr;</kbd></kbd> <kbd><kbd>&darr;</kbd></kbd> <kbd><kbd>&larr;</kbd></kbd> <kbd><kbd>&rarr;</kbd></kbd>
 	</p>
+	<label>Speed multiplier: <input type="number" id="speed" value="500"></label>
 	
 	<div id="error-log" hidden>
 		<h2>Error Log</h2>
 		<pre><output></output></pre>
 	</div>
+	
+	<h2>Runtime Stats</h2>
+	<p id="frametimes"></p>
+	<p>Basic JIT blocks: <span id="jit-block-count">0</span></p>
 </body>
 </html>

@@ -15,6 +15,8 @@ lcdImage.data.fill(255);
 const lcdCanvas = document.querySelector("#lcd");
 const ctx = lcdCanvas.getContext("2d", { alpha: false });
 
+const jitBlockCount = document.querySelector("#jit-block-count");
+
 const errorLogContainer = document.querySelector("#error-log");
 const errorLog = document.querySelector("#error-log output");
 
@@ -24,6 +26,10 @@ runtime.errorCallback = (message) => {
 	console.error(message);
 	errorLog.textContent += message;
 	errorLogContainer.hidden = false;
+}
+runtime.linkModuleCallback = () => {
+	console.log("Link new module called...");
+	jitBlockCount.textContent = runtime.linkedModuleCount;
 }
 
 const wasmSource = await (await fetch("../target/wasm32-unknown-unknown/release/jit.wasm")).bytes();
