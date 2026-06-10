@@ -9,7 +9,8 @@ export const Runtime = class {
 	
 	async init(source) {
 		const importObj = {env: {
-			console_log_glue: this.console_log_glue,
+			console_error_glue: this.#console_error_glue,
+			console_log_glue: this.#console_log_glue,
 			link_new_module_glue: this.link_new_module_glue,
 		}};
 		
@@ -18,10 +19,22 @@ export const Runtime = class {
 		this.jitRuntimePtr = instance.exports.make_runtime();
 	}
 	
-	console_log_glue = (stringPtr, stringLen) => {
+	#decodeUTF8 = (stringPtr, stringLen) => {
 		const messageBytes = new Uint8Array(this.instance.exports.memory.buffer, stringPtr, stringLen);
-		const message = utf8decoder.decode(messageBytes);
-		console.log(message);
+		return utf8decoder.decode(messageBytes);
+	}
+	
+	errorCallback = console.error;
+	logCallback = console.log;
+	
+	#console_error_glue = (stringPtr, stringLen) => {
+		const message = this.#decodeUTF8(stringPtr, stringLen);
+		this.errorCallback(message);
+	};
+	
+	#console_log_glue = (stringPtr, stringLen) => {
+		const message = this.#decodeUTF8(stringPtr, stringLen);
+		this.logCallback(message);
 	}
 	
 	link_new_module_glue = (bufferPtr, bufferLen) => {

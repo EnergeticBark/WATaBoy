@@ -2,7 +2,7 @@ use std::panic;
 
 use crate::cache::{BlockCache, BlockSlot, CacheAddress, CompiledBlock};
 use crate::codegen::WasmBlock;
-use crate::{call_indirect, console_log};
+use crate::{call_indirect, console_error, console_log};
 
 use interpreter::cpu::Cpu;
 use interpreter::cpu::opcodes::Opcode;
@@ -43,7 +43,7 @@ impl JitRuntime {
     pub extern "C" fn make_runtime() -> *mut Self {
         // Log panic messages to the JavaScript console.
         panic::set_hook(Box::new(|panic_info| {
-            console_log(&format!("panic occurred: {panic_info}"));
+            console_error(&format!("{panic_info}"));
         }));
 
         let mut runtime = Box::new(JitRuntime::default());

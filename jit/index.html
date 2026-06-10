@@ -22,6 +22,12 @@
 		  border: 1px solid black;
 		  box-shadow: 0 1px 1px darkgray;
 		}
+		
+		#error-log pre {
+			color: #ee0000;
+			overflow: auto;
+			border: 1px solid black;
+		}
 	</style>
 	<title>WATaBoy</title>
 </head>
@@ -45,6 +51,10 @@
 		Select: <kbd><kbd>Backspace</kbd></kbd>,
 		D-pad: <kbd><kbd>&uarr;</kbd></kbd> <kbd><kbd>&darr;</kbd></kbd> <kbd><kbd>&larr;</kbd></kbd> <kbd><kbd>&rarr;</kbd></kbd>
 	</p>
-
+	
+	<div id="error-log" hidden>
+		<h2>Error Log</h2>
+		<pre><output></output></pre>
+	</div>
 </body>
 </html>
