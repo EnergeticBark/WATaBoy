@@ -10,11 +10,31 @@
 		}
 	
 		#lcd {
+			display: block;
+			margin: 1rem auto;
 			border: 1px solid;
 			/* 2x scale. */
 			width: 320px;
 			height: 288px;
 			image-rendering: pixelated;
+		}
+		
+		@media (width >= 496px) {
+		  #lcd {
+			  /* 3x scale. */
+			  width: 480px;
+			  height: 432px;
+			  
+		  }
+		}
+		
+		@media (width >= 656px) {
+		  #lcd {
+			  /* 4x scale. */
+			  width: 640px;
+			  height: 576px;
+			  
+		  }
 		}
 		
 		kbd > kbd {
@@ -55,6 +75,16 @@
 		#b-button { grid-area: b; }
 		#start-button { grid-area: start; }
 		#select-button { grid-area: select; }
+		
+		@media (pointer: fine) {
+			#lcd {
+				margin: 1rem 0;
+			}
+		
+			#buttons {
+				display: none;
+			}
+		}
 	</style>
 	<title>WATaBoy</title>
 </head>
