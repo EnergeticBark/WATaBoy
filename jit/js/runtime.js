@@ -6,12 +6,14 @@ const utf8decoder = new TextDecoder();
 export const Runtime = class {
 	instance;
 	jitRuntimePtr;
+	// Just used for stats.
+	linkedModuleCount = 0;
 	
 	async init(source) {
 		const importObj = {env: {
 			console_error_glue: this.#console_error_glue,
 			console_log_glue: this.#console_log_glue,
-			link_new_module_glue: this.link_new_module_glue,
+			link_new_module_glue: this.#link_new_module_glue,
 		}};
 		
 		const {instance} = await WebAssembly.instantiate(source, importObj);
@@ -24,8 +26,10 @@ export const Runtime = class {
 		return utf8decoder.decode(messageBytes);
 	}
 	
+	// Default callback definitions.
 	errorCallback = console.error;
 	logCallback = console.log;
+	linkModuleCallback = () => {};
 	
 	#console_error_glue = (stringPtr, stringLen) => {
 		const message = this.#decodeUTF8(stringPtr, stringLen);
@@ -37,8 +41,8 @@ export const Runtime = class {
 		this.logCallback(message);
 	}
 	
-	link_new_module_glue = (bufferPtr, bufferLen) => {
-		console.log("Link new module called...");
+	#link_new_module_glue = (bufferPtr, bufferLen) => {
+		this.linkedModuleCount += 1;
 		
 		// Read the Wasm bytecode from the JIT runtime's memory.
 		const bytecode = new Uint8Array(this.instance.exports.memory.buffer, bufferPtr, bufferLen);
@@ -59,6 +63,8 @@ export const Runtime = class {
 		this.instance.exports.__indirect_function_table.grow(1)
 		const newFuncIdx = this.instance.exports.__indirect_function_table.length - 1;
 		this.instance.exports.__indirect_function_table.set(newFuncIdx, newInstance.exports.execute_block)
+		
+		this.linkModuleCallback();
 		
 		// Return the index of the function we've just linked in.
 		return newFuncIdx;
