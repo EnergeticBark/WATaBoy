@@ -13,18 +13,18 @@ const MBC1_SRAM_BANK_MASK: u8 = 0b0000_0011;
 
 #[derive(Archive, Deserialize, Serialize)]
 pub(crate) struct Mbc1 {
-    ram_enabled: bool,
     pub rom: Vec<u8>,
-    ext_ram: Vec<u8>,
+    pub sram: Vec<u8>,
     pub current_rom_bank: u8,
     current_rom_bank_start: usize,
-    current_ram_bank: u8,
+    current_sram_bank: u8,
+    sram_enabled: bool,
     banking_mode: bool,
 }
 
 impl Mbc1 {
     pub fn from_rom(rom: &[u8]) -> Self {
-        let ext_ram = match rom[RAM_SIZE_ADDR] {
+        let sram = match rom[RAM_SIZE_ADDR] {
             2 => vec![0; RAM_BANK_SIZE],
             3 => vec![0; RAM_BANK_SIZE * 4],
             _ => vec![],
@@ -32,12 +32,12 @@ impl Mbc1 {
 
         Self {
             rom: rom.to_vec(),
-            ext_ram,
+            sram,
             ..Default::default()
         }
     }
 
-    fn ram_size(&self) -> u8 {
+    fn sram_size(&self) -> u8 {
         self.rom[RAM_SIZE_ADDR]
     }
 
@@ -58,31 +58,29 @@ impl Mbc1 {
         #[cfg(feature = "mbc-logging")]
         info!(target: "mbc_events", "Switching to SRAM bank #{bank_number}");
 
-        if self.ram_size() == 2 {
+        if self.sram_size() == 2 {
             bank_number = 0;
             #[cfg(feature = "mbc-logging")]
             info!(target: "mbc_events", "Only 1 SRAM bank, constraining to 0...");
         }
 
-        self.current_ram_bank = bank_number;
+        self.current_sram_bank = bank_number;
     }
 
     // TODO: implement 1 MiB ROM support.
     // See: https://gbdev.io/pandocs/MBC1.html#40005fff--ram-bank-number--or--upper-bits-of-rom-bank-number-write-only
-    fn nth_ram_bank(&self, bank_number: u8) -> &[u8; RAM_BANK_SIZE] {
+    fn nth_sram_bank(&self, bank_number: u8) -> &[u8; RAM_BANK_SIZE] {
         let start_addr = RAM_BANK_SIZE * bank_number as usize;
         let end_addr = start_addr + RAM_BANK_SIZE;
-        self.ext_ram[start_addr..end_addr].try_into().unwrap()
+        self.sram[start_addr..end_addr].try_into().unwrap()
     }
 
     // TODO: implement 1 MiB ROM support.
     // See: https://gbdev.io/pandocs/MBC1.html#40005fff--ram-bank-number--or--upper-bits-of-rom-bank-number-write-only
-    fn nth_ram_bank_mut(&mut self, bank_number: u8) -> &mut [u8; RAM_BANK_SIZE] {
+    fn nth_sram_bank_mut(&mut self, bank_number: u8) -> &mut [u8; RAM_BANK_SIZE] {
         let start_addr = RAM_BANK_SIZE * bank_number as usize;
         let end_addr = start_addr + RAM_BANK_SIZE;
-        (&mut self.ext_ram[start_addr..end_addr])
-            .try_into()
-            .unwrap()
+        (&mut self.sram[start_addr..end_addr]).try_into().unwrap()
     }
 
     fn set_banking_mode(&mut self, banking_mode: u8) {
@@ -98,8 +96,8 @@ impl Mbc1 {
             ..ROM_BANK_0_END => unsafe { *self.rom.get_unchecked(index as usize) },
             SRAM_START..SRAM_END => {
                 // Only allow reads if SRAM has been enabled.
-                if self.ram_enabled {
-                    let sram = self.nth_ram_bank(self.current_ram_bank);
+                if self.sram_enabled {
+                    let sram = self.nth_sram_bank(self.current_sram_bank);
                     let sram_index = index as usize - 0xA000;
                     sram[sram_index]
                 } else {
@@ -120,13 +118,13 @@ impl Mbc1 {
                 if value & 0x0F == 0xA {
                     #[cfg(feature = "mbc-logging")]
                     info!(target: "mbc_events", "Enabling SRAM...");
-                    self.ram_enabled = true;
+                    self.sram_enabled = true;
                     return;
                 }
 
                 #[cfg(feature = "mbc-logging")]
                 info!(target: "mbc_events", "Disabling SRAM...");
-                self.ram_enabled = false;
+                self.sram_enabled = false;
             }
             // MBC1: ROM Bank Number
             0x2000..0x4000 => {
@@ -153,8 +151,8 @@ impl Mbc1 {
             // MBC1: SRAM
             SRAM_START..SRAM_END => {
                 // Only allow writes if the MBC RAM has been enabled.
-                if self.ram_enabled {
-                    let sram = self.nth_ram_bank_mut(self.current_ram_bank);
+                if self.sram_enabled {
+                    let sram = self.nth_sram_bank_mut(self.current_sram_bank);
                     let sram_index = index as usize - 0xA000;
                     sram[sram_index] = value;
                 }
@@ -167,12 +165,12 @@ impl Mbc1 {
 impl Default for Mbc1 {
     fn default() -> Self {
         Self {
-            ram_enabled: false,
             rom: Vec::new(),
-            ext_ram: Vec::new(),
+            sram: Vec::new(),
             current_rom_bank: 1,
             current_rom_bank_start: 0,
-            current_ram_bank: 0,
+            current_sram_bank: 0,
+            sram_enabled: false,
             banking_mode: false,
         }
     }
