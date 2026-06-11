@@ -117,7 +117,7 @@ impl Rtc {
 pub(crate) struct Mbc3 {
     ram_and_rtc_enabled: bool,
     pub rom: Vec<u8>,
-    sram: Vec<u8>,
+    pub sram: Vec<u8>,
     rtc: Rtc,
     rtc_latch: bool,
     pub current_rom_bank: u8,
@@ -141,7 +141,7 @@ impl Mbc3 {
         }
     }
 
-    fn ram_size(&self) -> u8 {
+    fn sram_size(&self) -> u8 {
         self.rom[RAM_SIZE_ADDR]
     }
 
@@ -164,7 +164,7 @@ impl Mbc3 {
         #[cfg(feature = "mbc-logging")]
         info!(target: "mbc_events", "Switching to SRAM bank or RTC reg using value #{value}");
 
-        if value < 0x8 && self.ram_size() == 2 {
+        if value < 0x8 && self.sram_size() == 2 {
             value = 0;
             #[cfg(feature = "mbc-logging")]
             info!(target: "mbc_events", "Only 1 SRAM bank, constraining to 0...");

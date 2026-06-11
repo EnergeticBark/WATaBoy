@@ -9,10 +9,10 @@ const SRAM_ADDR_MASK: u16 = 0x01FF;
 #[derive(Archive, Deserialize, Serialize)]
 pub(crate) struct Mbc2 {
     pub rom: Vec<u8>,
-    sram: Vec<u8>,
-    sram_enabled: bool,
+    pub sram: Vec<u8>,
     pub current_rom_bank: u8,
     current_rom_bank_start: usize,
+    sram_enabled: bool,
 }
 
 impl Mbc2 {
@@ -98,9 +98,9 @@ impl Default for Mbc2 {
         Self {
             rom: Vec::new(),
             sram: vec![0; 512],
-            sram_enabled: false,
             current_rom_bank: 1,
             current_rom_bank_start: 0,
+            sram_enabled: false,
         }
     }
 }

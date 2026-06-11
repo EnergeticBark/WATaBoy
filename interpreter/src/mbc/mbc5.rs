@@ -15,7 +15,7 @@ const MBC5_SRAM_BANK_MASK: u8 = 0b0000_1111;
 pub(crate) struct Mbc5 {
     ram_enabled: bool,
     pub rom: Vec<u8>,
-    sram: Vec<u8>,
+    pub sram: Vec<u8>,
     pub current_rom_bank: u16,
     current_rom_bank_start: usize,
     current_ram_bank: u8,
@@ -56,7 +56,7 @@ impl Mbc5 {
         self.current_rom_bank_start = 0x4000 * bank_number as usize;
     }
 
-    fn update_ram_bank(&mut self, bank_number: u8) {
+    fn update_sram_bank(&mut self, bank_number: u8) {
         let mut bank_number = bank_number & MBC5_SRAM_BANK_MASK;
         #[cfg(feature = "mbc-logging")]
         info!(target: "mbc_events", "Switching to SRAM bank #{bank_number}");
@@ -70,13 +70,13 @@ impl Mbc5 {
         self.current_ram_bank = bank_number;
     }
 
-    fn nth_ram_bank(&self, bank_number: u8) -> &[u8; SRAM_BANK_SIZE] {
+    fn nth_sram_bank(&self, bank_number: u8) -> &[u8; SRAM_BANK_SIZE] {
         let start_addr = SRAM_BANK_SIZE * bank_number as usize;
         let end_addr = start_addr + SRAM_BANK_SIZE;
         self.sram[start_addr..end_addr].try_into().unwrap()
     }
 
-    fn nth_ram_bank_mut(&mut self, bank_number: u8) -> &mut [u8; SRAM_BANK_SIZE] {
+    fn nth_sram_bank_mut(&mut self, bank_number: u8) -> &mut [u8; SRAM_BANK_SIZE] {
         let start_addr = SRAM_BANK_SIZE * bank_number as usize;
         let end_addr = start_addr + SRAM_BANK_SIZE;
         (&mut self.sram[start_addr..end_addr]).try_into().unwrap()
@@ -88,7 +88,7 @@ impl Mbc5 {
             SRAM_START..SRAM_END => {
                 // Only allow reads if SRAM has been enabled.
                 if self.ram_enabled {
-                    let sram = self.nth_ram_bank(self.current_ram_bank);
+                    let sram = self.nth_sram_bank(self.current_ram_bank);
                     let sram_index = index as usize - 0xA000;
                     sram[sram_index]
                 } else {
@@ -142,7 +142,7 @@ impl Mbc5 {
                 #[cfg(feature = "mbc-logging")]
                 info!(target: "mbc_events", "Switching SRAM bank using value: {value}");
 
-                self.update_ram_bank(value);
+                self.update_sram_bank(value);
             }
             0x6000..0x8000 => (),
 
@@ -150,7 +150,7 @@ impl Mbc5 {
             SRAM_START..SRAM_END => {
                 // Only allow writes if the MBC RAM has been enabled.
                 if self.ram_enabled {
-                    let sram = self.nth_ram_bank_mut(self.current_ram_bank);
+                    let sram = self.nth_sram_bank_mut(self.current_ram_bank);
                     let sram_index = index as usize - 0xA000;
                     sram[sram_index] = value;
                 }

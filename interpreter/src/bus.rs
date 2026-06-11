@@ -42,6 +42,10 @@ impl AddressBus {
         self.mbc = MbcDispatcher::from_rom(rom);
     }
 
+    pub fn load_sram(&mut self, sram: &[u8]) {
+        self.mbc.load_sram(sram);
+    }
+
     fn read_special(&mut self, index: u16) -> u8 {
         match index {
             // Delegate reads to the PPU.
