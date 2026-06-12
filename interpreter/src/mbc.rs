@@ -111,6 +111,16 @@ impl MbcDispatcher {
         }
     }
 
+    pub fn dump_sram(&self) -> &[u8] {
+        match &self.mbc {
+            Mbc::Mbc1(mbc1) => &mbc1.sram,
+            Mbc::Mbc2(mbc2) => &mbc2.sram,
+            Mbc::Mbc3(mbc3) => &mbc3.sram,
+            Mbc::Mbc5(mbc5) => &mbc5.sram,
+            Mbc::RomOnly => unreachable!(),
+        }
+    }
+
     pub fn read_byte(&self, index: u16) -> u8 {
         match &self.mbc {
             Mbc::Mbc1(mbc1) => mbc1.read_byte(index),
