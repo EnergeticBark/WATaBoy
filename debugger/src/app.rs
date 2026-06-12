@@ -15,11 +15,14 @@ use interpreter::joypad::ButtonsHeld;
 use log::error;
 use rkyv::deserialize;
 use rkyv::rancor::Error;
+use std::fs;
 use std::fs::File;
 use std::io::{Read, Write};
+use std::path::PathBuf;
 
 pub struct DebuggerApp {
-    dmg_state: Cpu,
+    pub dmg_state: Cpu,
+    pub sav_path: Option<PathBuf>,
     tiles: Vec<TextureHandle>,
     tile_map_0: TextureHandle,
     tile_map_1: TextureHandle,
@@ -45,6 +48,7 @@ impl DebuggerApp {
 
         Self {
             dmg_state: Cpu::default(),
+            sav_path: None,
             tiles: (0..384)
                 .map(|tile_index| {
                     cc.egui_ctx.load_texture(
@@ -128,6 +132,20 @@ impl DebuggerApp {
             });
         });
     }
+
+    /// If the previously
+    pub(crate) fn sav_to_disk(&self) {
+        if let Some(prev_sav_path) = &self.sav_path {
+            let prev_sav = self.dmg_state.memory.dump_sram();
+
+            // No need to save if the cartridge didn't have SRAM.
+            if prev_sav.is_empty() {
+                return;
+            }
+
+            fs::write(prev_sav_path, prev_sav).unwrap();
+        }
+    }
 }
 
 fn step_once(dmg_state: &mut Cpu, buttons_held: ButtonsHeld) {
@@ -152,6 +170,11 @@ fn step_vblank(dmg_state: &mut Cpu, buttons_held: ButtonsHeld) {
 impl eframe::App for DebuggerApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        if ui.input(|i| i.viewport().close_requested()) {
+            // Save SRAM to disk before closing.
+            self.sav_to_disk();
+        }
+
         egui::Window::new("Log")
             .open(&mut self.logger_open)
             .show(ui, |ui| {
@@ -254,9 +277,7 @@ impl eframe::App for DebuggerApp {
         ui.input(|i| {
             if !i.raw.dropped_files.is_empty() {
                 let dropped_file = i.raw.dropped_files.first().unwrap().clone();
-                self.dmg_state = Cpu::default();
-                //self.dmg_state = Cpu::post_boot_mgb();
-                handle_dropped_rom(dropped_file, &mut self.dmg_state);
+                handle_dropped_rom(self, dropped_file);
             }
 
             self.buttons_held = ButtonsHeld {
