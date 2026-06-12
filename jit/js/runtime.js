@@ -78,6 +78,23 @@ export const Runtime = class {
 		this.instance.exports.load_rom_from_buffer(this.jitRuntimePtr);
 	}
 	
+	// Load the ROM file.
+	loadSram = (sram) => {
+		const sramBufferPtr = this.instance.exports.realloc_sram_buffer(this.jitRuntimePtr, sram.length);
+		const sramBuffer = new Uint8Array(this.instance.exports.memory.buffer, sramBufferPtr, sram.length);
+		sramBuffer.set(sram);
+		this.instance.exports.load_sram_from_buffer(this.jitRuntimePtr);
+	}
+	
+	dumpSram = (rom) => {
+		const sramPtr = this.instance.exports.get_sram_ptr(this.jitRuntimePtr);
+		const sramLen = this.instance.exports.get_sram_len(this.jitRuntimePtr);
+		
+		// Need to make a copy because of this garbage: https://bugs.webkit.org/show_bug.cgi?id=302733.
+		// If we don't make a copy, OPFS will save the entirety of the Wasm instance's memory.
+		return new Uint8Array(this.instance.exports.memory.buffer.slice(sramPtr, sramPtr + sramLen));
+	}
+	
 	updateLcd = (lcdImage) => {
 		const lcdBufferPtr = this.instance.exports.get_lcd_buffer(this.jitRuntimePtr);
 		const greyscalePixels = new Uint8Array(this.instance.exports.memory.buffer, lcdBufferPtr, LCD_WIDTH * LCD_HEIGHT);

@@ -23,6 +23,7 @@ pub struct JitRuntime {
     block_cache: BlockCache,
     currently_executing: CacheAddress,
     rom_buffer: Vec<u8>,
+    sram_buffer: Vec<u8>,
     next_vblank: u64,
     #[cfg(feature = "log-uncompiled")]
     uncompiled: HashMap<u16, u32>,
@@ -106,6 +107,29 @@ impl JitRuntime {
     pub extern "C" fn load_rom_from_buffer(&mut self) {
         self.dmg_state.memory.load_rom(&self.rom_buffer);
         self.rom_ptr = self.dmg_state.memory.mbc.rom_base_ptr() as usize;
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn realloc_sram_buffer(&mut self, sram_length: usize) -> *mut u8 {
+        self.sram_buffer = vec![0; sram_length];
+        self.sram_buffer.as_mut_ptr()
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn load_sram_from_buffer(&mut self) {
+        self.dmg_state.memory.load_sram(&self.sram_buffer);
+    }
+
+    #[must_use]
+    #[unsafe(no_mangle)]
+    pub extern "C" fn get_sram_ptr(&self) -> *const u8 {
+        self.dmg_state.memory.dump_sram().as_ptr()
+    }
+
+    #[must_use]
+    #[unsafe(no_mangle)]
+    pub extern "C" fn get_sram_len(&self) -> usize {
+        self.dmg_state.memory.dump_sram().len()
     }
 
     #[unsafe(no_mangle)]

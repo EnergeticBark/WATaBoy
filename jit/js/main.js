@@ -2,6 +2,33 @@ import { buttonsHeld } from "./keyboard.js";
 import { frametimeCounter } from "./frametime.js"
 import { Runtime, LCD_WIDTH, LCD_HEIGHT } from "./runtime.js"
 
+let savName;
+
+const opfsRoot = await navigator.storage.getDirectory();
+for await (const [key, value] of opfsRoot.entries()) {
+  console.log({ key, value });
+}
+
+setInterval(async () => {
+	if (savName != undefined) {
+		let sramBuffer = runtime.dumpSram();
+		if (sramBuffer.length === 0) {
+			return;
+		}
+		
+		console.log("Saving: " + savName);
+		
+		const fileHandle = await opfsRoot.getFileHandle(savName, {
+			create: true,
+		});
+		
+		const writable = await fileHandle.createWritable();
+		
+		await writable.write(sramBuffer);
+		await writable.close();
+	}
+}, 1000);
+
 const speedInput = document.querySelector("#speed");
 let speedMultiplier = speedInput.value;
 speedInput.addEventListener("input", () => {
@@ -65,9 +92,25 @@ loadRomButton.addEventListener("click", async () => {
 	
 	// Read bytes from the selected file.
 	const file = romInput.files[0];
+	savName = file.name.replace(/\.[^\.]*$/, ".sav");
 	const rom = await file.bytes();
 	
 	runtime.loadRom(rom);
+	
+	// Try reading save from OPFS.
+	try {
+		const sramFileHandle = await opfsRoot.getFileHandle(savName);
+		const sramFile = await sramFileHandle.getFile();
+		
+		const sram = await sramFile.bytes();
+		runtime.loadSram(sram);
+	} catch (error) {
+		if (error.name == "NotFoundError") {
+			console.log("No save file found for "+ savName);
+		} else {
+			throw error;
+		}
+	}
 	
 	// Start the render loop.
 	nextFrame = document.timeline.currentTime;
