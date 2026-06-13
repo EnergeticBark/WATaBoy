@@ -5,7 +5,8 @@ import { Runtime } from "../runtime.js";
 // The first param is the rom name, the second param is the line in the tile map where "Passed" will appear. 
 const roms = [
 	"basic.gb",
-	"reg_read.gb"
+	"reg_read.gb",
+	"sources-GS.gb"
 ];
 
 test.each(roms)("%p", async (romName) => {
