@@ -13,3 +13,9 @@ fn test_reg_read() {
     let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/oam/reg_read.gb"));
     assert_eq!(bcdehl, FIBONACCI);
 }
+
+#[test]
+fn test_sources_gs() {
+    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/oam/sources-GS.gb"));
+    assert_eq!(bcdehl, FIBONACCI);
+}

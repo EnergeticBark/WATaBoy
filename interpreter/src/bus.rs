@@ -94,6 +94,13 @@ impl AddressBus {
                     .catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.buffer[index as usize]
             }
+
+            // Echo RAM
+            // See: https://gbdev.io/pandocs/Memory_Map.html#echo-ram
+            0xE000..0xFE00 => {
+                let lower_13 = index & 0b0001_1111_1111_1111;
+                self.buffer[0xC000 + lower_13 as usize]
+            }
             _ => self.buffer[index as usize],
         }
     }
@@ -250,12 +257,13 @@ impl AddressBus {
         // Actually write the value to this address before starting the OAM DMA transfer.
         self.buffer[0xFF46] = value;
 
+        let upper_byte = if value > 0xE0 { value - 0x20 } else { value };
+
         // TODO: Accurately make this take a few cycles.
         info!(target: "oam_events", "DMA Transfer from 0x{value:X}00!");
         let oam_size = 0xA0;
-        let src_start = u16::from_le_bytes([0x00, value]);
+        let src_start = u16::from_le_bytes([0x00, upper_byte]);
 
-        // TODO: fix OAM transfer from mirror ram.
         // TODO: use copy_from_slice from the correct region of memory, only use read_byte as a fallback.
         for i in 0..oam_size {
             self.ppu.oam[i as usize] = self.read_byte(src_start + i);
