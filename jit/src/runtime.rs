@@ -135,7 +135,15 @@ impl JitRuntime {
     #[unsafe(no_mangle)]
     pub extern "C" fn step_vblank(&mut self) {
         self.next_vblank += 70224;
-        while self.dmg_state.memory.clock < self.next_vblank {
+        while self.dmg_state.memory.ppu.line_number >= 144
+            && self.dmg_state.memory.clock < self.next_vblank
+        {
+            self.execute();
+        }
+
+        while self.dmg_state.memory.ppu.line_number < 144
+            && self.dmg_state.memory.clock < self.next_vblank
+        {
             self.execute();
         }
     }

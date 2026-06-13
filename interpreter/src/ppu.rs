@@ -71,7 +71,7 @@ enum PpuMode {
 
 pub struct Ppu {
     dots_this_line: u16,
-    line_number: u8,
+    pub line_number: u8,
     mode: PpuMode,
     x: u8,
     pixels_to_drop: u8,
