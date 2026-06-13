@@ -241,10 +241,7 @@ impl Ppu {
     // Lots of overlap with how the background tiles are render, should probably refactor some of this into a separate function.
 
     fn coarse_window(&mut self, line_buffer: &mut [Pixel; SCREEN_WIDTH as usize + 32]) {
-        if !self.registers.lcdc.window_enabled()
-            || self.line_number < self.registers.wy
-            || self.registers.wx > 166
-        {
+        if !self.drawing_window_line() {
             return;
         }
 
@@ -867,10 +864,17 @@ impl Ppu {
         matches!(self.mode, PpuMode::Disabled)
     }
 
-    fn drawing_window(&self) -> bool {
+    fn drawing_window_line(&self) -> bool {
+        // Window is enabled.
         self.registers.lcdc.window_enabled()
-            && self.x == self.registers.wx.saturating_sub(7)
+			// Window isn't off screen.
+            && self.registers.wx <= 166
+			// Window appears on this line.
             && self.line_number >= self.registers.wy
+    }
+
+    fn drawing_window(&self) -> bool {
+        self.drawing_window_line() && self.x == self.registers.wx.saturating_sub(7)
     }
 
     fn pop_next_obj(&mut self) -> Option<Obj> {
