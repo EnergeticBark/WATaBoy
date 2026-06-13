@@ -4,7 +4,7 @@ import { Runtime } from "../runtime.js";
 // Parameters for the parameterised test.
 // The first param is the rom name, the second param is the line in the tile map where "Passed" will appear. 
 const roms = [
-	//"basic.gb",
+	"basic.gb",
 	"reg_read.gb"
 ];
 
