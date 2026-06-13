@@ -131,20 +131,7 @@ impl AddressBus {
             }
 
             // Initiate OAM transfer.
-            0xFF46 => {
-                // Actually write the value to this address before starting the OAM DMA transfer.
-                self.buffer[index as usize] = value;
-
-                // TODO: Accurately make this take a few cycles.
-                info!(target: "oam_events", "DMA Transfer from 0x{value:X}00!");
-                let oam_size = 0xA0;
-                let src_start = u16::from_le_bytes([0x00, value]) as usize;
-                let src_end = src_start + oam_size;
-
-                self.ppu
-                    .oam
-                    .copy_from_slice(&self.buffer[src_start..src_end]);
-            }
+            0xFF46 => self.oam_dma(value),
 
             // Certain I/O addresses only use certain bits. Bits which go unused are pulled high.
             // See Appendix B: https://gekkio.fi/files/gb-docs/gbctr.pdf
@@ -257,6 +244,22 @@ impl AddressBus {
         let next_ppu_interrupt =
             u64::min(self.ppu.next_vblank_interrupt, self.ppu.next_lcd_interrupt);
         self.next_interrupt = u64::min(self.timers.next_interrupt, next_ppu_interrupt);
+    }
+
+    fn oam_dma(&mut self, value: u8) {
+        // Actually write the value to this address before starting the OAM DMA transfer.
+        self.buffer[0xFF46] = value;
+
+        // TODO: Accurately make this take a few cycles.
+        info!(target: "oam_events", "DMA Transfer from 0x{value:X}00!");
+        let oam_size = 0xA0;
+        let src_start = u16::from_le_bytes([0x00, value]);
+
+        // TODO: fix OAM transfer from mirror ram.
+        // TODO: use copy_from_slice from the correct region of memory, only use read_byte as a fallback.
+        for i in 0..oam_size {
+            self.ppu.oam[i as usize] = self.read_byte(src_start + i);
+        }
     }
 
     pub fn half_increment_timers(&mut self) {
