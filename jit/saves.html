@@ -62,8 +62,26 @@
 			await opfsRoot.removeEntry(saveName);
 			tr.remove();
 		});
+		
+		const savInput = document.querySelector("#sav");
+		const loadSavButton = document.querySelector("#load-sav");
+		loadSavButton.addEventListener("click", async () => {
+			const file = savInput.files[0];
+			const saveFileHandle = await opfsRoot.getFileHandle(file.name, {
+				create: true,
+			});
+			const writable = await saveFileHandle.createWritable();
+			
+			await writable.write(file);
+			await writable.close();
+			window.location.reload();
+		});
 	</script>
 	<style>
+		fieldset {
+			max-width: fit-content;
+		}
+		
 		th {
 		    text-align: left;
 		}
@@ -77,5 +95,11 @@
 
 	  </tbody>
 	</table>
+	
+	<fieldset>
+		<legend>Load a .sav file</legend>
+		<label>SAV: <input type="file" id="sav"></label>
+		<input type="button" id="load-sav" value="Load SAV">
+	</fieldset>
 </body>
 </html>
