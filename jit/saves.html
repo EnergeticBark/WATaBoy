@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<script type="module">
+		const tableBody = document.querySelector("tbody");
+		
+		const SaveFile = class {
+			constructor(name) {
+				this.name = name;
+			}
+			
+			render = async () => {
+				const name = document.createElement("th");
+				name.scope = "row";
+				name.textContent = this.name;
+			
+				const saveFileHandle = await opfsRoot.getFileHandle(this.name);
+				const saveFile = await saveFileHandle.getFile();
+				const downloadUrl = URL.createObjectURL(saveFile);
+				const downloadLink = document.createElement("a");
+				downloadLink.href = downloadUrl;
+				downloadLink.download = this.name;
+				downloadLink.textContent = "Download";
+				const downloadTd = document.createElement("td");
+				downloadTd.appendChild(downloadLink);
+				
+				const deleteButton = document.createElement("button");
+				deleteButton.classList = "delete";
+				deleteButton.textContent = "Delete";
+				const deleteTd = document.createElement("td");
+				deleteTd.appendChild(deleteButton);
+				
+				const tableRow = document.createElement("tr");
+				tableRow.append(name, downloadTd, deleteTd);
+				tableRow.dataset.saveName = this.name;
+				return tableRow;
+			}
+		}
+		
+		const opfsRoot = await navigator.storage.getDirectory();
+		const fragment = new DocumentFragment();
+		for await (const saveName of opfsRoot.keys()) {
+			const sav = new SaveFile(saveName);
+			const saveRow = await sav.render();
+			fragment.appendChild(saveRow);
+		}
+		tableBody.appendChild(fragment);
+		
+		tableBody.addEventListener("click", async (event) => {
+			const target = event.target;
+			if (!target.classList.contains("delete")) {
+				return;
+			}
+			
+			// Find the closest table row inclusive ancestor.
+			const tr = target.closest("tr");
+			const saveName = tr.dataset.saveName;
+			
+			console.log("Deleting " + saveName);
+			await opfsRoot.removeEntry(saveName);
+			tr.remove();
+		});
+	</script>
+	<style>
+		th {
+		    text-align: left;
+		}
+	</style>
+	<title>Save Manager - WATaBoy</title>
+</head>
+<body>
+	<h1>WATaBoy Save Manager</h1>
+	<table>
+	  <tbody>
+
+	  </tbody>
+	</table>
+</body>
+</html>
