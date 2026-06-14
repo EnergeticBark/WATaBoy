@@ -52,6 +52,15 @@ impl RtcRegs {
     }
 }
 
+// TODO: Call out to JS for the current time instead of stubbing it out with UNIX_EPOCH.
+/// Safe version of `SystemTime::now()` since it panics on Wasm targets.
+fn safe_now() -> SystemTime {
+    cfg_select! {
+        target_arch = "wasm32" => SystemTime::UNIX_EPOCH,
+        _ => SystemTime::now()
+    }
+}
+
 struct Rtc {
     duration: Duration,
     last_ticked: SystemTime,
@@ -62,7 +71,7 @@ impl Default for Rtc {
     fn default() -> Self {
         Self {
             duration: Duration::default(),
-            last_ticked: SystemTime::now(),
+            last_ticked: safe_now(),
             regs: RtcRegs::default(),
         }
     }
@@ -70,7 +79,7 @@ impl Default for Rtc {
 
 impl Rtc {
     fn update(&mut self) {
-        let new_time = SystemTime::now();
+        let new_time = safe_now();
         let delta = new_time
             .duration_since(self.last_ticked)
             .expect("Clock went backwards...");
@@ -104,7 +113,7 @@ impl Rtc {
             0x0C => {
                 let new_days_hi = DaysHi::from_bits(value);
                 if self.regs.days_hi.halt() && !new_days_hi.halt() {
-                    self.last_ticked = SystemTime::now();
+                    self.last_ticked = safe_now();
                 }
 
                 self.regs.days_hi = new_days_hi;
