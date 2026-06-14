@@ -438,7 +438,7 @@ impl Ppu {
         ]);
 
         // Get the palette's colours into their correct greyscale values.
-        let greyscale_colors = Simd::splat(255) - palette_colors * Simd::splat(64);
+        let greyscale_colors = Simd::splat(255) - palette_colors * Simd::splat(85);
 
         let (lcd_chunks, _) = scanline.as_chunks_mut();
 
@@ -646,7 +646,7 @@ impl Ppu {
                                 let color = palette.map_to_color(pixel_to_render.color_index());
 
                                 // Get the colors in their correct greyscale values.
-                                self.lcd_buffer[lcd_pixel_index] = 255 - color.into_bits() * 64;
+                                self.lcd_buffer[lcd_pixel_index] = 255 - color.into_bits() * 85;
 
                                 self.x += 1;
                             }
