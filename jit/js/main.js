@@ -77,6 +77,12 @@ const renderLoop = (timestamp) => {
 	
 	requestAnimationFrame(renderLoop);
 };
+// Don't try to catch up if the user was tabbed out, resume at normal speed.
+document.addEventListener("visibilitychange", () => {
+	if (document.visibilityState === "visible") {
+		nextFrame = document.timeline.currentTime;
+	}
+});
 
 const romFieldset = document.querySelector("fieldset");
 const romInput = document.querySelector("#rom");
