@@ -19,6 +19,10 @@ pub const OAM_START: u16 = 0xFE00;
 pub const OAM_END: u16 = 0xFEA0;
 pub const OAM_SIZE: u16 = OAM_END - OAM_START;
 
+pub const DMA: u16 = 0xFF46;
+
+pub const HRAM_START: u16 = 0xFF80;
+
 pub const IE: u16 = 0xFFFF;
 
 // Screen
