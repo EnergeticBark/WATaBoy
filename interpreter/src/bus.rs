@@ -268,6 +268,9 @@ impl AddressBus {
     }
 
     fn oam_dma(&mut self, value: u8) {
+        // Reset the DMA end time so we don't get into a bus conflict with an existing DMA transfer.
+        self.dma_end = 0;
+
         // Actually write the value to this address before starting the OAM DMA transfer.
         self.buffer[DMA as usize] = value;
 
