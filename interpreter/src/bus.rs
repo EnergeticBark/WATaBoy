@@ -15,7 +15,9 @@ use hw_constants::io_regs::{
     BANK, BGP, DIV, IF, JOYP, LCDC, LY, LYC, NR10, NR30, NR32, NR41, NR44, NR52, OBP0, OBP1, SC,
     SCX, SCY, STAT, TAC, TIMA, TMA, WX, WY,
 };
-use hw_constants::{IE, MEM_MAP_SIZE, OAM_END, OAM_START, PostBoot, VRAM_END, VRAM_START};
+use hw_constants::{
+    DMA, HRAM_START, IE, MEM_MAP_SIZE, OAM_END, OAM_START, PostBoot, VRAM_END, VRAM_START,
+};
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize, with::Skip};
 
@@ -31,6 +33,8 @@ pub struct AddressBus {
     pub buttons_held: ButtonsHeld,
     pub clock: u64,
     pub next_interrupt: u64,
+    // The exact cycle this OAM DMA transfer is scheduled to end. If it's less than `clock` it's already over.
+    pub dma_end: u64,
     #[cfg(feature = "waking-counters")]
     pub waking_reads: WakingCounter,
     #[cfg(feature = "waking-counters")]
@@ -48,6 +52,10 @@ impl AddressBus {
 
     pub fn dump_sram(&self) -> &[u8] {
         self.mbc.dump_sram()
+    }
+
+    fn dma_active(&self) -> bool {
+        self.clock < self.dma_end
     }
 
     fn read_special(&mut self, index: u16) -> u8 {
@@ -109,6 +117,12 @@ impl AddressBus {
     // Maybe see if there's a better way to do this? Keywords: "fast-mem" maybe?
     #[inline(never)]
     pub fn read_byte(&mut self, index: u16) -> u8 {
+        // HRAM and DMA are always readable regardless of OAM DMA state.
+        if self.dma_active() && index < HRAM_START && index != DMA {
+            // DMA bus conflict!!!
+            return 0xFF;
+        }
+
         match index {
             // Delegate reads to the MBC.
             ..VRAM_START | 0xA000..0xC000 => self.mbc.read_byte(index),
@@ -138,7 +152,7 @@ impl AddressBus {
             }
 
             // Initiate OAM transfer.
-            0xFF46 => self.oam_dma(value),
+            DMA => self.oam_dma(value),
 
             // Certain I/O addresses only use certain bits. Bits which go unused are pulled high.
             // See Appendix B: https://gekkio.fi/files/gb-docs/gbctr.pdf
@@ -255,11 +269,10 @@ impl AddressBus {
 
     fn oam_dma(&mut self, value: u8) {
         // Actually write the value to this address before starting the OAM DMA transfer.
-        self.buffer[0xFF46] = value;
+        self.buffer[DMA as usize] = value;
 
         let upper_byte = if value > 0xE0 { value - 0x20 } else { value };
 
-        // TODO: Accurately make this take a few cycles.
         info!(target: "oam_events", "DMA Transfer from 0x{value:X}00!");
         let oam_size = 0xA0;
         let src_start = u16::from_le_bytes([0x00, upper_byte]);
@@ -268,6 +281,10 @@ impl AddressBus {
         for i in 0..oam_size {
             self.ppu.oam[i as usize] = self.read_byte(src_start + i);
         }
+
+        // 1 M-cycle for this write + 1 delay + 160 for each byte of OAM.
+        // See comments: https://github.com/Gekkio/mooneye-test-suite/blob/443f6e1f2a8d83ad9da051cbb960311c5aaaea66/acceptance/oam_dma_start.s
+        self.dma_end = self.clock + (2 + 160) * 4;
     }
 
     pub fn half_increment_timers(&mut self) {
@@ -347,6 +364,7 @@ impl Default for AddressBus {
             buttons_held: ButtonsHeld::default(),
             clock: 0,
             next_interrupt: 0,
+            dma_end: 0,
             #[cfg(feature = "waking-counters")]
             waking_reads: WakingCounter::default(),
             #[cfg(feature = "waking-counters")]
