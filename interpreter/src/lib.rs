@@ -7,5 +7,6 @@ pub mod ppu;
 
 pub mod addressable;
 mod bus;
+mod dma;
 mod mbc;
 pub mod timers;

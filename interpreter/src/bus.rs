@@ -6,6 +6,7 @@ use std::hint::cold_path;
 
 use crate::addressable::Addressable;
 use crate::cpu::InterruptBits;
+use crate::dma::{Dma, DmaState};
 use crate::joypad::{ButtonsHeld, Joyp};
 use crate::mbc::MbcDispatcher;
 use crate::ppu::Ppu;
@@ -16,7 +17,8 @@ use hw_constants::io_regs::{
     SCX, SCY, STAT, TAC, TIMA, TMA, WX, WY,
 };
 use hw_constants::{
-    DMA, HRAM_START, IE, MEM_MAP_SIZE, OAM_END, OAM_START, PostBoot, VRAM_END, VRAM_START,
+    DMA, ECHO_END, ECHO_START, HRAM_START, IE, MEM_MAP_SIZE, OAM_END, OAM_START, PostBoot,
+    VRAM_END, VRAM_START,
 };
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize, with::Skip};
@@ -34,11 +36,18 @@ pub struct AddressBus {
     pub clock: u64,
     pub next_interrupt: u64,
     // The exact cycle this OAM DMA transfer is scheduled to end. If it's less than `clock` it's already over.
-    pub dma_end: u64,
+    #[rkyv(with = Skip)]
+    pub dma: Dma,
     #[cfg(feature = "waking-counters")]
     pub waking_reads: WakingCounter,
     #[cfg(feature = "waking-counters")]
     pub waking_writes: WakingCounter,
+}
+
+/// See: <https://gbdev.io/pandocs/Memory_Map.html#echo-ram>
+fn echo_to_wram(index: u16) -> u16 {
+    let lower_13 = index & 0b0001_1111_1111_1111;
+    0xC000 + lower_13
 }
 
 impl AddressBus {
@@ -52,10 +61,6 @@ impl AddressBus {
 
     pub fn dump_sram(&self) -> &[u8] {
         self.mbc.dump_sram()
-    }
-
-    fn dma_active(&self) -> bool {
-        self.clock < self.dma_end
     }
 
     fn read_special(&mut self, index: u16) -> u8 {
@@ -103,11 +108,9 @@ impl AddressBus {
                 self.buffer[index as usize]
             }
 
-            // Echo RAM
-            // See: https://gbdev.io/pandocs/Memory_Map.html#echo-ram
-            0xE000..0xFE00 => {
-                let lower_13 = index & 0b0001_1111_1111_1111;
-                self.buffer[0xC000 + lower_13 as usize]
+            ECHO_START..ECHO_END => {
+                let wram_index = echo_to_wram(index) as usize;
+                self.buffer[wram_index]
             }
             _ => self.buffer[index as usize],
         }
@@ -118,7 +121,7 @@ impl AddressBus {
     #[inline(never)]
     pub fn read_byte(&mut self, index: u16) -> u8 {
         // HRAM and DMA are always readable regardless of OAM DMA state.
-        if self.dma_active() && index < HRAM_START && index != DMA {
+        if self.dma.is_active() && index < HRAM_START && index != DMA {
             // DMA bus conflict!!!
             return 0xFF;
         }
@@ -135,6 +138,12 @@ impl AddressBus {
     }
 
     pub fn write_byte(&mut self, index: u16, value: u8) {
+        // HRAM and DMA are always readable regardless of OAM DMA state.
+        if self.dma.is_active() && index < HRAM_START && index != DMA {
+            // DMA bus conflict!!!
+            return;
+        }
+
         match index {
             // Delegate write in the ROM range and the SRAM range to the MBC.
             0x0000..0x8000 | 0xA000..0xC000 | BANK => {
@@ -151,8 +160,17 @@ impl AddressBus {
                 self.ppu_est_next_intr();
             }
 
+            ECHO_START..ECHO_END => {
+                let wram_index = echo_to_wram(index) as usize;
+                self.buffer[wram_index] = value;
+            }
+
             // Initiate OAM transfer.
-            DMA => self.oam_dma(value),
+            DMA => {
+                // Actually write the value to this address before starting the OAM DMA transfer.
+                self.buffer[DMA as usize] = value;
+                self.dma.start();
+            }
 
             // Certain I/O addresses only use certain bits. Bits which go unused are pulled high.
             // See Appendix B: https://gekkio.fi/files/gb-docs/gbctr.pdf
@@ -267,13 +285,16 @@ impl AddressBus {
         self.next_interrupt = u64::min(self.timers.next_interrupt, next_ppu_interrupt);
     }
 
-    fn oam_dma(&mut self, value: u8) {
-        // Reset the DMA end time so we don't get into a bus conflict with an existing DMA transfer.
-        self.dma_end = 0;
+    fn oam_dma(&mut self) {
+        // TODO: Maybe actually only move one byte per M-Cycle if it affects the PPU.
+        // TODO: If so, also move this logic into the PPU.
 
-        // Actually write the value to this address before starting the OAM DMA transfer.
-        self.buffer[DMA as usize] = value;
+        let state_backup = self.dma.state;
 
+        // Reset DMA state so we don't get into a bus conflict with an existing DMA transfer.
+        self.dma.state = DmaState::Idle;
+
+        let value = self.buffer[DMA as usize];
         let upper_byte = if value > 0xE0 { value - 0x20 } else { value };
 
         info!(target: "oam_events", "DMA Transfer from 0x{value:X}00!");
@@ -285,13 +306,17 @@ impl AddressBus {
             self.ppu.oam[i as usize] = self.read_byte(src_start + i);
         }
 
-        // 1 M-cycle for this write + 1 delay + 160 for each byte of OAM.
-        // See comments: https://github.com/Gekkio/mooneye-test-suite/blob/443f6e1f2a8d83ad9da051cbb960311c5aaaea66/acceptance/oam_dma_start.s
-        self.dma_end = self.clock + (2 + 160) * 4;
+        // Restore DMA state.
+        self.dma.state = state_backup;
     }
 
     pub fn half_increment_timers(&mut self) {
         self.clock += 2;
+
+        if self.dma.catch_up(self.clock) {
+            self.oam_dma();
+        }
+
         if self.next_interrupt <= self.clock {
             if self
                 .ppu
@@ -313,6 +338,11 @@ impl AddressBus {
 
     pub fn increment_timers(&mut self, m_cycles: u16) {
         self.clock += u64::from(m_cycles) * 4;
+
+        if self.dma.catch_up(self.clock) {
+            self.oam_dma();
+        }
+
         if self.next_interrupt <= self.clock {
             if self
                 .ppu
@@ -367,7 +397,7 @@ impl Default for AddressBus {
             buttons_held: ButtonsHeld::default(),
             clock: 0,
             next_interrupt: 0,
-            dma_end: 0,
+            dma: Dma::default(),
             #[cfg(feature = "waking-counters")]
             waking_reads: WakingCounter::default(),
             #[cfg(feature = "waking-counters")]
