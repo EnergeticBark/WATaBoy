@@ -35,6 +35,12 @@ fn test_oam_dma_restart() {
 }
 
 #[test]
+fn test_oam_dma_start() {
+    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/oam_dma_start.gb"));
+    assert_eq!(bcdehl, FIBONACCI);
+}
+
+#[test]
 fn test_oam_dma_timing() {
     let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/oam_dma_timing.gb"));
     assert_eq!(bcdehl, FIBONACCI);
