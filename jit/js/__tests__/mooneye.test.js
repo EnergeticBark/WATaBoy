@@ -4,6 +4,7 @@ import { Runtime } from "../runtime.js";
 // Parameters for the parameterised test.
 // The first param is the rom name, the second param is the line in the tile map where "Passed" will appear. 
 const roms = [
+	"add_sp_e_timing.gb",
 	"div_timing.gb",
 	// TODO: Implement boot ROM skipping so I can pass this without distributing the original mgb boot ROM.
 	//"boot_div-dmgABCmgb.gb",

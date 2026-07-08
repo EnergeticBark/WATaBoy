@@ -2,6 +2,12 @@ pub mod common;
 
 use common::mooneye::{FIBONACCI, run_mooneye_test};
 
+#[test]
+fn test_add_sp_e_timing() {
+    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/add_sp_e_timing.gb"));
+    assert_eq!(bcdehl, FIBONACCI);
+}
+
 // TODO: Implement boot ROM skipping so I can pass this without distributing the original mgb boot ROM.
 /*#[test]
 fn test_boot_div_dmg_abc_mgb() {
