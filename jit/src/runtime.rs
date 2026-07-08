@@ -289,6 +289,7 @@ impl JitRuntime {
     }
 
     // Check if we can execute compiled_block up to the first checkpoint without being interrupted.
+    // TODO: Should probably ensure that an OAM DMA isn't active too.
     fn wont_be_interrupted(&self, cache_address: CacheAddress) -> bool {
         let compiled_block = self.block_cache[cache_address].unwrap_compiled_block();
 
