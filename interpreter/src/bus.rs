@@ -6,7 +6,7 @@ use std::hint::cold_path;
 
 use crate::addressable::Addressable;
 use crate::cpu::InterruptBits;
-use crate::dma::{Dma, DmaState};
+use crate::dma::Dma;
 use crate::joypad::{ButtonsHeld, Joyp};
 use crate::mbc::MbcDispatcher;
 use crate::ppu::Ppu;
@@ -17,8 +17,7 @@ use hw_constants::io_regs::{
     SCX, SCY, STAT, TAC, TIMA, TMA, WX, WY,
 };
 use hw_constants::{
-    DMA, ECHO_END, ECHO_START, HRAM_START, IE, MEM_MAP_SIZE, OAM_END, OAM_START, PostBoot,
-    VRAM_END, VRAM_START,
+    DMA, ECHO_END, ECHO_START, IE, MEM_MAP_SIZE, OAM_END, OAM_START, PostBoot, VRAM_END, VRAM_START,
 };
 use log::info;
 use rkyv::{Archive, Deserialize, Serialize, with::Skip};
@@ -65,18 +64,20 @@ impl AddressBus {
     fn read_special(&mut self, index: u16) -> u8 {
         match index {
             // Delegate reads to the PPU.
-            VRAM_START..VRAM_END
-            | OAM_START..OAM_END
-            | LCDC
-            | STAT
-            | SCY
-            | SCX
-            | LYC
-            | BGP
-            | OBP0
-            | OBP1
-            | WY
-            | WX => {
+            VRAM_START..VRAM_END | LCDC | STAT | SCY | SCX | LYC | BGP | OBP0 | OBP1 | WY | WX => {
+                #[cfg(feature = "waking-counters")]
+                self.waking_reads.log_access(index);
+
+                self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
+                self.ppu.read_byte(index, self.clock)
+            }
+
+            OAM_START..OAM_END => {
+                // Block OAM reads during DMA.
+                if self.dma.is_running() {
+                    return 0xFF;
+                }
+
                 #[cfg(feature = "waking-counters")]
                 self.waking_reads.log_access(index);
 
@@ -119,12 +120,6 @@ impl AddressBus {
     // Maybe see if there's a better way to do this? Keywords: "fast-mem" maybe?
     #[inline(never)]
     pub fn read_byte(&mut self, index: u16) -> u8 {
-        // HRAM and DMA are always readable regardless of OAM DMA state.
-        if self.dma.is_active() && index < HRAM_START && index != DMA {
-            // DMA bus conflict!!!
-            return 0xFF;
-        }
-
         match index {
             // Delegate reads to the MBC.
             ..VRAM_START | 0xA000..0xC000 => self.mbc.read_byte(index),
@@ -137,20 +132,29 @@ impl AddressBus {
     }
 
     pub fn write_byte(&mut self, index: u16, value: u8) {
-        // HRAM and DMA are always writable regardless of OAM DMA state.
-        if self.dma.is_active() && index < HRAM_START && index != DMA {
-            // DMA bus conflict!!!
-            return;
-        }
-
         match index {
             // Delegate write in the ROM range and the SRAM range to the MBC.
             0x0000..0x8000 | 0xA000..0xC000 | BANK => {
                 self.mbc.write_byte(index, value);
             }
 
-            // Delegate writes to VRAM and OAM to the PPU.
-            VRAM_START..VRAM_END | OAM_START..OAM_END => {
+            // Delegate writes to VRAM to the PPU.
+            VRAM_START..VRAM_END => {
+                #[cfg(feature = "waking-counters")]
+                self.waking_writes.log_access(index);
+
+                self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
+                self.ppu.write_byte(index, value, self.clock);
+                self.ppu_est_next_intr();
+            }
+
+            // Delegate writes to VRAM to OAM the PPU.
+            OAM_START..OAM_END => {
+                // Block OAM writes during DMA.
+                if self.dma.is_running() {
+                    return;
+                }
+
                 #[cfg(feature = "waking-counters")]
                 self.waking_writes.log_access(index);
 
@@ -288,10 +292,8 @@ impl AddressBus {
         // TODO: Maybe actually only move one byte per M-Cycle if it affects the PPU.
         // TODO: If so, also move this logic into the PPU.
 
-        let state_backup = self.dma.state;
-
-        // Reset DMA state so we don't get into a bus conflict with an existing DMA transfer.
-        self.dma.state = DmaState::Idle;
+        // Disable DMA running state so we don't get into a bus conflict with an existing DMA transfer.
+        self.dma.running = false;
 
         let value = self.buffer[DMA as usize];
         let upper_byte = if value > 0xE0 { value - 0x20 } else { value };
@@ -305,8 +307,8 @@ impl AddressBus {
             self.ppu.oam[i as usize] = self.read_byte(src_start + i);
         }
 
-        // Restore DMA state.
-        self.dma.state = state_backup;
+        // Restore DMA running state.
+        self.dma.running = true;
     }
 
     pub fn half_increment_timers(&mut self) {

@@ -1,7 +1,7 @@
 // 1 M-cycle for the write + 1 delay + 160 for each byte of OAM.
 // See comments: https://github.com/Gekkio/mooneye-test-suite/blob/443f6e1f2a8d83ad9da051cbb960311c5aaaea66/acceptance/oam_dma_start.s
 #[derive(Clone, Copy, Default)]
-pub enum DmaState {
+enum DmaState {
     #[default]
     Idle,
     Initiated,
@@ -13,7 +13,8 @@ pub enum DmaState {
 #[derive(Default)]
 pub struct Dma {
     pub clock: u64,
-    pub state: DmaState,
+    pub running: bool,
+    state: DmaState,
 }
 
 impl Dma {
@@ -21,8 +22,8 @@ impl Dma {
         self.state = DmaState::Initiated;
     }
 
-    pub fn is_active(&self) -> bool {
-        matches!(self.state, DmaState::Active(_))
+    pub fn is_running(&self) -> bool {
+        self.running
     }
 
     // Returns true on Pending -> Active transition.
@@ -31,9 +32,13 @@ impl Dma {
             DmaState::Initiated => self.state = DmaState::Pending,
             DmaState::Pending => {
                 self.state = DmaState::Active(159);
+                self.running = true;
                 return true;
             }
-            DmaState::Active(0) => self.state = DmaState::Idle,
+            DmaState::Active(0) => {
+                self.state = DmaState::Idle;
+                self.running = false;
+            }
             DmaState::Active(remaining) => self.state = DmaState::Active(remaining - 1),
             DmaState::Idle => (),
         }
