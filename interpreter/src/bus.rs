@@ -35,7 +35,6 @@ pub struct AddressBus {
     pub buttons_held: ButtonsHeld,
     pub clock: u64,
     pub next_interrupt: u64,
-    // The exact cycle this OAM DMA transfer is scheduled to end. If it's less than `clock` it's already over.
     #[rkyv(with = Skip)]
     pub dma: Dma,
     #[cfg(feature = "waking-counters")]
@@ -138,7 +137,7 @@ impl AddressBus {
     }
 
     pub fn write_byte(&mut self, index: u16, value: u8) {
-        // HRAM and DMA are always readable regardless of OAM DMA state.
+        // HRAM and DMA are always writable regardless of OAM DMA state.
         if self.dma.is_active() && index < HRAM_START && index != DMA {
             // DMA bus conflict!!!
             return;
