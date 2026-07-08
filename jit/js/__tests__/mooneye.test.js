@@ -8,7 +8,10 @@ const roms = [
 	// TODO: Implement boot ROM skipping so I can pass this without distributing the original mgb boot ROM.
 	//"boot_div-dmgABCmgb.gb",
 	//"boot_hwio-dmgABCmgb.gb",
-	"boot_regs-mgb.gb"
+	"boot_regs-mgb.gb",
+	"oam_dma_restart.gb",
+	"oam_dma_start.gb",
+	"oam_dma_timing.gb"
 ];
 
 test.each(roms)("%p", async (romName) => {
