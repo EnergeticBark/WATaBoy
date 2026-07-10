@@ -2,50 +2,18 @@ pub mod common;
 
 use common::mooneye::{FIBONACCI, run_mooneye_test};
 
-#[test]
-fn test_rom_512kb() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/mbc5/rom_512kb.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
+#[macro_export]
+macro_rules! mooneye_mbc5_test {
+    ($i:ident, $r:expr) => {
+        mooneye_test_pathless!($i, concat!("roms/mooneye/mbc5/", $r));
+    };
 }
 
-#[test]
-fn test_rom_1mb() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/mbc5/rom_1Mb.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
-
-#[test]
-fn test_rom_2mb() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/mbc5/rom_2Mb.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
-
-#[test]
-fn test_rom_4mb() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/mbc5/rom_4Mb.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
-
-#[test]
-fn test_rom_8mb() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/mbc5/rom_8Mb.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
-
-#[test]
-fn test_rom_16mb() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/mbc5/rom_16Mb.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
-
-#[test]
-fn test_rom_32mb() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/mbc5/rom_32Mb.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
-
-#[test]
-fn test_rom_64mb() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/mbc5/rom_64Mb.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
+mooneye_mbc5_test!(rom_512kb, "rom_512kb.gb");
+mooneye_mbc5_test!(rom_1mb, "rom_1Mb.gb");
+mooneye_mbc5_test!(rom_2mb, "rom_2Mb.gb");
+mooneye_mbc5_test!(rom_4mb, "rom_4Mb.gb");
+mooneye_mbc5_test!(rom_8mb, "rom_8Mb.gb");
+mooneye_mbc5_test!(rom_16mb, "rom_16Mb.gb");
+mooneye_mbc5_test!(rom_32mb, "rom_32Mb.gb");
+mooneye_mbc5_test!(rom_64mb, "rom_64Mb.gb");

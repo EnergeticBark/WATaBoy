@@ -1,21 +1,14 @@
 pub mod common;
 
-use crate::common::mooneye::{FIBONACCI, run_mooneye_test};
+use common::mooneye::{FIBONACCI, run_mooneye_test};
 
-#[test]
-fn test_basic() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/oam/basic.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
+#[macro_export]
+macro_rules! mooneye_oam_test {
+    ($i:ident, $r:expr) => {
+        mooneye_test_pathless!($i, concat!("roms/mooneye/oam/", $r));
+    };
 }
 
-#[test]
-fn test_reg_read() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/oam/reg_read.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
-
-#[test]
-fn test_sources_gs() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/oam/sources-GS.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
+mooneye_oam_test!(basic, "basic.gb");
+mooneye_oam_test!(reg_read, "reg_read.gb");
+mooneye_oam_test!(sources_gs, "sources-GS.gb");
