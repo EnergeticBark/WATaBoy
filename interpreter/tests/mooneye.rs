@@ -2,76 +2,20 @@ pub mod common;
 
 use common::mooneye::{FIBONACCI, run_mooneye_test};
 
-#[test]
-fn test_add_sp_e_timing() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/add_sp_e_timing.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
+mooneye_test!(add_sp_e_timing, "roms/mooneye/add_sp_e_timing.gb");
 
 // TODO: Implement boot ROM skipping so I can pass this without distributing the original mgb boot ROM.
-/*#[test]
-fn test_boot_div_dmg_abc_mgb() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/boot_div-dmgABCmgb.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}*/
+//mooneye_test!(boot_div_dmg_abc_mgb, "roms/mooneye/boot_div-dmgABCmgb.gb");
 
 // TODO: Fix this test, but only if I can do it without implementing the APU.
-/*#[test]
-fn test_boot_hwio_dmg_abc_mgb() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/boot_hwio-dmgABCmgb.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}*/
+//mooneye_test!(boot_hwio_dmg_abc_mgb, "roms/mooneye/boot_hwio-dmgABCmgb.gb");
 
-#[test]
-fn test_boot_regs_mgb() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/boot_regs-mgb.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
-
-#[test]
-fn test_call_cc_timing() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/call_cc_timing.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
-
-#[test]
-fn test_call_cc_timing2() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/call_cc_timing2.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
-
-#[test]
-fn test_call_timing() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/call_timing.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
-
-#[test]
-fn test_call_timing2() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/call_timing2.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
-
-#[test]
-fn test_div_timing() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/div_timing.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
-
-#[test]
-fn test_oam_dma_restart() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/oam_dma_restart.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
-
-#[test]
-fn test_oam_dma_start() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/oam_dma_start.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
-
-#[test]
-fn test_oam_dma_timing() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/oam_dma_timing.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
+mooneye_test!(boot_regs_mgb, "roms/mooneye/boot_regs-mgb.gb");
+mooneye_test!(call_cc_timing, "roms/mooneye/call_cc_timing.gb");
+mooneye_test!(call_cc_timing2, "roms/mooneye/call_cc_timing2.gb");
+mooneye_test!(call_timing, "roms/mooneye/call_timing.gb");
+mooneye_test!(call_timing2, "roms/mooneye/call_timing2.gb");
+mooneye_test!(div_timing, "roms/mooneye/div_timing.gb");
+mooneye_test!(oam_dma_restart, "roms/mooneye/oam_dma_restart.gb");
+mooneye_test!(oam_dma_start, "roms/mooneye/oam_dma_start.gb");
+mooneye_test!(oam_dma_timing, "roms/mooneye/oam_dma_timing.gb");

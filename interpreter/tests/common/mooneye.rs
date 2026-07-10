@@ -34,3 +34,14 @@ pub fn run_mooneye_test(rom: &[u8]) -> [u8; 6] {
 
     read_bcdehl(&cpu)
 }
+
+#[macro_export]
+macro_rules! mooneye_test {
+    ($i:ident, $p:expr) => {
+        #[test]
+        fn $i() {
+            let bcdehl = run_mooneye_test(include_bytes!($p));
+            assert_eq!(bcdehl, FIBONACCI);
+        }
+    };
+}
