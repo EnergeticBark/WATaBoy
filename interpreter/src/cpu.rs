@@ -193,13 +193,6 @@ impl Cpu {
                     2
                 }
             }
-            Opcode::CallCcNn { c } => {
-                if self.check_condition(c) {
-                    6
-                } else {
-                    3
-                }
-            }
             Opcode::RetCc { c } => {
                 if self.check_condition(c) {
                     5
@@ -864,19 +857,30 @@ impl Cpu {
                 self.registers.pc = self.registers.hl.into_bits();
             }
             Opcode::CallCcNn { c } => {
-                let destination = u16::from_le_bytes([
-                    self.memory.read_byte(pc + 1),
-                    self.memory.read_byte(pc + 2),
-                ]);
+                // TICKS MANUALLY
+                self.memory.increment_timers(1);
+
+                let low_dest = self.memory.read_byte(pc + 1);
+                self.memory.increment_timers(1);
+
+                let high_dest = self.memory.read_byte(pc + 2);
+                let destination = u16::from_le_bytes([low_dest, high_dest]);
+                self.memory.increment_timers(1);
 
                 self.registers.pc += 3;
 
                 if self.check_condition(c) {
+                    self.memory.increment_timers(1);
+
                     // Push the address of the next instruction to the stack.
-                    self.registers.sp -= 2;
                     let [low, high] = (pc + 3).to_le_bytes();
+                    self.registers.sp -= 1;
+                    self.memory.write_byte(self.registers.sp, high);
+                    self.memory.increment_timers(1);
+
+                    self.registers.sp -= 1;
                     self.memory.write_byte(self.registers.sp, low);
-                    self.memory.write_byte(self.registers.sp + 1, high);
+                    self.memory.increment_timers(1);
 
                     self.registers.pc = destination;
                 }
