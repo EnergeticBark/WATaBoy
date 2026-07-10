@@ -882,17 +882,28 @@ impl Cpu {
                 }
             }
             Opcode::CallNn => {
-                // Push the address of the next instruction to the stack.
-                self.registers.sp -= 2;
-                let [low, high] = (pc + 3).to_le_bytes();
-                self.memory.write_byte(self.registers.sp, low);
-                self.memory.write_byte(self.registers.sp + 1, high);
+                // TICKS MANUALLY
+                self.memory.increment_timers(1);
 
-                let destination = u16::from_le_bytes([
-                    self.memory.read_byte(pc + 1),
-                    self.memory.read_byte(pc + 2),
-                ]);
+                let low_dest = self.memory.read_byte(pc + 1);
+                self.memory.increment_timers(1);
+
+                let high_dest = self.memory.read_byte(pc + 2);
+                let destination = u16::from_le_bytes([low_dest, high_dest]);
+                self.memory.increment_timers(2);
+
+                // Push the address of the next instruction to the stack.
+                let [low, high] = (pc + 3).to_le_bytes();
+                self.registers.sp -= 1;
+                self.memory.write_byte(self.registers.sp, high);
+                self.memory.increment_timers(1);
+
+                self.registers.sp -= 1;
+                self.memory.write_byte(self.registers.sp, low);
+                self.memory.increment_timers(1);
+
                 self.registers.pc = destination;
+                // For timing see: https://github.com/Gekkio/mooneye-test-suite/blob/443f6e1f2a8d83ad9da051cbb960311c5aaaea66/acceptance/call_timing.s
             }
             Opcode::RstN { x } => {
                 // Push the address of the next instruction to the stack.

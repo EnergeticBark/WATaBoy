@@ -61,7 +61,7 @@ pub fn m_cycles(opcode: Opcode) -> u16 {
         Opcode::JpCcNn { .. } => 0, // CONTEXT DEPENDANT: 4 if condition is true, otherwise 3.
         Opcode::JrE => 3,
         Opcode::JrCcE { .. } => 0, // CONTEXT DEPENDANT: 3 if condition is true, otherwise 2.
-        Opcode::CallNn => 6,
+        Opcode::CallNn => 0,       // CONTEXT DEPENDANT: OAM might be blocked by DMA.
         Opcode::CallCcNn { .. } => 0, // CONTEXT DEPENDANT: 6 if condition is true, otherwise 3.
         Opcode::Ret => 4,
         Opcode::RetCc { .. } => 0, // CONTEXT DEPENDANT: 5 if condition is true, otherwise 2.

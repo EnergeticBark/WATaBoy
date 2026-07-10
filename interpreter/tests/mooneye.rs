@@ -29,6 +29,18 @@ fn test_boot_regs_mgb() {
 }
 
 #[test]
+fn test_call_timing() {
+    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/call_timing.gb"));
+    assert_eq!(bcdehl, FIBONACCI);
+}
+
+#[test]
+fn test_call_timing2() {
+    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/call_timing2.gb"));
+    assert_eq!(bcdehl, FIBONACCI);
+}
+
+#[test]
 fn test_div_timing() {
     let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/div_timing.gb"));
     assert_eq!(bcdehl, FIBONACCI);

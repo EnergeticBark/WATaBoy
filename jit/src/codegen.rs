@@ -310,7 +310,6 @@ impl WasmBlock {
                     | Opcode::PushRr { .. }
                     | Opcode::LdMemA { .. }
                     | Opcode::LdAMem { .. }
-                    | Opcode::CallNn
             ) {
                 ctx.increment_m_cycles(opcodes::cycles::m_cycles(opcode).saturating_sub(1));
             }
