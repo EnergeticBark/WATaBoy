@@ -2,26 +2,14 @@ pub mod common;
 
 use common::mooneye::{FIBONACCI, run_mooneye_test};
 
-#[test]
-fn test_bits_ramg() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/mbc2/bits_ramg.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
+#[macro_export]
+macro_rules! mooneye_mbc2_test {
+    ($i:ident, $r:expr) => {
+        mooneye_test_pathless!($i, concat!("roms/mooneye/mbc2/", $r));
+    };
 }
 
-#[test]
-fn test_bits_romb() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/mbc2/bits_romb.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
-
-#[test]
-fn test_bits_unused() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/mbc2/bits_unused.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
-
-#[test]
-fn test_ram() {
-    let bcdehl = run_mooneye_test(include_bytes!("roms/mooneye/mbc2/ram.gb"));
-    assert_eq!(bcdehl, FIBONACCI);
-}
+mooneye_mbc2_test!(bits_ramg, "bits_ramg.gb");
+mooneye_mbc2_test!(bits_romb, "bits_romb.gb");
+mooneye_mbc2_test!(bits_unused, "bits_unused.gb");
+mooneye_mbc2_test!(ram, "ram.gb");

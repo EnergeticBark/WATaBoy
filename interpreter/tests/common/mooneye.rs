@@ -36,7 +36,7 @@ pub fn run_mooneye_test(rom: &[u8]) -> [u8; 6] {
 }
 
 #[macro_export]
-macro_rules! mooneye_test {
+macro_rules! mooneye_test_pathless {
     ($i:ident, $p:expr) => {
         #[test]
         fn $i() {
