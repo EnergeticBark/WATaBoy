@@ -5,6 +5,8 @@ import { Runtime } from "../runtime.js";
 // The first param is the rom name, the second param is the line in the tile map where "Passed" will appear. 
 const roms = [
 	"add_sp_e_timing.gb",
+	"call_cc_timing.gb",
+	"call_cc_timing2.gb",
 	"call_timing.gb",
 	"call_timing2.gb",
 	"div_timing.gb",
