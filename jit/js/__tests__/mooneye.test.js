@@ -9,6 +9,7 @@ const roms = [
 	"call_cc_timing2.gb",
 	"call_timing.gb",
 	"call_timing2.gb",
+	"di_timing-GS.gb",
 	"div_timing.gb",
 	// TODO: Implement boot ROM skipping so I can pass this without distributing the original mgb boot ROM.
 	//"boot_div-dmgABCmgb.gb",
