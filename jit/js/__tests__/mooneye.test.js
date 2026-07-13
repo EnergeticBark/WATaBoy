@@ -16,6 +16,8 @@ const roms = [
 	"di_timing-GS.gb",
 	"div_timing.gb",
 	"intr_timing.gb",
+	"jp_cc_timing.gb",
+	"jp_timing.gb",
 	"oam_dma_restart.gb",
 	"oam_dma_start.gb",
 	"oam_dma_timing.gb"

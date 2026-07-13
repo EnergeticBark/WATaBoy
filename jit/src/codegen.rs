@@ -257,6 +257,9 @@ impl WasmBlock {
                         break;
                     }
 
+                    // JpNn takes 4 M-Cycles
+                    ctx.increment_m_cycles(3);
+
                     ctx.traced_pc = address;
                 }
                 Opcode::CallNn => {

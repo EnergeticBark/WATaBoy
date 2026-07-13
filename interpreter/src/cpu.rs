@@ -179,13 +179,6 @@ impl Cpu {
 
     fn calculate_m_cycles(&self, opcode: Opcode) -> u16 {
         match opcode {
-            Opcode::JpCcNn { c } => {
-                if self.check_condition(c) {
-                    4
-                } else {
-                    3
-                }
-            }
             Opcode::JrCcE { c } => {
                 if self.check_condition(c) {
                     3
@@ -836,21 +829,34 @@ impl Cpu {
                 self.registers.pc = destination;
             }
             Opcode::JpCcNn { c } => {
-                let destination = u16::from_le_bytes([
-                    self.memory.read_byte(pc + 1),
-                    self.memory.read_byte(pc + 2),
-                ]);
+                // TICKS MANUALLY
+                self.memory.increment_timers(1);
+
+                let low_dest = self.memory.read_byte(pc + 1);
+                self.memory.increment_timers(1);
+
+                let high_dest = self.memory.read_byte(pc + 2);
+                let destination = u16::from_le_bytes([low_dest, high_dest]);
+                self.memory.increment_timers(1);
+
                 self.registers.pc += 3;
 
                 if self.check_condition(c) {
                     self.registers.pc = destination;
+                    self.memory.increment_timers(1);
                 }
             }
             Opcode::JpNn => {
-                let destination = u16::from_le_bytes([
-                    self.memory.read_byte(pc + 1),
-                    self.memory.read_byte(pc + 2),
-                ]);
+                // TICKS MANUALLY
+                self.memory.increment_timers(1);
+
+                let low_dest = self.memory.read_byte(pc + 1);
+                self.memory.increment_timers(1);
+
+                let high_dest = self.memory.read_byte(pc + 2);
+                let destination = u16::from_le_bytes([low_dest, high_dest]);
+                self.memory.increment_timers(2);
+
                 self.registers.pc = destination;
             }
             Opcode::JpHl => {

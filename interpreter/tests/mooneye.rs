@@ -25,6 +25,8 @@ mooneye_test!(call_timing2, "call_timing2.gb");
 mooneye_test!(di_timing_gs, "di_timing-GS.gb");
 mooneye_test!(div_timing, "div_timing.gb");
 mooneye_test!(intr_timing, "intr_timing.gb");
+mooneye_test!(jp_cc_timing, "jp_cc_timing.gb");
+mooneye_test!(jp_timing, "jp_timing.gb");
 mooneye_test!(oam_dma_restart, "oam_dma_restart.gb");
 mooneye_test!(oam_dma_start, "oam_dma_start.gb");
 mooneye_test!(oam_dma_timing, "oam_dma_timing.gb");
