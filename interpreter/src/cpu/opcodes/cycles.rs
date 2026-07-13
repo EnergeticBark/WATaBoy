@@ -66,7 +66,7 @@ pub fn m_cycles(opcode: Opcode) -> u16 {
         Opcode::Ret => 0,          // CONTEXT DEPENDANT: OAM might be blocked by DMA.
         Opcode::RetCc { .. } => 0, // CONTEXT DEPENDANT: 5 if condition is true, otherwise 2.
         Opcode::Reti => 0,         // CONTEXT DEPENDANT: OAM might be blocked by DMA.
-        Opcode::RstN { .. } => 4,
+        Opcode::RstN { .. } => 0,  // CONTEXT DEPENDANT: OAM might be blocked by DMA.
 
         // Miscellaneous instructions
         // I'm not 100% sure about HALT, but it's listed as 1 MCycle on the gbdev.io optable.

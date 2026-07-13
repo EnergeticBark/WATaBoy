@@ -927,11 +927,18 @@ impl Cpu {
                 // For timing see: https://github.com/Gekkio/mooneye-test-suite/blob/443f6e1f2a8d83ad9da051cbb960311c5aaaea66/acceptance/call_timing.s
             }
             Opcode::RstN { x } => {
+                // TICKS MANUALLY
+                self.memory.increment_timers(2);
+
                 // Push the address of the next instruction to the stack.
                 self.registers.sp -= 2;
                 let [low, high] = (pc + 1).to_le_bytes();
-                self.memory.write_byte(self.registers.sp, low);
+
                 self.memory.write_byte(self.registers.sp + 1, high);
+                self.memory.increment_timers(1);
+
+                self.memory.write_byte(self.registers.sp, low);
+                self.memory.increment_timers(1);
 
                 let destination = u16::from_le_bytes([
                     // Rst's parameter is pre-divided by 8, so we multiply it by 8 here.
