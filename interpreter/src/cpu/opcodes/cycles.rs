@@ -56,7 +56,7 @@ pub fn m_cycles(opcode: Opcode) -> u16 {
         Opcode::Rlca | Opcode::Rrca | Opcode::Rla | Opcode::Rra => 1,
 
         // Control flow instructions
-        Opcode::JpNn => 4,
+        Opcode::JpNn => 0, // CONTEXT DEPENDANT: OAM might be blocked by DMA.
         Opcode::JpHl => 1,
         Opcode::JpCcNn { .. } => 0, // CONTEXT DEPENDANT: 4 if condition is true, otherwise 3.
         Opcode::JrE => 3,
