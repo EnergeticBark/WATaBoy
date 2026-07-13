@@ -28,7 +28,8 @@ const roms = [
 	"ret_timing.gb",
 	// TODO: Implement the EI instruction's delay.
 	// "reti_intr_timing.gb",
-	"reti_timing.gb"
+	"reti_timing.gb",
+	"rst_timing.gb"
 ];
 
 test.each(roms)("%p", async (romName) => {

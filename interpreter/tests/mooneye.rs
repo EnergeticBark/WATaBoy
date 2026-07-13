@@ -38,3 +38,4 @@ mooneye_test!(ret_timing, "ret_timing.gb");
 // TODO: Implement the EI instruction's delay.
 // mooneye_test!(reti_intr_timing, "reti_intr_timing.gb");
 mooneye_test!(reti_timing, "reti_timing.gb");
+mooneye_test!(rst_timing, "rst_timing.gb");
