@@ -186,13 +186,6 @@ impl Cpu {
                     2
                 }
             }
-            Opcode::RetCc { c } => {
-                if self.check_condition(c) {
-                    5
-                } else {
-                    2
-                }
-            }
             _ => m_cycles(opcode),
         }
     }
@@ -797,32 +790,50 @@ impl Cpu {
                 self.registers.pc += 2;
             }
             Opcode::RetCc { c } => {
+                // TICKS MANUALLY
+                self.memory.increment_timers(2);
+
                 self.registers.pc += 1;
 
                 if self.check_condition(c) {
-                    let destination = u16::from_le_bytes([
-                        self.memory.read_byte(self.registers.sp),
-                        self.memory.read_byte(self.registers.sp + 1),
-                    ]);
+                    let low_dest = self.memory.read_byte(self.registers.sp);
+                    self.memory.increment_timers(1);
+
+                    let high_dest = self.memory.read_byte(self.registers.sp + 1);
+                    let destination = u16::from_le_bytes([low_dest, high_dest]);
+                    self.memory.increment_timers(2);
+
                     self.registers.sp += 2;
 
                     self.registers.pc = destination;
                 }
             }
             Opcode::Ret => {
-                let destination = u16::from_le_bytes([
-                    self.memory.read_byte(self.registers.sp),
-                    self.memory.read_byte(self.registers.sp + 1),
-                ]);
+                // TICKS MANUALLY
+                self.memory.increment_timers(1);
+
+                let low_dest = self.memory.read_byte(self.registers.sp);
+                self.memory.increment_timers(1);
+
+                let high_dest = self.memory.read_byte(self.registers.sp + 1);
+                let destination = u16::from_le_bytes([low_dest, high_dest]);
+                self.memory.increment_timers(2);
+
                 self.registers.sp += 2;
 
                 self.registers.pc = destination;
             }
             Opcode::Reti => {
-                let destination = u16::from_le_bytes([
-                    self.memory.read_byte(self.registers.sp),
-                    self.memory.read_byte(self.registers.sp + 1),
-                ]);
+                // TICKS MANUALLY
+                self.memory.increment_timers(1);
+
+                let low_dest = self.memory.read_byte(self.registers.sp);
+                self.memory.increment_timers(1);
+
+                let high_dest = self.memory.read_byte(self.registers.sp + 1);
+                let destination = u16::from_le_bytes([low_dest, high_dest]);
+                self.memory.increment_timers(2);
+
                 self.registers.sp += 2;
 
                 self.ime = true;

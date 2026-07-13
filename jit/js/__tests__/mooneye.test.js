@@ -23,7 +23,12 @@ const roms = [
 	"oam_dma_start.gb",
 	"oam_dma_timing.gb",
 	"pop_timing.gb",
-	"push_timing.gb"
+	"push_timing.gb",
+	"ret_cc_timing.gb",
+	"ret_timing.gb",
+	// TODO: Implement the EI instruction's delay.
+	// "reti_intr_timing.gb",
+	"reti_timing.gb"
 ];
 
 test.each(roms)("%p", async (romName) => {

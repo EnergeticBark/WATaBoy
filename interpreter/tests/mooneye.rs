@@ -33,3 +33,8 @@ mooneye_test!(oam_dma_start, "oam_dma_start.gb");
 mooneye_test!(oam_dma_timing, "oam_dma_timing.gb");
 mooneye_test!(pop_timing, "pop_timing.gb");
 mooneye_test!(push_timing, "push_timing.gb");
+mooneye_test!(ret_cc_timing, "ret_cc_timing.gb");
+mooneye_test!(ret_timing, "ret_timing.gb");
+// TODO: Implement the EI instruction's delay.
+// mooneye_test!(reti_intr_timing, "reti_intr_timing.gb");
+mooneye_test!(reti_timing, "reti_timing.gb");
