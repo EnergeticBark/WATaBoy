@@ -21,7 +21,9 @@ const roms = [
 	"ld_hl_sp_e_timing.gb",
 	"oam_dma_restart.gb",
 	"oam_dma_start.gb",
-	"oam_dma_timing.gb"
+	"oam_dma_timing.gb",
+	"pop_timing.gb",
+	"push_timing.gb"
 ];
 
 test.each(roms)("%p", async (romName) => {
