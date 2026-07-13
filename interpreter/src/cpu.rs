@@ -930,22 +930,34 @@ impl Cpu {
                 self.registers.pc = destination;
             }
             Opcode::PopRr { x } => {
+                // TICKS MANUALLY
+                self.memory.increment_timers(1);
+
                 let low = self.memory.read_byte(self.registers.sp);
+                self.memory.increment_timers(1);
+
                 let high = self.memory.read_byte(self.registers.sp + 1);
                 self.registers.sp += 2;
-
                 self.registers
                     .set_r16_stack(x, u16::from_le_bytes([low, high]));
+                self.memory.increment_timers(1);
 
                 self.registers.pc += 1;
             }
             Opcode::PushRr { x } => {
+                // TICKS MANUALLY
+                self.memory.increment_timers(2);
+
                 let [low, high] = self.registers.r16_stack(x).to_le_bytes();
                 // Make room on the stack for a 16-bit value.
                 self.registers.sp -= 2;
                 // Game Boy is little-endian, so load the low byte then the high byte.
-                self.memory.write_byte(self.registers.sp, low);
                 self.memory.write_byte(self.registers.sp + 1, high);
+                self.memory.increment_timers(1);
+
+                self.memory.write_byte(self.registers.sp, low);
+                self.memory.increment_timers(1);
+
                 self.registers.pc += 1;
             }
             Opcode::Prefix => self.execute_prefix(),

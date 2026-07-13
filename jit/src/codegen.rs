@@ -305,15 +305,9 @@ impl WasmBlock {
 
             // Add the number of cycles this instruction took to total_m_cycles.
             // TODO: Remember to handle any context dependent instructions separately!!
-            // TODO: PopRr and PushRr tick manually here, but not in the interpreter.
+            // TODO: LdMemA and LdAMem tick manually here, but not in the interpreter.
             // Remove this if statement once the interpreter ticks them manually.
-            if !matches!(
-                opcode,
-                Opcode::PopRr { .. }
-                    | Opcode::PushRr { .. }
-                    | Opcode::LdMemA { .. }
-                    | Opcode::LdAMem { .. }
-            ) {
+            if !matches!(opcode, Opcode::LdMemA { .. } | Opcode::LdAMem { .. }) {
                 ctx.increment_m_cycles(opcodes::cycles::m_cycles(opcode).saturating_sub(1));
             }
 

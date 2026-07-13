@@ -22,8 +22,8 @@ pub fn m_cycles(opcode: Opcode) -> u16 {
         Opcode::LdRrNn { .. } => 3,
         Opcode::LdNnSp => 5,
         Opcode::LdSpHl => 2,
-        Opcode::PushRr { .. } => 4,
-        Opcode::PopRr { .. } => 3,
+        // CONTEXT DEPENDANT: OAM might be blocked by DMA.
+        Opcode::PushRr { .. } | Opcode::PopRr { .. } => 0,
         Opcode::LdHlSpPlusE => 3,
 
         // 8-bit arithmetic and logical instructions.

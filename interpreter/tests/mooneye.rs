@@ -31,3 +31,5 @@ mooneye_test!(ld_hl_sp_e_timing, "ld_hl_sp_e_timing.gb");
 mooneye_test!(oam_dma_restart, "oam_dma_restart.gb");
 mooneye_test!(oam_dma_start, "oam_dma_start.gb");
 mooneye_test!(oam_dma_timing, "oam_dma_timing.gb");
+mooneye_test!(pop_timing, "pop_timing.gb");
+mooneye_test!(push_timing, "push_timing.gb");
