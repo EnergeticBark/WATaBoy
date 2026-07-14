@@ -1,8 +1,10 @@
 use std::collections::VecDeque;
+use std::fs;
 use std::sync::Arc;
 use std::time::Instant;
 
 use error_iter::ErrorIter as _;
+use hw_constants::io_regs::IF;
 use interpreter::joypad::ButtonsHeld;
 use log::error;
 use pixels::{Error, Pixels, SurfaceTexture};
@@ -15,32 +17,15 @@ use winit_input_helper::WinitInputHelper;
 
 use interpreter::cpu::Cpu;
 
-const TEST_ROM: &[u8; 1048576] =
-    include_bytes!("../Pokemon - Blue Version (USA, Europe) (SGB Enhanced).sgb");
-
 const WIDTH: u32 = 160;
 const HEIGHT: u32 = 144;
 
+#[derive(Default)]
 pub struct AppState {
     mgb_state: Cpu,
     buttons_held: ButtonsHeld,
     next_vblank: u64,
     prev_frametimes: VecDeque<u128>,
-}
-
-impl Default for AppState {
-    fn default() -> Self {
-        Self {
-            mgb_state: {
-                let mut cpu = Cpu::default();
-                cpu.memory.load_rom(TEST_ROM);
-                cpu
-            },
-            buttons_held: ButtonsHeld::default(),
-            next_vblank: 0,
-            prev_frametimes: VecDeque::new(),
-        }
-    }
 }
 
 fn main() -> Result<(), Error> {
@@ -68,6 +53,12 @@ fn main() -> Result<(), Error> {
         Pixels::new(WIDTH, HEIGHT, surface_texture)?
     };
     let mut app_state = AppState::default();
+	
+	let path_str = std::env::args().nth(1).expect("no path given");
+	let path = std::path::PathBuf::from(path_str);
+	let rom = fs::read(path).expect("failed to read file");
+	
+	app_state.mgb_state.memory.load_rom(&rom);
 
     let res = event_loop.run(|event, elwt| {
         match event {
@@ -120,7 +111,7 @@ fn main() -> Result<(), Error> {
 
                     // Update internal state and request a redraw
                     let now = Instant::now();
-                    for _ in 0..500 {
+                    for _ in 0..1 {
                         app_state.step_vblank();
 						app_state.mgb_state.memory.buttons_held = app_state.buttons_held;
                     }
@@ -154,9 +145,21 @@ impl AppState {
     /// Update the Game Boy's state, emulating a frame worth of cycles.
     fn step_vblank(&mut self) {
         self.next_vblank += 70224;
-        while self.mgb_state.memory.clock < self.next_vblank {
-            self.mgb_state.execute().unwrap();
-        }
+		while self.mgb_state.memory.ppu.line_number >= 144
+			&& self.mgb_state.memory.clock < self.next_vblank
+		{
+			self.mgb_state.execute().unwrap();
+		}
+		
+		while self.mgb_state.memory.ppu.line_number < 144
+			&& self.mgb_state.memory.clock < self.next_vblank
+		{
+			self.mgb_state.execute().unwrap();
+		}
+		
+        // Force catch-up the PPU.
+		let mmu = &mut self.mgb_state.memory;
+		mmu.ppu.catch_up(mmu.clock, &mut mmu.buffer[IF as usize]);
     }
 
     /// Draw the Game Boy's lcd buffer state to the frame buffer.

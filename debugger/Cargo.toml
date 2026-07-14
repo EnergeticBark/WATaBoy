@@ -13,8 +13,8 @@ targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 hw-constants = { path = "../hw-constants" }
 interpreter = {
     path = "../interpreter",
-    features = ["waking-counters", "mbc-logging"],
-    #features = ["ppu-logging", "cpu-logging"],
+    features = ["waking-counters", "mbc-logging", "ppu-logging"],
+    #features = ["cpu-logging"],
 }
 egui = "0.34.1"
 egui_extras = "0.34.1"

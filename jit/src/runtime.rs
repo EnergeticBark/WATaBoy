@@ -4,6 +4,7 @@ use crate::cache::{BlockCache, BlockSlot, CacheAddress, CompiledBlock};
 use crate::codegen::WasmBlock;
 use crate::{call_indirect, console_error, console_log};
 
+use hw_constants::io_regs::IF;
 use interpreter::cpu::Cpu;
 use interpreter::cpu::opcodes::Opcode;
 use interpreter::cpu::registers::Flags;
@@ -146,6 +147,10 @@ impl JitRuntime {
         {
             self.execute();
         }
+
+        // Force catch-up the PPU.
+        let mmu = &mut self.dmg_state.memory;
+        mmu.ppu.catch_up(mmu.clock, &mut mmu.buffer[IF as usize]);
     }
 
     // TODO: Figure out a nice way to pass C structs across runtime boundaries without resorting to wasm-bindgen.

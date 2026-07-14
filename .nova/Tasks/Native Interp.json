@@ -1,11 +1,8 @@
 {
-  "extension" : {
-    "identifier" : "xyz.valknight.rust",
-    "name" : "Rust 3 (??)"
-  },
-  "extensionTemplate" : "cargo",
-  "extensionValues" : {
-    "xyz.valknight.rust.cargo.build.args" : "--package native-interp --release",
-    "xyz.valknight.rust.cargo.run.args" : "--package native-interp --release"
+  "actions" : {
+    "run" : {
+      "enabled" : true,
+      "script" : "cargo run --package native-interp --release -- \"interpreter\/tests\/roms\/mooneye\/add_sp_e_timing.gb\""
+    }
   }
 }
