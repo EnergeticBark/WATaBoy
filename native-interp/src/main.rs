@@ -39,7 +39,7 @@ fn main() -> Result<(), Error> {
             event_loop
                 .create_window(
                     WindowAttributes::new()
-                        .with_title("Hello Pixels")
+                        .with_title("wataboy native interp")
                         .with_inner_size(size)
                         .with_min_inner_size(size),
                 )
@@ -111,7 +111,7 @@ fn main() -> Result<(), Error> {
 
                     // Update internal state and request a redraw
                     let now = Instant::now();
-                    for _ in 0..1 {
+                    for _ in 0..10 {
                         app_state.step_vblank();
 						app_state.mgb_state.memory.buttons_held = app_state.buttons_held;
                     }
@@ -123,7 +123,8 @@ fn main() -> Result<(), Error> {
 					let avg = app_state.prev_frametimes.iter().sum::<u128>() / app_state.prev_frametimes.len() as u128;
 					let min = app_state.prev_frametimes.iter().min().unwrap();
 					let max = app_state.prev_frametimes.iter().max().unwrap();
-                    println!("Frametimes: latest = {frametime}ms avg = {avg}ms min = {min}ms max = {max}ms of last 100");
+                    // TODO: enable this with an argument.
+                    // println!("Frametimes: latest = {frametime}ms avg = {avg}ms min = {min}ms max = {max}ms of last 100");
 
                     window.request_redraw();
                 }
