@@ -18,7 +18,7 @@ fn draw_tile_map(
     tile_map: &[u8; 0x0400],
     ppu: &Ppu,
 ) {
-    let mut tile_map_bitmap: Vec<u8> = vec![0; 256 * 256];
+    /*let mut tile_map_bitmap: Vec<u8> = vec![0; 256 * 256];
 
     for row in 0..32 {
         for column in 0..32 {
@@ -45,11 +45,11 @@ fn draw_tile_map(
     let greyscale = ColorImage::from_gray([256, 256], &tile_map_bitmap);
     tile_map_texture.set(greyscale, TextureOptions::NEAREST);
 
-    egui::Image::from_texture(&*tile_map_texture).paint_at(ui, rect);
+    egui::Image::from_texture(&*tile_map_texture).paint_at(ui, rect);*/
 }
 
 fn highlight_background(ui: &mut Ui, to_screen: RectTransform, ppu: &Ppu) {
-    // Draw a red rectangle around the visible portion of the background tile map.
+    /*// Draw a red rectangle around the visible portion of the background tile map.
     let sc_y = ppu.read_byte(SCY, ppu.clock);
     let sc_x = ppu.read_byte(SCX, ppu.clock);
     let bottom = f32::from(sc_y.wrapping_add(143));
@@ -64,11 +64,11 @@ fn highlight_background(ui: &mut Ui, to_screen: RectTransform, ppu: &Ppu) {
         0.0,
         Stroke::new(2.0_f32, Color32::RED),
         StrokeKind::Middle,
-    );
+    );*/
 }
 
 fn highlight_window(ui: &mut Ui, to_screen: RectTransform, ppu: &Ppu) {
-    // Draw a blue rectangle around the visible portion of the window tile map.
+    /*// Draw a blue rectangle around the visible portion of the window tile map.
     let wy = ppu.read_byte(WY, ppu.clock);
     let wx = ppu.read_byte(WX, ppu.clock).wrapping_sub(7);
     let bottom = f32::from(143u8.wrapping_sub(wy));
@@ -83,11 +83,11 @@ fn highlight_window(ui: &mut Ui, to_screen: RectTransform, ppu: &Ppu) {
         0.0,
         Stroke::new(2.0_f32, Color32::BLUE),
         StrokeKind::Middle,
-    );
+    );*/
 }
 
 pub fn draw_tile_map_0(ui: &mut Ui, tile_map_0_texture: &mut TextureHandle, ppu: &Ppu) {
-    ui.vertical(|ui| {
+    /*ui.vertical(|ui| {
         ui.heading("Tile Map 0: 0x9800-0x9C00");
 
         let vram = ppu.vram.as_array().unwrap();
@@ -118,11 +118,11 @@ pub fn draw_tile_map_0(ui: &mut Ui, tile_map_0_texture: &mut TextureHandle, ppu:
                 }
             }
         });
-    });
+    });*/
 }
 
 pub fn draw_tile_map_1(ui: &mut Ui, tile_map_1_texture: &mut TextureHandle, ppu: &Ppu) {
-    ui.vertical(|ui| {
+    /*ui.vertical(|ui| {
         ui.heading("Tile Map 1: 0x9C00-0xA000");
 
         let vram = ppu.vram.as_array().unwrap();
@@ -153,5 +153,5 @@ pub fn draw_tile_map_1(ui: &mut Ui, tile_map_1_texture: &mut TextureHandle, ppu:
                 }
             }
         });
-    });
+    });*/
 }

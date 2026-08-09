@@ -15,6 +15,9 @@ pub(super) struct IoRegisters {
     pub(super) stat: LcdStatus,
     pub(super) scy: u8,
     pub(super) scx: u8,
+    // READ ONLY
+    pub(super) ly: u8,
+    // R/W
     pub(super) lyc: u8,
     pub(super) bgp: Palette,
     pub(super) obp0: Palette,

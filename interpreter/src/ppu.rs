@@ -8,1022 +8,145 @@ mod registers;
 
 pub use registers::{LcdControl, LcdStatus, StatMode};
 
-#[cfg(feature = "ppu-logging")]
-use log::{info, trace};
-
-use std::collections::VecDeque;
-use std::simd::cmp::SimdPartialEq;
-use std::simd::{Select, Simd, simd_swizzle, u8x2, u8x16};
-
-use hw_constants::io_regs::{BGP, LCDC, LY, LYC, OBP0, OBP1, SCX, SCY, STAT, WX, WY};
-use hw_constants::{
-    OAM_END, OAM_SIZE, OAM_START, PostBoot, SCREEN_SIZE, SCREEN_WIDTH, VRAM_END, VRAM_SIZE,
-    VRAM_START,
-};
-
-use bg_fetcher::{BackgroundFetcher, ColorIndex, FetcherState, Pixel};
-use oam::Obj;
-use obj_fetcher::{ObjectFetcher, TRANSPARENT};
-use palette::PaletteSelect;
+use hw_constants::{OAM_SIZE, PostBoot, SCREEN_SIZE, VRAM_SIZE};
+use palette::Palette;
 use registers::IoRegisters;
 
-use crate::addressable::Addressable;
-use crate::cpu::InterruptBits;
+// This PPU implementation is heavily modelled off of DocBoy's with a few optimisations and a bit of refactoring to make it more rust-y.
+// None of these timings or quirks were discovered by me, full credit belongs to: https://github.com/Docheinstein/docboy/
 
-const SCANLINES_PER_FRAME: u32 = 154;
-const DOTS_PER_SCANLINE: u16 = 456;
-const DOTS_PER_FRAME: u32 = DOTS_PER_SCANLINE as u32 * SCANLINES_PER_FRAME;
-
-// OAM and VRAM access is never "read only", so we represent this state as a ternary value rather than 2 bools for readable and writable.
-pub enum PpuMemAccess {
-    ReadWrite,
-    WriteOnly,
-    Blocked,
+enum TickSelector {
+    OamScanAfterTurnOn,
+    // (me) TODO!!!
 }
 
-#[derive(Debug, Copy, Clone)]
-enum PpuMode {
-    Disabled,
-    JustEnabled,
-    JustEnabled2,
-    JustEnabled3,
-    JustEnabled4,
-    JustEnabled5,
-    JustEnabled6,
-    HBlank,
-    HBlank2,
-    HBlank3,
-    HBlank4,
-    VBlank,
-    VBlank2,
-    VBlank3,
-    LastLine,
-    LastLine2,
-    LastLine3,
-    LastLine4,
-    OamScan,
-    OamScan2,
-    OamScan3,
-    OamScan4,
-    Drawing,
-    DrawingCoarse,
+// (me) TODO: Possibly refactor this out into a separate file once this is all working.
+enum FetcherTickSelector {
+    BgPrefetcherGetTile0, // (me) TODO!!!
+}
+
+struct Window {
+    active_for_frame: bool,
+    // (me) TODO!!!
 }
 
 pub struct Ppu {
-    dots_this_line: u16,
-    pub line_number: u8,
-    mode: PpuMode,
-    x: u8,
-    pixels_to_drop: u8,
-    window_y: u8,
-    bg_fetcher: BackgroundFetcher,
-    // Why is this here *and* in ObjectFetcher? Because the ObjectFetcher doesn't know the current x
-    // coordinate the LCD is rendering.
-    // The PPU decides *when* to fetch an object, whereas the ObjectFetcher just mindlessly fetches
-    // whatever the PPU puts into its queue.
-    obj_buffer: VecDeque<Obj>,
-    obj_fetcher: ObjectFetcher,
+    registers: IoRegisters,
+    tick_selector: TickSelector,
+    fetcher_tick_selector: FetcherTickSelector,
+    // Dots this scanline
+    dots: u16, // [0, 456)
+    lx: u8,    // LX=X+8, therefore [0, 168]
+
+    mode: StatMode, // (me) Might be desynced from the mode in the STAT register?
+
+    // (me) Registers that behave as if they were delayed 1 T-Cycle.
+    last_ly: u8,
+    last_lyc: u8,
+    last_bgp: Palette,
+    last_wx: u8,
+    last_lcdc: LcdControl,
+
+    w: Window,
+
     // Only public for debugging reasons.
     pub vram: Box<[u8; VRAM_SIZE as usize]>,
     pub oam: Box<[u8; OAM_SIZE as usize]>,
-    registers: IoRegisters,
-    stat_interrupt_line: bool,
-    stat_mode_for_interrupt: u8,
-    ly_to_compare_lyc: Option<u8>,
-    oam_access: PpuMemAccess,
-    vram_access: PpuMemAccess,
     // Buffer of greyscale pixel values, i.e. what the PPU would output to the LCD.
     pub lcd_buffer: Vec<u8>,
-    pub clock: u64,
-    pub next_vblank_interrupt: u64,
-    pub next_lcd_interrupt: u64,
-}
-
-fn mix_pixels(bg_pixel: Pixel, obj_pixel: Pixel) -> Pixel {
-    let mut render_bg = false;
-    render_bg |= obj_pixel.color_index().into_bits() == 0;
-    render_bg |= obj_pixel.priority() && bg_pixel.color_index().into_bits() > 0;
-
-    if render_bg { bg_pixel } else { obj_pixel }
-}
-
-fn two_tile_bit_planes_to_mask(tile_1: u8, tile_2: u8) -> std::simd::Mask<i8, 16> {
-    // Broadcast the tile 1 bit plane into the first 8 lanes, and broadcast the tile 2 bit plane into the next 8 lanes.
-    // [tile_1 x 8, tile_2 x 8]
-    let bitplanes = simd_swizzle!(
-        u8x2::from_array([tile_1, tile_2]),
-        [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1]
-    );
-
-    let ones_mask = u8x16::from_array([
-        // Masks for each bit of the tile 1 bit plane.
-        0b1000_0000, // 7th bit
-        0b0100_0000, // 6th bit
-        0b0010_0000, // 5th bit
-        0b0001_0000, // 4th bit
-        0b0000_1000, // 3rd bit
-        0b0000_0100, // 2nd bit
-        0b0000_0010, // 1st bit
-        0b0000_0001, // 0th bit
-        // Masks for each bit of the tile 2 bit plane.
-        0b1000_0000, // 7th bit
-        0b0100_0000, // 6th bit
-        0b0010_0000, // 5th bit
-        0b0001_0000, // 4th bit
-        0b0000_1000, // 3rd bit
-        0b0000_0100, // 2nd bit
-        0b0000_0010, // 1st bit
-        0b0000_0001, // 0th bit
-    ]);
-
-    // Mask off each individual bit of tile_1 and tile_2 in our 16 lanes.
-    let masked_bit_planes = bitplanes & ones_mask;
-
-    // Produce an SIMD "Mask" of booleans, by comparing each of the 16 bytes against 0.
-    masked_bit_planes.simd_ne(u8x16::splat(0))
 }
 
 impl Ppu {
-    fn compute_ly(&self, cpu_clock: u64) -> u8 {
-        if matches!(self.mode, PpuMode::Disabled) {
-            return 0;
-        }
-
-        let mut dots_since_catch_up = cpu_clock.saturating_sub(self.clock);
-
-        // TODO: CALCULATE FOR OTHER MODES TOO. Or just don't do this optimisation if it was just enabled.
-        if matches!(self.mode, PpuMode::JustEnabled) {
-            dots_since_catch_up += 7;
-        }
-
-        let would_be_dot_total = u64::from(self.dots_this_line) + dots_since_catch_up;
-
-        let would_be_line =
-            u64::from(self.line_number) + would_be_dot_total / u64::from(DOTS_PER_SCANLINE);
-        #[allow(clippy::cast_possible_truncation)]
-        let would_be_line = (would_be_line % u64::from(SCANLINES_PER_FRAME)) as u8;
-        let would_be_dots_this_line = would_be_dot_total % u64::from(DOTS_PER_SCANLINE);
-
-        if would_be_line == 153 && would_be_dots_this_line > 5 {
-            0
-        } else {
-            would_be_line
+    // (me) TODO!!!
+    fn exec_tick_selector(&mut self) {
+        match self.tick_selector {
+            _ => (),
         }
     }
 
-    // Draw background tiles.
-    fn coarse_background(&self, line_buffer: &mut [Pixel; SCREEN_WIDTH as usize + 32]) {
-        // Legend: * tile, [] LCD boundaries.
-        // *[* ** ** ** ** ** ** ** ** ** *]**
-        // Leftmost tile is always completely off screen.
-        // Up to 7 pixels of the rightmost tile may be shown if SCX & 7 > 0.
-
-        let ly = self.line_number.wrapping_add(self.registers.scy);
-        let tile_map_y = ly / 8;
-        let tile_line = ly & 7;
-        let tile_scrolled_left = (self.registers.scx / 8).wrapping_sub(1);
-
-        let tile_map = if self.registers.lcdc.bg_tile_map() {
-            tiles::tile_map_1(&self.vram)
-        } else {
-            tiles::tile_map_0(&self.vram)
-        };
-
-        // TODO: Maybe don't draw tiles that will be covered by the window?
-
-        // Choose either the $8000 or $8800 method, see: https://gbdev.io/pandocs/Tile_Data.html#vram-tile-data
-        let (tile_data_base, tile_id_signed_offset) = if self.registers.lcdc.bg_and_window_tiles() {
-            (0x000, 0_u8)
-        } else {
-            (0x800, 128_u8)
-        };
-
-        let tile_data_indexes = (0..22)
-            .map(|tile_x| {
-                let tile_map_x = (tile_scrolled_left as usize + tile_x) & 0x1F;
-                tile_map[tile_map_y as usize * 32 + tile_map_x]
-            })
-            .map(|tile_id| {
-                tile_data_base + (u16::from(tile_id_signed_offset.wrapping_add(tile_id)) * 16)
-            })
-            .map(|tile_start_addr| tile_start_addr + u16::from(tile_line) * 2);
-
-        let tile_data = tile_data_indexes.map(|tile_data_index| {
-            u16::from_le_bytes([
-                unsafe { *self.vram.get_unchecked(tile_data_index as usize) },
-                unsafe { *self.vram.get_unchecked(tile_data_index as usize + 1) },
-            ])
-        });
-
-        let tile_data_chunks = tile_data.array_chunks();
-        let (line_chunks, _) = line_buffer.as_chunks_mut();
-        tile_data_chunks.zip(line_chunks.iter_mut()).for_each(
-            |([tile_1_bit_planes, tile_2_bit_planes], line_chunk)| {
-                let [low_bit_plane_1, high_bit_plane_1] = tile_1_bit_planes.to_le_bytes();
-                let [low_bit_plane_2, high_bit_plane_2] = tile_2_bit_planes.to_le_bytes();
-
-                let low_color_ids = two_tile_bit_planes_to_mask(low_bit_plane_1, low_bit_plane_2)
-                    .select(u8x16::splat(0b0000_0001), u8x16::splat(0));
-
-                let high_color_ids =
-                    two_tile_bit_planes_to_mask(high_bit_plane_1, high_bit_plane_2)
-                        .select(u8x16::splat(0b0000_0010), u8x16::splat(0));
-
-                // Bitwise OR our 16 low colour IDs and 16 high colour IDs together to get the 16 colour IDs for these two tiles.
-                let color_ids = low_color_ids | high_color_ids;
-
-                *line_chunk = color_ids.to_array().map(Pixel::from_bits);
-            },
-        );
+    fn tick_window(&mut self) {
+        // Window is considered active for the rest of the frame
+        // if at some point in it happens that window is enabled while LY matches WY.
+        // Note that this does not mean that window will always be rendered:
+        // the WX == LX condition will be checked again during pixel transfer
+        // (on the other hand WY is not checked again).
+        let ly = self.registers.ly;
+        self.w.active_for_frame = self.w.active_for_frame
+            || (self.registers.lcdc.window_enabled() && ly == self.registers.wy);
     }
 
-    // Draw window tiles.
-    // Lots of overlap with how the background tiles are render, should probably refactor some of this into a separate function.
-
-    fn coarse_window(&mut self, line_buffer: &mut [Pixel; SCREEN_WIDTH as usize + 32]) {
-        if !self.drawing_window_line() {
-            return;
-        }
-
-        // Legend: * tile, [] LCD boundaries.
-        // Start rendering window tiles at WX+1 of line_buffer.
-        // For WX=7 the window will cover the LCD.
-        // [** ** ** ** ** ** ** ** ** **]**
-
-        // For WX=166 the window will cover 1 pixel on the right.
-        // [1px]15px
-
-        self.window_y = self.window_y.wrapping_add(1);
-        let tile_map_y = self.window_y / 8;
-        let tile_line = self.window_y & 7;
-
-        let window_tile_map = if self.registers.lcdc.window_tile_map() {
-            tiles::tile_map_1(&self.vram)
-        } else {
-            tiles::tile_map_0(&self.vram)
-        };
-
-        // Choose either the $8000 or $8800 method, see: https://gbdev.io/pandocs/Tile_Data.html#vram-tile-data
-        let (tile_data_base, tile_id_signed_offset) = if self.registers.lcdc.bg_and_window_tiles() {
-            (0x000, 0_u8)
-        } else {
-            (0x800, 128_u8)
-        };
-
-        let tile_data_indexes = (0..22)
-            .map(|tile_x| {
-                let tile_map_x = tile_x;
-                window_tile_map[tile_map_y as usize * 32 + tile_map_x]
-            })
-            .map(|tile_id| {
-                tile_data_base + (u16::from(tile_id_signed_offset.wrapping_add(tile_id)) * 16)
-            })
-            .map(|tile_start_addr| tile_start_addr + u16::from(tile_line) * 2);
-
-        let tile_data = tile_data_indexes.map(|tile_data_index| {
-            u16::from_le_bytes([
-                unsafe { *self.vram.get_unchecked(tile_data_index as usize) },
-                unsafe { *self.vram.get_unchecked(tile_data_index as usize + 1) },
-            ])
-        });
-
-        let tile_data_chunks = tile_data.array_chunks();
-        let scrolled_left = self.registers.scx & 7;
-        let (line_chunks, _) =
-            line_buffer[self.registers.wx as usize + 1 + scrolled_left as usize..].as_chunks_mut();
-        tile_data_chunks.zip(line_chunks.iter_mut()).for_each(
-            |([tile_1_bit_planes, tile_2_bit_planes], line_chunk)| {
-                let [low_bit_plane_1, high_bit_plane_1] = tile_1_bit_planes.to_le_bytes();
-                let [low_bit_plane_2, high_bit_plane_2] = tile_2_bit_planes.to_le_bytes();
-
-                let low_color_ids = two_tile_bit_planes_to_mask(low_bit_plane_1, low_bit_plane_2)
-                    .select(u8x16::splat(0b0000_0001), u8x16::splat(0));
-
-                let high_color_ids =
-                    two_tile_bit_planes_to_mask(high_bit_plane_1, high_bit_plane_2)
-                        .select(u8x16::splat(0b0000_0010), u8x16::splat(0));
-
-                // Bitwise OR our 16 low colour IDs and 16 high colour IDs together to get the 16 colour IDs for these two tiles.
-                let color_ids = low_color_ids | high_color_ids;
-
-                *line_chunk = color_ids.to_array().map(Pixel::from_bits);
-            },
-        );
+    fn raise_stat_irq(&mut self) {
+        // (me) TODO!!!
     }
 
-    // Draw object tiles.
-    fn coarse_objects(&self, line_buffer: &mut [Pixel; SCREEN_WIDTH as usize + 32]) {
-        // Draw object tiles.
-        for obj in &self.obj_buffer {
-            let obj_line = {
-                let obj_line = self.line_number + 16 - obj.y_pos;
-                // If the object isn't flipped vertically, just return the line.
-                if obj.attributes.y_flip() {
-                    // If the object is flipped we need to subtract from its height - 1.
-                    if self.registers.lcdc.obj_size() {
-                        15 - obj_line
-                    } else {
-                        7 - obj_line
-                    }
-                } else {
-                    // If the object isn't flipped vertically, just return the line.
-                    obj_line
-                }
-            };
-
-            let tile = {
-                let mut tile_index = obj.tile_index;
-                if self.registers.lcdc.obj_size() {
-                    // Override the first bit as described in PanDocs.
-                    // See: https://gbdev.io/pandocs/OAM.html#byte-2--tile-index
-                    if obj_line < 8 {
-                        tile_index &= !0b0000_0001;
-                    } else {
-                        tile_index |= 0b0000_0001;
-                    }
-                }
-
-                tiles::unsigned_nth_tile(&self.vram, tile_index as usize)
-            };
-
-            let tile_line = obj_line % 8;
-            let tile_data_low = tile[tile_line as usize * 2];
-            let tile_data_high = tile[tile_line as usize * 2 + 1];
-
-            // Push
-            let mut obj_line_buffer = [Pixel::from_bits(0); 8];
-
-            obj_line_buffer
-                .iter_mut()
-                .enumerate()
-                .for_each(|(nth_bit, buffer_pixel)| {
-                    let color_index = ColorIndex::new()
-                        .with_low((tile_data_low >> nth_bit) & 1 == 1)
-                        .with_high((tile_data_high >> nth_bit) & 1 == 1);
-                    let palette = if obj.attributes.palette() {
-                        PaletteSelect::Obp1
-                    } else {
-                        PaletteSelect::Obp0
-                    };
-
-                    *buffer_pixel = Pixel::new()
-                        .with_color_index(color_index)
-                        .with_palette(palette)
-                        .with_priority(obj.attributes.priority());
-                });
-
-            if !obj.attributes.x_flip() {
-                obj_line_buffer.reverse();
-            }
-
-            let scrolled_left = self.registers.scx & 7;
-            obj_line_buffer
-                .into_iter()
-                .enumerate()
-                .for_each(|(nth_bit, new_pixel)| {
-                    let pixel_index = obj.x_pos as usize + nth_bit + scrolled_left as usize;
-                    if pixel_index < line_buffer.len() {
-                        let old_pixel = &mut line_buffer[pixel_index];
-                        match old_pixel.palette() {
-                            PaletteSelect::Bgp => *old_pixel = mix_pixels(*old_pixel, new_pixel),
-                            // Replace any transparent pixels that are currently on the queue with the new pixels.
-                            PaletteSelect::Obp0 | PaletteSelect::Obp1
-                                if old_pixel.color_index().into_bits() == 0 =>
-                            {
-                                *old_pixel = new_pixel;
-                            }
-                            _ => (),
-                        }
-                    }
-                });
-        }
+    fn tick_pending_write(&mut self) {
+        // (me) TODO!!!
     }
 
-    // Quickly draw a scanline in one go without manually emulating the tile fetchers or pixel FIFOs.
-    // Can be used after we've determined that the CPU didn't modify VRAM, OAM, or PPU registers for the duration of a scanline.
-    fn coarse_scanline(&mut self) {
-        // 8 extra pixels for scrolling, plus another 24... there's probably a more efficient way to lay this out.
-        let mut line_buffer = [Pixel::from_bits(0); SCREEN_WIDTH as usize + 32];
-
-        if self.registers.lcdc.bg_and_window_enabled() {
-            self.coarse_background(&mut line_buffer);
-            self.coarse_window(&mut line_buffer);
-        }
-
-        if self.registers.lcdc.obj_enabled() {
-            self.coarse_objects(&mut line_buffer);
-        }
-
-        let line_start = self.line_number as usize * SCREEN_WIDTH as usize;
-        let line_end = line_start + SCREEN_WIDTH as usize;
-        let scanline = &mut self.lcd_buffer[line_start..line_end];
-
-        let palette_colors = Simd::from_array([
-            self.registers.bgp.id_0().into_bits(),
-            self.registers.bgp.id_1().into_bits(),
-            self.registers.bgp.id_2().into_bits(),
-            self.registers.bgp.id_3().into_bits(),
-            self.registers.obp0.id_0().into_bits(),
-            self.registers.obp0.id_1().into_bits(),
-            self.registers.obp0.id_2().into_bits(),
-            self.registers.obp0.id_3().into_bits(),
-            self.registers.obp1.id_0().into_bits(),
-            self.registers.obp1.id_1().into_bits(),
-            self.registers.obp1.id_2().into_bits(),
-            self.registers.obp1.id_3().into_bits(),
-            0,
-            0,
-            0,
-            0,
-        ]);
-
-        // Get the palette's colours into their correct greyscale values.
-        let greyscale_colors = Simd::splat(255) - palette_colors * Simd::splat(85);
-
-        let (lcd_chunks, _) = scanline.as_chunks_mut();
-
-        let scrolled_left = (self.registers.scx & 7) + 8;
-        let (scanline_chunks, _) = line_buffer[scrolled_left as usize..].as_chunks();
-        lcd_chunks
-            .iter_mut()
-            .zip(scanline_chunks)
-            .for_each(|(lcd_chunk, scanline_chunk)| {
-                *lcd_chunk = greyscale_colors
-                    .swizzle_dyn(
-                        Simd::from_array(scanline_chunk.map(Pixel::into_bits)) & Simd::splat(15),
-                    )
-                    .to_array();
-            });
+    fn tick_stat(&mut self) {
+        // (me) TODO!!!
     }
 
-    #[allow(clippy::too_many_lines)]
-    pub fn catch_up(&mut self, cpu_clock: u64, interrupt_flags: &mut u8) {
-        // Make the PPU catch up to the CPU!
-        while self.clock < cpu_clock {
-            match self.mode {
-                PpuMode::Disabled => self.clock = cpu_clock,
-                // Do evil initial line 0 shenanigans.
-                // This timing matches GameRoy's PPU implementation.
-                PpuMode::JustEnabled => {
-                    // Observable 1.
-                    self.stat_mode_for_interrupt = 0xFF;
-                    self.update_stat_interrupt(interrupt_flags);
-
-                    self.clock += 78;
-                    self.dots_this_line += 78;
-                    self.mode = PpuMode::JustEnabled2;
-                }
-                PpuMode::JustEnabled2 => {
-                    // Observable 79.
-                    self.oam_access = PpuMemAccess::Blocked;
-                    self.vram_access = PpuMemAccess::Blocked;
-
-                    self.update_stat_mode(StatMode::Drawing);
-                    self.stat_mode_for_interrupt = 3;
-                    self.update_stat_interrupt(interrupt_flags);
-
-                    self.clock += 172;
-                    self.dots_this_line += 172;
-                    self.mode = PpuMode::JustEnabled3;
-                }
-                PpuMode::JustEnabled3 => {
-                    // Observable 84.
-                    // Skip 5 extra cycles, 84 will be observed as 89.
-                    self.dots_this_line += 5;
-                    self.mode = PpuMode::JustEnabled4;
-                }
-                PpuMode::JustEnabled4 => {
-                    // Observable 251.
-                    self.oam_access = PpuMemAccess::ReadWrite;
-                    self.vram_access = PpuMemAccess::ReadWrite;
-
-                    self.update_stat_mode(StatMode::HBlank);
-                    self.clock += 198;
-                    self.dots_this_line += 198;
-                    self.mode = PpuMode::JustEnabled5;
-                }
-                PpuMode::JustEnabled5 => {
-                    // Skip 3 extra cycles.
-                    self.dots_this_line = 0;
-                    self.line_number += 1;
-                    self.mode = PpuMode::JustEnabled6;
-                }
-                PpuMode::JustEnabled6 => {
-                    self.mode = PpuMode::OamScan;
-                    // TEMP: needed for mixed tick and catch up so we don't instantly go to OAM.
-                    self.clock += 1;
-                }
-
-                PpuMode::OamScan => {
-                    self.clock += 2;
-                    self.dots_this_line += 2;
-
-                    self.mode = PpuMode::OamScan2;
-                }
-                PpuMode::OamScan2 => {
-                    // Observable 3.
-                    self.oam_access = PpuMemAccess::WriteOnly;
-
-                    // Mode 2 signals a mode interrupt 1-Tcycle *before* its bits change in STAT on line 1 onward.
-                    // See: section 8.11.1 of TCAGBD.
-                    // Also see cycles.txt based on SameBoy's timing.
-                    if self.line_number == 0 {
-                        self.stat_mode_for_interrupt = 0xFF;
-                        self.ly_to_compare_lyc = Some(0);
-                    } else {
-                        self.stat_mode_for_interrupt = 2;
-                        self.ly_to_compare_lyc = None;
-                    }
-
-                    self.update_stat_mode(StatMode::HBlank);
-                    self.update_stat_interrupt(interrupt_flags);
-
-                    self.clock += 1;
-                    self.dots_this_line += 1;
-                    self.mode = PpuMode::OamScan3;
-                }
-                PpuMode::OamScan3 => {
-                    // Observable 4.
-                    self.oam_access = PpuMemAccess::Blocked;
-
-                    self.update_stat_mode(StatMode::OamScan);
-
-                    self.ly_to_compare_lyc = Some(self.line_number);
-
-                    self.stat_mode_for_interrupt = 2;
-                    self.update_stat_interrupt(interrupt_flags);
-
-                    self.stat_mode_for_interrupt = 0xFF;
-                    self.update_stat_interrupt(interrupt_flags);
-
-                    self.clock += 76;
-                    self.dots_this_line += 76;
-                    self.mode = PpuMode::OamScan4;
-                }
-
-                PpuMode::OamScan4 => {
-                    // Observable 80.
-                    self.oam_access = PpuMemAccess::WriteOnly;
-                    self.vram_access = PpuMemAccess::WriteOnly;
-
-                    self.clock += 1;
-                    self.dots_this_line += 1;
-                    self.transition_drawing();
-
-                    // Using DOTS_PER_SCANLINE is wayyy too conservative, but it's a start.
-                    if cpu_clock > self.clock
-                        && cpu_clock - self.clock > u64::from(DOTS_PER_SCANLINE)
-                    {
-                        self.mode = PpuMode::DrawingCoarse;
-                    }
-                }
-                PpuMode::Drawing => {
-                    // Observable 84.
-                    if self.dots_this_line == 83 {
-                        self.oam_access = PpuMemAccess::Blocked;
-                        self.vram_access = PpuMemAccess::Blocked;
-
-                        self.update_stat_mode(StatMode::Drawing);
-
-                        self.stat_mode_for_interrupt = 3;
-                        self.update_stat_interrupt(interrupt_flags);
-                    }
-
-                    if let Some(obj) = self.pop_next_obj() {
-                        self.obj_fetcher.push_obj(obj);
-                    }
-
-                    if self.obj_fetcher.idle_and_empty()
-                        || self.bg_fetcher.bg_fifo.is_empty()
-                        || !matches!(
-                            self.bg_fetcher.state,
-                            FetcherState::BeforeGetTileDataHigh
-                                | FetcherState::GetTileDataHigh
-                                | FetcherState::Push
-                        )
-                    {
-                        self.bg_fetcher.tick(
-                            &self.vram,
-                            self.registers.lcdc,
-                            self.registers.scx,
-                            self.registers.scy,
-                            self.line_number,
-                            self.window_y,
-                        );
-                    } else {
-                        self.obj_fetcher
-                            .tick(&self.vram, self.registers.lcdc, self.line_number);
-                    }
-
-                    if self.obj_fetcher.idle_and_empty() {
-                        // Combine FIFOs.
-                        if let Some(bg_pixel) = self.bg_fetcher.shift_out() {
-                            let obj_pixel = self.obj_fetcher.shift_out().unwrap_or(TRANSPARENT);
-
-                            if self.pixels_to_drop > 0 {
-                                self.pixels_to_drop -= 1;
-                            } else {
-                                // If the background/window is disabled, use a pixel with a colour index of 0.
-                                // See: https://gbdev.io/pandocs/pixel_fifo.html#pixel-rendering
-                                let mut pixel_to_render =
-                                    if self.registers.lcdc.bg_and_window_enabled() {
-                                        bg_pixel
-                                    } else {
-                                        Pixel::from_bits(0)
-                                    };
-
-                                if self.registers.lcdc.obj_enabled() {
-                                    pixel_to_render = mix_pixels(pixel_to_render, obj_pixel);
-                                }
-
-                                let lcd_row = self.line_number as usize * SCREEN_WIDTH as usize;
-                                let lcd_pixel_index = lcd_row + self.x as usize;
-                                let palette = match pixel_to_render.palette() {
-                                    PaletteSelect::Bgp => self.registers.bgp,
-                                    PaletteSelect::Obp0 => self.registers.obp0,
-                                    PaletteSelect::Obp1 => self.registers.obp1,
-                                };
-                                let color = palette.map_to_color(pixel_to_render.color_index());
-
-                                // Get the colors in their correct greyscale values.
-                                self.lcd_buffer[lcd_pixel_index] = 255 - color.into_bits() * 85;
-
-                                self.x += 1;
-                            }
-                        }
-                    }
-
-                    if self.drawing_window() && !self.bg_fetcher.drawing_window {
-                        #[cfg(feature = "ppu-logging")]
-                        trace!(target: "ppu_window", "Started drawing window at X {}", self.x);
-                        self.window_y = self.window_y.wrapping_add(1);
-                        self.bg_fetcher = BackgroundFetcher::default();
-                        self.bg_fetcher.warmup = false;
-                        self.bg_fetcher.drawing_window = true;
-                        // Prevent the window from being scrolled by the background scroll (SCX).
-                        // https://github.com/Ashiepaws/GBEDG/blob/master/ppu/index.md#scx-at-a-sub-tile-layer
-                        self.pixels_to_drop = 0;
-                    }
-
-                    self.clock += 1;
-                    self.dots_this_line += 1;
-                    // If we've finished drawing this line, then transition to the HBlank state.
-                    if self.x == SCREEN_WIDTH {
-                        self.transition_hblank();
-                    }
-                    debug_assert!(self.x <= SCREEN_WIDTH);
-                }
-                PpuMode::DrawingCoarse => {
-                    self.oam_access = PpuMemAccess::Blocked;
-                    self.vram_access = PpuMemAccess::Blocked;
-
-                    self.update_stat_mode(StatMode::Drawing);
-
-                    self.stat_mode_for_interrupt = 3;
-                    self.update_stat_interrupt(interrupt_flags);
-
-                    self.coarse_scanline();
-                    // TODO: Actually compute this line length beforehand and use it to determine whether we can enter "DrawingCoarse" to begin with.
-                    // Right now it's hard coded, which is very wrong.
-                    self.clock += 172;
-                    self.dots_this_line += 172;
-                    self.transition_hblank();
-                }
-
-                PpuMode::HBlank => {
-                    self.clock += 3;
-                    self.dots_this_line += 3;
-                    self.mode = PpuMode::HBlank2;
-                }
-                PpuMode::HBlank2 => {
-                    // Most of the timing is based on upstream GameRoy, but here we mimic SameBoy by delaying update_stat_interrupt 1 T-Cycle.
-                    self.oam_access = PpuMemAccess::ReadWrite;
-                    self.vram_access = PpuMemAccess::ReadWrite;
-
-                    self.update_stat_mode(StatMode::HBlank);
-                    self.stat_mode_for_interrupt = 0;
-
-                    self.clock += 1;
-                    self.dots_this_line += 1;
-                    self.mode = PpuMode::HBlank3;
-                }
-                PpuMode::HBlank3 => {
-                    // Observable 4 dots into HBlank, or 256 with the shortest mode 3.
-                    self.update_stat_interrupt(interrupt_flags);
-
-                    let dots_remaining_in_scanline = DOTS_PER_SCANLINE - self.dots_this_line;
-
-                    self.clock += u64::from(dots_remaining_in_scanline) - 1;
-                    self.dots_this_line += dots_remaining_in_scanline - 1;
-                    self.mode = PpuMode::HBlank4;
-                }
-                PpuMode::HBlank4 => {
-                    self.dots_this_line = 0;
-                    self.line_number += 1;
-                    if self.line_number == 144 {
-                        self.mode = PpuMode::VBlank;
-                        self.ly_to_compare_lyc = None;
-                    } else {
-                        self.mode = PpuMode::OamScan;
-                    }
-
-                    // TEMP: needed for mixed tick and catch up so we don't instantly go to OAM.
-                    self.clock += 1;
-                }
-                PpuMode::VBlank => {
-                    self.clock += 3;
-                    self.dots_this_line += 3;
-                    self.mode = PpuMode::VBlank2;
-                }
-                // TODO: Observable 2.
-                PpuMode::VBlank2 => {
-                    // Observable 4.
-                    self.ly_to_compare_lyc = Some(self.line_number);
-                    if self.line_number == 144 {
-                        self.update_stat_mode(StatMode::VBlank);
-                        // Request the VBlank interrupt.
-                        *interrupt_flags |= 0b0000_0001;
-
-                        // A VBlank also triggers as an OAM Scan... for some reason?
-                        // See: https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/ppu/vblank_stat_intr-GS.s
-                        self.stat_mode_for_interrupt = 2;
-                        self.update_stat_interrupt(interrupt_flags);
-                        self.stat_mode_for_interrupt = 1;
-                    }
-                    self.update_stat_interrupt(interrupt_flags);
-
-                    self.clock += 452;
-                    self.dots_this_line += 452;
-                    self.mode = PpuMode::VBlank3;
-                }
-                PpuMode::VBlank3 => {
-                    self.clock += 1;
-                    self.dots_this_line = 0;
-                    self.line_number += 1;
-                    if self.line_number == 153 {
-                        self.mode = PpuMode::LastLine;
-                    } else {
-                        self.mode = PpuMode::VBlank;
-                    }
-                }
-                PpuMode::LastLine => {
-                    self.clock += 5;
-                    self.dots_this_line += 5;
-                    self.mode = PpuMode::LastLine2;
-                }
-                PpuMode::LastLine2 => {
-                    // Observable 6.
-                    self.ly_to_compare_lyc = Some(153);
-                    self.update_stat_interrupt(interrupt_flags);
-
-                    self.clock += 6;
-                    self.dots_this_line += 6;
-                    self.mode = PpuMode::LastLine3;
-                }
-                PpuMode::LastLine3 => {
-                    // Observable 12.
-                    self.ly_to_compare_lyc = Some(0);
-                    self.update_stat_interrupt(interrupt_flags);
-
-                    self.clock += 445;
-                    self.dots_this_line += 445;
-                    self.mode = PpuMode::LastLine4;
-                }
-                PpuMode::LastLine4 => {
-                    self.dots_this_line = 0;
-                    self.line_number = 0;
-                    self.window_y = 255;
-                    self.mode = PpuMode::OamScan;
-                }
-            }
-        }
-    }
-
-    pub fn predict_next_interrupt(&mut self, ie: InterruptBits) -> u64 {
-        let current_dot = i64::from(self.line_number) * i64::from(DOTS_PER_SCANLINE)
-            + i64::from(self.dots_this_line);
-
-        self.next_vblank_interrupt = if ie.vblank() {
-            // VBlank always happens on this dot.
-            const VBLANK_DOT: i64 = 144 * DOTS_PER_SCANLINE as i64 + 4;
-
-            let mut dots_until_vblank = VBLANK_DOT - current_dot;
-            // If we already passed VBlank this frame, then get number of dots until VBlank on the next frame.
-            if dots_until_vblank.is_negative() {
-                dots_until_vblank += i64::from(DOTS_PER_FRAME);
-            }
-
-            self.clock + dots_until_vblank.cast_unsigned()
-        } else {
-            u64::MAX
-        };
-
-        self.next_lcd_interrupt = if ie.lcd() {
-            let stat = self.registers.stat;
-            let lyc = self.registers.lyc;
-
-            // TODO: This needs more testing, but it passes the test ROMs.
-            let next_lyc_interrupt = if stat.lyc_int_select() && lyc <= 153 {
-                // LY=LYC is predicted to happen on this dot.
-                let lyc_dot = if lyc == 0 {
-                    // Line 0 has special timing.
-                    // See: TCAGBD.pdf section 8.9.1.
-                    153 * i64::from(DOTS_PER_SCANLINE) + 12
-                } else {
-                    i64::from(lyc) * i64::from(DOTS_PER_SCANLINE) + 4
-                };
-
-                let mut dots_until_lyc = lyc_dot - current_dot;
-                // If we already passed LY=LYC this frame, then get number of dots until LY=LYC on the next frame.
-                if dots_until_lyc.is_negative() {
-                    dots_until_lyc += i64::from(DOTS_PER_FRAME);
-                }
-
-                self.clock + dots_until_lyc.cast_unsigned()
-            } else {
-                u64::MAX
-            };
-            // TODO: Actual mode prediction...
-            let next_mode2_interrupt = if stat.mode2_int_select() { 0 } else { u64::MAX };
-            let next_mode1_interrupt = if stat.mode1_int_select() { 0 } else { u64::MAX };
-            let next_mode0_interrupt = if stat.mode0_int_select() { 0 } else { u64::MAX };
-
-            next_lyc_interrupt
-                .min(next_mode2_interrupt)
-                .min(next_mode1_interrupt)
-                .min(next_mode0_interrupt)
-        } else {
-            u64::MAX
-        };
-
-        self.next_vblank_interrupt.min(self.next_lcd_interrupt)
-    }
-
-    #[must_use]
-    pub fn is_disabled(&self) -> bool {
-        matches!(self.mode, PpuMode::Disabled)
-    }
-
-    fn drawing_window_line(&self) -> bool {
-        // Window is enabled.
-        self.registers.lcdc.window_enabled()
-			// Window isn't off screen.
-            && self.registers.wx <= 166
-			// Window appears on this line.
-            && self.line_number >= self.registers.wy
-    }
-
-    fn drawing_window(&self) -> bool {
-        self.drawing_window_line() && self.x == self.registers.wx.saturating_sub(7)
-    }
-
-    fn pop_next_obj(&mut self) -> Option<Obj> {
-        self.obj_buffer.pop_front_if(|obj| {
-            // Addition on the left might overflow so we cast to usize.
-            obj.x_pos as usize + self.pixels_to_drop as usize <= self.x as usize + 8
-        })
-    }
-
-    fn transition_hblank(&mut self) {
-        self.mode = PpuMode::HBlank;
-        #[cfg(feature = "ppu-logging")]
-        trace!(target: "ppu_hblank", "Set to Mode 0 on dot: {}, (Drew for {} dots)", self.dots_this_line, self.dots_this_line - 80);
-
-        self.x = 0;
-        // Reset each of the fetchers.
-        self.bg_fetcher.reset();
-        self.obj_fetcher.reset();
-    }
-
-    fn transition_drawing(&mut self) {
-        self.mode = PpuMode::Drawing;
-
-        // This is the last cycle of the OAM scan, so lets actually do the OAM scan.
-        let ly = self.line_number;
-        oam::oam_scan(&mut self.obj_buffer, &self.oam, self.registers.lcdc, ly);
-
-        // Prepare for Drawing.
-        self.pixels_to_drop = (self.registers.scx & 7) + 8;
-    }
-
-    fn update_stat_mode(&mut self, mode: StatMode) {
-        self.registers.stat.set_mode(mode);
-    }
-
-    pub fn update_stat_interrupt(&mut self, interrupt_flags: &mut u8) {
-        let coincidence = self
-            .ly_to_compare_lyc
-            .is_some_and(|x| x == self.registers.lyc);
-        self.registers.stat.set_coincidence(coincidence);
-
-        // STAT interrupt triggering.
-        let lyc_int = coincidence && self.registers.stat.lyc_int_select();
-        let mode_int = match self.stat_mode_for_interrupt {
-            0 => self.registers.stat.mode0_int_select(),
-            1 => self.registers.stat.mode1_int_select(),
-            2 => self.registers.stat.mode2_int_select(),
-            _ => false,
-        };
-
-        let prev_stat_line = self.stat_interrupt_line;
-        self.stat_interrupt_line = lyc_int || mode_int;
-
-        // Low to high transition on the STAT interrupt line.
-        if !prev_stat_line && self.stat_interrupt_line {
-            #[cfg(feature = "ppu-logging")]
-            info!(target: "lcd_int", "LCD interrupt flag set on dot: {}", self.dots_this_line);
-            // Request the LCD interrupt.
-            *interrupt_flags |= 0b0000_0010;
-        }
-    }
-
-    fn disable(&mut self) {
-        if !self.is_disabled() {
-            #[cfg(feature = "ppu-logging")]
-            info!(target: "ppu_disabled", "Disabled on dot: {}", u32::from(self.line_number) * u32::from(DOTS_PER_SCANLINE) + u32::from(self.dots_this_line));
-
-            // Reset the PPU state, preserving only some of its state.
-            *self = Ppu {
-                vram: self.vram.clone(),
-                oam: self.oam.clone(),
-                registers: self.registers,
-                stat_interrupt_line: self.stat_interrupt_line,
-                clock: self.clock,
-                next_vblank_interrupt: self.clock,
-                next_lcd_interrupt: self.next_lcd_interrupt,
-                ..Default::default()
-            };
-
-            self.registers.stat.set_mode(StatMode::HBlank);
-        }
-    }
-}
-
-impl Addressable for Ppu {
-    fn read_byte(&self, index: u16, cpu_clock: u64) -> u8 {
-        match index {
-            VRAM_START..VRAM_END => match self.vram_access {
-                PpuMemAccess::ReadWrite => self.vram[(index - VRAM_START) as usize],
-                _ => 0xFF,
-            },
-            OAM_START..OAM_END => match self.oam_access {
-                PpuMemAccess::ReadWrite => self.oam[(index - OAM_START) as usize],
-                _ => 0xFF,
-            },
-            LCDC => self.registers.lcdc.into(),
-            STAT => self.registers.stat.into(),
-            SCY => self.registers.scy,
-            SCX => self.registers.scx,
-            LY => self.compute_ly(cpu_clock),
-            LYC => self.registers.lyc,
-            BGP => self.registers.bgp.into(),
-            OBP0 => self.registers.obp0.into(),
-            OBP1 => self.registers.obp1.into(),
-            WY => self.registers.wy,
-            WX => self.registers.wx,
-            _ => unreachable!(),
-        }
-    }
-
-    fn write_byte(&mut self, index: u16, value: u8, cpu_clock: u64) {
-        match index {
-            // Ignore writes to VRAM when access is blocked.
-            VRAM_START..VRAM_END => match self.vram_access {
-                PpuMemAccess::Blocked => (),
-                _ => self.vram[(index - VRAM_START) as usize] = value,
-            },
-            // Ignore writes to OAM when access is blocked.
-            OAM_START..OAM_END => match self.oam_access {
-                PpuMemAccess::Blocked => (),
-                _ => self.oam[(index - OAM_START) as usize] = value,
-            },
-            LCDC => {
-                self.registers.lcdc = value.into();
-                if self.registers.lcdc.lcd_and_ppu_enabled() {
-                    if self.is_disabled() {
-                        self.mode = PpuMode::JustEnabled;
-                        // The PPU may have had a pending state change later than the current CPU clock.
-                        // Bring the PPU clock back to the CPU's clock.
-                        self.clock = cpu_clock;
-                    }
-                } else {
-                    self.disable();
-                }
-            }
-            STAT => {
-                let stat = self.registers.stat.into_bits() & 0b1000_0111;
-                let masked_value = value & 0b0111_1000;
-                self.registers.stat = (stat | masked_value).into();
-            }
-            SCY => self.registers.scy = value,
-            SCX => self.registers.scx = value,
-            LYC => self.registers.lyc = value,
-            BGP => self.registers.bgp = value.into(),
-            OBP0 => self.registers.obp0 = value.into(),
-            OBP1 => self.registers.obp1 = value.into(),
-            WY => self.registers.wy = value,
-            WX => self.registers.wx = value,
-            _ => unreachable!(),
+    fn tick(&mut self) {
+        // Do nothing if PPU is off
+        if self.registers.lcdc.enabled() {
+            // Tick PPU by one dot
+            self.exec_tick_selector();
+
+            // Check for window activation (the state holds for entire frame).
+            // The activation conditions are checked every dot,
+            // (not only during pixel transfer or at LY == WX).
+            // This is also reflected in the fact that window glitches for
+            // the rest of the frame by pushing 00 pixels if WX == LX during the fetched
+            // push stage if at some point in the entire frame the condition
+            // WY = LY was satisfied.
+            self.tick_window();
+
+            // Update STAT's LYC_EQ_LY and eventually raise STAT interrupt.
+            self.raise_stat_irq();
+
+            // On DMG there is 1 T-cycle delay between BGP and the BGP value the PPU sees.
+            // During this T-Cycle, the PPU sees the last BGP ORed with the new one.
+            // Therefore, we store the last BGP value here so that we can use (BGP | LAST_BGP)
+            // for resolving BG color.
+            // [mealybug/m3_bgp_change]
+            // Verified: CGB is not affected.
+            self.last_bgp = self.registers.bgp;
+
+            // On DMG, this is needed for:
+            // 1) LCDC.WIN_ENABLE, because it seems that the t-cycle window is turned on
+            //    (and it was off), window is activated also for LX == WX + 1, not only for LX == WX.
+            //    [mealybug/m3_lcdc_win_en_change_multiple_wx]
+            // 2) LCDC.BG_WIN_ENABLE, because it seems that there is a 1 T-cycle delay for this bit
+            //    [mealybug/m3_lcdc_bg_en_change]
+            // 3) LCDC.OBJ_ENABLE, because it seems that there is a 1 T-cycle delay for this bit
+            //    [mealybug/m3_lcdc_obj_en_change]
+            // Verified: CGB is not affected (it sees LCDC delayed by 2 T-Cycles by default)
+            // On CGB, this is needed for:
+            // 1) LCDC.BG_WIN_TILE_DATA selector change glitch.
+            //    [mealybug/m3_lcdc_tile_sel_change (DMG mode)]
+            self.last_lcdc = self.registers.lcdc;
+
+            // It seems that there is a 1 T-cycle delay for the LY value used for the comparison LYC == LY.
+            // This is supported by the fact that for LY = 153, LYC_EQ_LY STAT flag is raised for LYC = 153
+            // the very same T-cycle LY is 0 (but was 153 the T-cycle before).
+            self.last_ly = self.registers.ly;
+
+            // It seems that there is a 1 T-cycle delay for the LYC value used for the comparison LYC == LY.
+            self.last_lyc = self.registers.lyc;
+
+            /*#ifdef ENABLE_DEBUGGER
+                    ++cycles;
+            #endif*/
+
+            // Writes to PPU registers have delayed effects.
+            // This happens mostly on CGB, where some registers are seen with delay of 2 T-Cycles.
+            self.tick_pending_write();
+
+            // Update STAT's mode (usually it matches the "internal" PPU mode, but there are few exceptions).
+            self.tick_stat();
+
+            assert!(self.dots < 456);
         }
     }
 }
@@ -1031,15 +154,25 @@ impl Addressable for Ppu {
 impl Default for Ppu {
     fn default() -> Self {
         Self {
-            dots_this_line: 0,
-            line_number: 0,
-            mode: PpuMode::Disabled,
-            x: 0,
-            pixels_to_drop: 0,
-            window_y: 255,
-            bg_fetcher: BackgroundFetcher::default(),
-            obj_buffer: VecDeque::with_capacity(10),
-            obj_fetcher: ObjectFetcher::default(),
+            registers: IoRegisters::default(),
+            tick_selector: TickSelector::OamScanAfterTurnOn,
+            fetcher_tick_selector: FetcherTickSelector::BgPrefetcherGetTile0,
+            dots: 0,
+            lx: 0,
+
+            // TODO: ensure this is OAM_SCAN
+            mode: IoRegisters::default().stat.mode(),
+
+            last_ly: IoRegisters::default().ly,
+            last_lyc: IoRegisters::default().lyc,
+            last_bgp: IoRegisters::default().bgp,
+            last_wx: IoRegisters::default().wx,
+            last_lcdc: IoRegisters::default().lcdc,
+
+            w: Window {
+                active_for_frame: false,
+            },
+
             vram: vec![0; VRAM_SIZE as usize]
                 .into_boxed_slice()
                 .try_into()
@@ -1048,16 +181,8 @@ impl Default for Ppu {
                 .into_boxed_slice()
                 .try_into()
                 .unwrap(),
-            registers: IoRegisters::default(),
-            stat_interrupt_line: false,
-            stat_mode_for_interrupt: 0xFF,
-            ly_to_compare_lyc: Some(0),
-            oam_access: PpuMemAccess::ReadWrite,
-            vram_access: PpuMemAccess::ReadWrite,
+            // Buffer of greyscale pixel values, i.e. what the PPU would output to the LCD.
             lcd_buffer: vec![0; SCREEN_SIZE],
-            clock: 0,
-            next_vblank_interrupt: 0,
-            next_lcd_interrupt: 0,
         }
     }
 }
@@ -1065,428 +190,8 @@ impl Default for Ppu {
 impl PostBoot for Ppu {
     fn post_boot_mgb() -> Self {
         Self {
-            dots_this_line: DOTS_PER_SCANLINE - 54,
-            line_number: 153,
-            mode: PpuMode::LastLine3,
-            registers: IoRegisters::post_boot_mgb(),
-            stat_mode_for_interrupt: 1,
+            // TODO: Actually fill in these values
             ..Default::default()
         }
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const OAM_SCAN_DOTS: u16 = 80;
-
-    // Assert that the minimum Mode 3 length (172) with:
-    // - unscrolled background tiles (0)
-    // - no window (0)
-    // - no objects (0)
-    // is 172 dots.
-    // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
-    #[test]
-    fn test_minimum_bg_mode_3_dots() {
-        let mut ppu = Ppu::post_boot_mgb();
-
-        let mut dot = 0;
-        let mut interrupt_flags = 0;
-        while !matches!(ppu.mode, PpuMode::HBlank) {
-            dot += 1;
-            ppu.catch_up(dot, &mut interrupt_flags);
-        }
-
-        let mode_3_dots = ppu.dots_this_line - OAM_SCAN_DOTS;
-        assert_eq!(mode_3_dots, 172);
-    }
-
-    // Assert that the minimum Mode 3 length (172) with:
-    // - scrolled background tiles (SCX % 8 = 7)
-    // - no window (0)
-    // - no objects (0)
-    // is 179 dots.
-    // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
-    #[test]
-    fn test_scrolled_bg_mode_3_dots() {
-        let mut ppu = Ppu::post_boot_mgb();
-        ppu.registers.scx = 7;
-
-        let mut dot = 0;
-        let mut interrupt_flags = 0;
-        while !matches!(ppu.mode, PpuMode::HBlank) {
-            dot += 1;
-            ppu.catch_up(dot, &mut interrupt_flags);
-        }
-
-        let mode_3_dots = ppu.dots_this_line - OAM_SCAN_DOTS;
-        assert_eq!(mode_3_dots, 179);
-    }
-
-    // Assert that the minimum Mode 3 length (172) with:
-    // - unscrolled background tiles (0)
-    // - a window (6)
-    // - no objects (0)
-    // is 178 dots.
-    // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
-    #[test]
-    fn test_minimum_bg_window_mode_3_dots() {
-        let mut ppu = Ppu::post_boot_mgb();
-        // Enable the window.
-        ppu.registers.lcdc.set_window_enabled(true);
-        // Scroll it to x=50px
-        ppu.registers.wx = 50 + 7;
-
-        let mut dot = 0;
-        let mut interrupt_flags = 0;
-        while !matches!(ppu.mode, PpuMode::HBlank) {
-            dot += 1;
-            ppu.catch_up(dot, &mut interrupt_flags);
-        }
-
-        let mode_3_dots = ppu.dots_this_line - OAM_SCAN_DOTS;
-        assert_eq!(mode_3_dots, 178);
-    }
-
-    // Assert that the minimum Mode 3 length (172) with:
-    // - scrolled background tiles (SCX % 8 = 7)
-    // - a window (6)
-    // - no objects (0)
-    // is 185 dots.
-    // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
-    #[test]
-    fn test_scrolled_bg_window_mode_3_dots() {
-        let mut ppu = Ppu::post_boot_mgb();
-        ppu.registers.scx = 7;
-
-        // Enable the window.
-        ppu.registers.lcdc.set_window_enabled(true);
-        // Scroll it to x=50px
-        ppu.registers.wx = 50 + 7;
-
-        let mut dot = 0;
-        let mut interrupt_flags = 0;
-        while !matches!(ppu.mode, PpuMode::HBlank) {
-            dot += 1;
-            ppu.catch_up(dot, &mut interrupt_flags);
-        }
-
-        let mode_3_dots = ppu.dots_this_line - OAM_SCAN_DOTS;
-        assert_eq!(mode_3_dots, 185);
-    }
-
-    // Assert that the minimum Mode 3 length (172) with:
-    // - unscrolled background tiles (0)
-    // - no window (0)
-    // - 1 object at position x=0 (11)
-    // is 183 dots.
-    // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
-    #[test]
-    fn test_bg_obj_x_0_mode_3_dots() {
-        let mut ppu = Ppu::post_boot_mgb();
-        ppu.oam[0x00] = 16; // OBJ Y
-        ppu.oam[0x01] = 0; // OBJ X
-        ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
-
-        let mut dot = 0;
-        let mut interrupt_flags = 0;
-        while !matches!(ppu.mode, PpuMode::HBlank) {
-            dot += 1;
-            ppu.catch_up(dot, &mut interrupt_flags);
-        }
-
-        let mode_3_dots = ppu.dots_this_line - OAM_SCAN_DOTS;
-        assert_eq!(mode_3_dots, 183);
-    }
-
-    // Assert that the minimum Mode 3 length (172) with:
-    // - unscrolled background tiles (0)
-    // - no window (0)
-    // - 2 object at position x=0 (11+6)
-    // is 189 dots.
-    // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
-    #[test]
-    fn test_bg_2_obj_x_0_mode_3_dots() {
-        let mut ppu = Ppu::post_boot_mgb();
-        ppu.oam[0x00] = 16; // OBJ Y
-        ppu.oam[0x01] = 0; // OBJ X
-        ppu.oam[0x04] = 16; // OBJ Y
-        ppu.oam[0x05] = 0; // OBJ X
-        ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
-
-        let mut dot = 0;
-        let mut interrupt_flags = 0;
-        while !matches!(ppu.mode, PpuMode::HBlank) {
-            dot += 1;
-            ppu.catch_up(dot, &mut interrupt_flags);
-        }
-
-        let mode_3_dots = ppu.dots_this_line - OAM_SCAN_DOTS;
-        assert_eq!(mode_3_dots, 189);
-    }
-
-    // Assert that the minimum Mode 3 length (172) with:
-    // - unscrolled background tiles (0)
-    // - no window (0)
-    // - 10 object at position x=1 (64)
-    // is 236 dots.
-    // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
-    #[test]
-    fn test_bg_10_obj_x_1_mode_3_dots() {
-        let mut ppu = Ppu::post_boot_mgb();
-        for i in 0..10 {
-            let obj_idx = i * 4;
-            ppu.oam[obj_idx] = 16; // OBJ Y
-            ppu.oam[obj_idx + 1] = 1; // OBJ X
-        }
-        ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
-
-        let mut dot = 0;
-        let mut interrupt_flags = 0;
-        while !matches!(ppu.mode, PpuMode::HBlank) {
-            dot += 1;
-            ppu.catch_up(dot, &mut interrupt_flags);
-        }
-
-        let mode_3_dots = ppu.dots_this_line - OAM_SCAN_DOTS;
-        assert_eq!(mode_3_dots, 236);
-    }
-
-    // Assert that the minimum Mode 3 length (172) with:
-    // - unscrolled background tiles (0)
-    // - no window (0)
-    // - 1 object at position x=2 (9)
-    // is 181 dots.
-    // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
-    #[test]
-    fn test_bg_obj_x_2_mode_3_dots() {
-        let mut ppu = Ppu::post_boot_mgb();
-        ppu.oam[0x00] = 16; // OBJ Y
-        ppu.oam[0x01] = 2; // OBJ X
-        ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
-
-        let mut dot = 0;
-        let mut interrupt_flags = 0;
-        while !matches!(ppu.mode, PpuMode::HBlank) {
-            dot += 1;
-            ppu.catch_up(dot, &mut interrupt_flags);
-        }
-
-        let mode_3_dots = ppu.dots_this_line - OAM_SCAN_DOTS;
-        assert_eq!(mode_3_dots, 181);
-    }
-
-    // Assert that the minimum Mode 3 length (172) with:
-    // - unscrolled background tiles (0)
-    // - no window (0)
-    // - 1 object at position x=8 (11)
-    // is 183 dots.
-    // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
-    #[test]
-    fn test_bg_obj_x_8_mode_3_dots() {
-        let mut ppu = Ppu::post_boot_mgb();
-        ppu.oam[0x00] = 16; // OBJ Y
-        ppu.oam[0x01] = 8; // OBJ X
-        ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
-
-        let mut dot = 0;
-        let mut interrupt_flags = 0;
-        while !matches!(ppu.mode, PpuMode::HBlank) {
-            dot += 1;
-            ppu.catch_up(dot, &mut interrupt_flags);
-        }
-
-        let mode_3_dots = ppu.dots_this_line - OAM_SCAN_DOTS;
-        assert_eq!(mode_3_dots, 183);
-    }
-
-    // Assert that the minimum Mode 3 length (172) with:
-    // - unscrolled background tiles (0)
-    // - no window (0)
-    // - 1 object at position x=9 (10)
-    // is 182 dots.
-    // See: https://gbdev.io/pandocs/Rendering.html#mode-3-length
-    #[test]
-    fn test_bg_obj_x_9_mode_3_dots() {
-        let mut ppu = Ppu::post_boot_mgb();
-        ppu.oam[0x00] = 16; // OBJ Y
-        ppu.oam[0x01] = 9; // OBJ X
-        ppu.registers.lcdc = 0x93.into(); // Enable OBJs.
-
-        let mut dot = 0;
-        let mut interrupt_flags = 0;
-        while !matches!(ppu.mode, PpuMode::HBlank) {
-            dot += 1;
-            ppu.catch_up(dot, &mut interrupt_flags);
-        }
-
-        let mode_3_dots = ppu.dots_this_line - OAM_SCAN_DOTS;
-        assert_eq!(mode_3_dots, 182);
-    }
-
-    // Tests that log PPU state changes for comparing against other emulators.
-    /*use std::fs::File;
-    use std::io::Write;
-
-    #[test]
-    fn lcd_on_vars() {
-        let mut ppu = Ppu::default();
-        ppu.write_byte(LCDC, 0x81, 0); // Enable the LCD
-
-        let filename = "my_lcd_on_vars.csv";
-        let mut file = File::create(filename).unwrap();
-        writeln!(
-            &mut file,
-            "Dot, LY, LY for LYC, STAT Mode, OAM R Blocked, OAM W Blocked, VRAM R Blocked, VRAM W Blocked"
-        )
-        .unwrap();
-
-        // TWO FRAMES
-        let mut previous_line_sans_dot = String::new();
-        for dot in 0..u64::from(DOTS_PER_FRAME) * 2 {
-            let output_line = format!(
-                "{dot}, {}, {}, {}, {}, {}, {}, {}",
-                ppu.read_byte(LY, dot),
-                ppu.ly_to_compare_lyc.unwrap_or(0xFF),
-                ppu.read_byte(STAT, dot) & 0b0000_0011,
-                matches!(
-                    ppu.oam_access,
-                    PpuMemAccess::Blocked | PpuMemAccess::WriteOnly
-                ),
-                matches!(ppu.oam_access, PpuMemAccess::Blocked),
-                matches!(
-                    ppu.vram_access,
-                    PpuMemAccess::Blocked | PpuMemAccess::WriteOnly
-                ),
-                matches!(ppu.vram_access, PpuMemAccess::Blocked),
-            );
-            if let Some((_, line_sans_dot)) = output_line.split_once(", ")
-                && line_sans_dot != previous_line_sans_dot
-            {
-                previous_line_sans_dot = line_sans_dot.into();
-                writeln!(&mut file, "{output_line}").unwrap();
-            }
-
-            let mut interrupt_flags = 0;
-            ppu.catch_up(dot + 1, &mut interrupt_flags);
-        }
-    }
-
-    #[test]
-    fn lcd_on_ly() {
-        let mut ppu = Ppu::default();
-        ppu.write_byte(LCDC, 0x81, 0); // Enable the LCD
-
-        let filename = "my_lcd_on_ly.csv";
-        let mut file = File::create(filename).unwrap();
-        writeln!(&mut file, "Dot, LY").unwrap();
-
-        // TWO FRAMES
-        let mut previous_line_sans_dot = String::new();
-        for dot in 0..u64::from(DOTS_PER_FRAME) * 2 {
-            let output_line = format!("{dot}, {}", ppu.read_byte(LY, dot));
-            if let Some((_, line_sans_dot)) = output_line.split_once(", ")
-                && line_sans_dot != previous_line_sans_dot
-            {
-                previous_line_sans_dot = line_sans_dot.into();
-                writeln!(&mut file, "{output_line}").unwrap();
-            }
-
-            let mut interrupt_flags = 0;
-            ppu.catch_up(dot + 1, &mut interrupt_flags);
-        }
-    }
-
-    #[test]
-    fn lcd_on_vars_scx1() {
-        let mut ppu = Ppu::default();
-        ppu.write_byte(LCDC, 0x81, 0); // Enable the LCD
-        ppu.write_byte(SCX, 0x01, 0); // SCX=1
-
-        let filename = "my_lcd_on_vars_scx1.csv";
-        let mut file = File::create(filename).unwrap();
-        writeln!(
-            &mut file,
-            "Dot, LY, LY for LYC, STAT Mode, STAT for I, OAM R Blocked, OAM W Blocked, VRAM R Blocked, VRAM W Blocked"
-        )
-        .unwrap();
-
-        // TWO FRAMES
-        let mut previous_line_sans_dot = String::new();
-        for dot in 0..u64::from(DOTS_PER_FRAME) * 2 {
-            let output_line = format!(
-                "{dot}, {}, {}, {}, {}, {}, {}, {}, {}",
-                ppu.read_byte(LY, dot),
-                ppu.ly_to_compare_lyc.unwrap_or(0xFF),
-                ppu.read_byte(STAT, dot) & 0b0000_0011,
-                ppu.stat_mode_for_interrupt,
-                matches!(
-                    ppu.oam_access,
-                    PpuMemAccess::Blocked | PpuMemAccess::WriteOnly
-                ),
-                matches!(ppu.oam_access, PpuMemAccess::Blocked),
-                matches!(
-                    ppu.vram_access,
-                    PpuMemAccess::Blocked | PpuMemAccess::WriteOnly
-                ),
-                matches!(ppu.vram_access, PpuMemAccess::Blocked),
-            );
-            if let Some((_, line_sans_dot)) = output_line.split_once(", ")
-                && line_sans_dot != previous_line_sans_dot
-            {
-                previous_line_sans_dot = line_sans_dot.into();
-                writeln!(&mut file, "{output_line}").unwrap();
-            }
-
-            let mut interrupt_flags = 0;
-            ppu.catch_up(dot + 1, &mut interrupt_flags);
-        }
-    }
-
-    #[test]
-    fn vars() {
-        let mut ppu = Ppu::post_boot_mgb();
-
-        let filename = "my_vars.csv";
-        let mut file = File::create(filename).unwrap();
-        writeln!(
-            &mut file,
-            "Dot, LY, LY for LYC, STAT Mode, OAM R Blocked, OAM W Blocked, VRAM R Blocked, VRAM W Blocked"
-        )
-        .unwrap();
-
-        let initial_clock = u64::from(DOTS_PER_SCANLINE) - 65;
-        ppu.mode = PpuMode::LastLine3;
-
-        // TWO FRAMES
-        let mut previous_line_sans_dot = String::new();
-        for dot in 0..u64::from(DOTS_PER_FRAME) * 2 {
-            let output_line = format!(
-                "{dot}, {}, {}, {}, {}, {}, {}, {}",
-                ppu.read_byte(LY, dot),
-                ppu.ly_to_compare_lyc.unwrap_or(0xFF),
-                ppu.read_byte(STAT, dot) & 0b0000_0011,
-                matches!(
-                    ppu.oam_access,
-                    PpuMemAccess::Blocked | PpuMemAccess::WriteOnly
-                ),
-                matches!(ppu.oam_access, PpuMemAccess::Blocked),
-                matches!(
-                    ppu.vram_access,
-                    PpuMemAccess::Blocked | PpuMemAccess::WriteOnly
-                ),
-                matches!(ppu.vram_access, PpuMemAccess::Blocked),
-            );
-            if let Some((_, line_sans_dot)) = output_line.split_once(", ")
-                && line_sans_dot != previous_line_sans_dot
-            {
-                previous_line_sans_dot = line_sans_dot.into();
-                writeln!(&mut file, "{output_line}").unwrap();
-            }
-
-            let mut interrupt_flags = 0;
-            ppu.catch_up(initial_clock + dot + 1, &mut interrupt_flags);
-        }
-    }*/
 }

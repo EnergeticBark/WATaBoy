@@ -79,8 +79,8 @@ fn draw_ie_and_if_body(body: TableBody<'_>, dmg_state: &Cpu) {
     let intr_flag = InterruptBits::from_bits(dmg_state.memory.buffer[IF as usize]);
 
     let clock = dmg_state.memory.clock;
-    let next_vblank = cycles_until_interrupt(dmg_state.memory.ppu.next_vblank_interrupt, clock);
-    let next_lcd = cycles_until_interrupt(dmg_state.memory.ppu.next_lcd_interrupt, clock);
+    let next_vblank = /*cycles_until_interrupt(dmg_state.memory.ppu.next_vblank_interrupt, clock)*/Some(0);
+    let next_lcd = /*cycles_until_interrupt(dmg_state.memory.ppu.next_lcd_interrupt, clock)*/Some(0);
     let next_timers = cycles_until_interrupt(dmg_state.memory.timers.next_interrupt, clock);
 
     let values = [
@@ -138,7 +138,7 @@ fn draw_checkbox_row(body: &mut TableBody<'_>, status: &str, checked: bool) {
 }
 
 fn draw_stat_body(body: &mut TableBody<'_>, dmg_state: &Cpu) {
-    let stat = LcdStatus::from_bits(dmg_state.memory.ppu.read_byte(STAT, 0));
+    /*let stat = LcdStatus::from_bits(dmg_state.memory.ppu.read_byte(STAT, 0));
 
     body.row(ROW_HEIGHT, |mut row| {
         row.col(|ui| {
@@ -159,7 +159,7 @@ fn draw_stat_body(body: &mut TableBody<'_>, dmg_state: &Cpu) {
     draw_checkbox_row(body, "Mode 0 Int Select", stat.mode0_int_select());
     draw_checkbox_row(body, "Mode 1 Int Select", stat.mode1_int_select());
     draw_checkbox_row(body, "Mode 2 Int Select", stat.mode2_int_select());
-    draw_checkbox_row(body, "LYC Int Select", stat.lyc_int_select());
+    draw_checkbox_row(body, "LYC Int Select", stat.lyc_int_select());*/
 }
 
 fn draw_tac_body(body: &mut TableBody<'_>, dmg_state: &Cpu) {

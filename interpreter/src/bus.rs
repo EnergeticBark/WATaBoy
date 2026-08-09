@@ -68,8 +68,9 @@ impl AddressBus {
                 #[cfg(feature = "waking-counters")]
                 self.waking_reads.log_access(index);
 
-                self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
-                self.ppu.read_byte(index, self.clock)
+                /*self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
+                self.ppu.read_byte(index, self.clock)*/
+                0xFF
             }
 
             OAM_START..OAM_END => {
@@ -81,11 +82,16 @@ impl AddressBus {
                 #[cfg(feature = "waking-counters")]
                 self.waking_reads.log_access(index);
 
-                self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
-                self.ppu.read_byte(index, self.clock)
+                /*self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
+                self.ppu.read_byte(index, self.clock)*/
+                0xFF
             }
 
-            LY => self.ppu.read_byte(index, self.clock),
+            LY =>
+            /*self.ppu.read_byte(index, self.clock)*/
+            {
+                0xFF
+            }
 
             // Delegate reads to the timers
             DIV | TIMA | TMA | TAC => {
@@ -143,9 +149,9 @@ impl AddressBus {
                 #[cfg(feature = "waking-counters")]
                 self.waking_writes.log_access(index);
 
-                self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
+                /*self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.write_byte(index, value, self.clock);
-                self.ppu_est_next_intr();
+                self.ppu_est_next_intr();*/
             }
 
             // Delegate writes to VRAM to OAM the PPU.
@@ -158,9 +164,9 @@ impl AddressBus {
                 #[cfg(feature = "waking-counters")]
                 self.waking_writes.log_access(index);
 
-                self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
+                /*self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.write_byte(index, value, self.clock);
-                self.ppu_est_next_intr();
+                self.ppu_est_next_intr();*/
             }
 
             ECHO_START..ECHO_END => {
@@ -207,9 +213,9 @@ impl AddressBus {
 
                 // If we don't catch up the components now, the value we're writing may get overwritten by a stale flag when we catch up later.
                 // TODO: I should probably catch up the timers here too...
-                self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
+                //self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.buffer[index as usize] = value | 0b1110_0000;
-                self.ppu_est_next_intr();
+                //self.ppu_est_next_intr();
             }
 
             NR10 => self.buffer[index as usize] = value | 0b1000_0000,
@@ -233,7 +239,7 @@ impl AddressBus {
                 #[cfg(feature = "waking-counters")]
                 self.waking_writes.log_access(index);
 
-                self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
+                /*self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.write_byte(index, value, self.clock);
 
                 if !self.ppu.is_disabled() {
@@ -241,15 +247,15 @@ impl AddressBus {
                         .update_stat_interrupt(&mut self.buffer[IF as usize]);
                 }
 
-                self.ppu_est_next_intr();
+                self.ppu_est_next_intr();*/
             }
             SCY | SCX | BGP | OBP0 | OBP1 | WY | WX => {
                 #[cfg(feature = "waking-counters")]
                 self.waking_writes.log_access(index);
 
-                self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
+                /*self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu.write_byte(index, value, self.clock);
-                self.ppu_est_next_intr();
+                self.ppu_est_next_intr();*/
             }
 
             // There is *nothing* at these addresses, so they don't have names.
@@ -261,31 +267,31 @@ impl AddressBus {
                 #[cfg(feature = "waking-counters")]
                 self.waking_writes.log_access(index);
 
-                self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
+                //self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.timers
                     .catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.buffer[index as usize] = value;
-                self.ppu_est_next_intr();
+                //self.ppu_est_next_intr();
                 self.timers_est_next_intr();
             }
             _ => self.buffer[index as usize] = value,
         }
     }
 
-    fn ppu_est_next_intr(&mut self) {
+    /*fn ppu_est_next_intr(&mut self) {
         self.ppu
             .predict_next_interrupt(InterruptBits::from(self.buffer[IE as usize]));
         let next_ppu_interrupt =
             u64::min(self.ppu.next_vblank_interrupt, self.ppu.next_lcd_interrupt);
         self.next_interrupt = u64::min(self.timers.next_interrupt, next_ppu_interrupt);
-    }
+    }*/
 
     fn timers_est_next_intr(&mut self) {
         self.timers
             .predict_next_interrupt(InterruptBits::from(self.buffer[IE as usize]));
-        let next_ppu_interrupt =
-            u64::min(self.ppu.next_vblank_interrupt, self.ppu.next_lcd_interrupt);
-        self.next_interrupt = u64::min(self.timers.next_interrupt, next_ppu_interrupt);
+        /*let next_ppu_interrupt =
+        u64::min(self.ppu.next_vblank_interrupt, self.ppu.next_lcd_interrupt);*/
+        self.next_interrupt = /*u64::min(*/self.timers.next_interrupt/*, next_ppu_interrupt)*/;
     }
 
     fn oam_dma(&mut self) {
@@ -319,7 +325,7 @@ impl AddressBus {
         }
 
         if self.next_interrupt <= self.clock {
-            if self
+            /*if self
                 .ppu
                 .next_vblank_interrupt
                 .min(self.ppu.next_lcd_interrupt)
@@ -327,7 +333,7 @@ impl AddressBus {
             {
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu_est_next_intr();
-            }
+            }*/
 
             if self.timers.next_interrupt <= self.clock {
                 self.timers
@@ -345,7 +351,7 @@ impl AddressBus {
         }
 
         if self.next_interrupt <= self.clock {
-            if self
+            /*if self
                 .ppu
                 .next_vblank_interrupt
                 .min(self.ppu.next_lcd_interrupt)
@@ -353,7 +359,7 @@ impl AddressBus {
             {
                 self.ppu.catch_up(self.clock, &mut self.buffer[IF as usize]);
                 self.ppu_est_next_intr();
-            }
+            }*/
 
             if self.timers.next_interrupt <= self.clock {
                 self.timers

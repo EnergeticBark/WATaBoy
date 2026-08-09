@@ -2,7 +2,7 @@ use bitfield_struct::bitfield;
 
 #[bitfield(u8, order = Msb)]
 pub struct LcdControl {
-    pub lcd_and_ppu_enabled: bool,
+    pub enabled: bool,
     pub window_tile_map: bool,
     pub window_enabled: bool,
     pub bg_and_window_tiles: bool,

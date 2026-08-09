@@ -101,7 +101,7 @@ fn draw_flags_body(body: &mut TableBody<'_>, dmg_state: &Cpu) {
         let formatted = format!("{}", dmg_state.memory.clock);
         row.col(|ui| _ = ui.label(formatted));
     });
-    body.row(ROW_HEIGHT, |mut row| {
+    /*body.row(ROW_HEIGHT, |mut row| {
         row.col(|ui| _ = ui.label("PPU Clock"));
         let formatted = format!("{}", dmg_state.memory.ppu.clock);
         row.col(|ui| _ = ui.label(formatted));
@@ -115,7 +115,7 @@ fn draw_flags_body(body: &mut TableBody<'_>, dmg_state: &Cpu) {
         row.col(|ui| _ = ui.label("Next LCD"));
         let formatted = format!("{}", dmg_state.memory.ppu.next_lcd_interrupt);
         row.col(|ui| _ = ui.label(formatted));
-    });
+    });*/
     body.row(ROW_HEIGHT, |mut row| {
         row.col(|ui| _ = ui.label("Timers Clock"));
         let formatted = format!("{}", dmg_state.memory.timers.clock);
