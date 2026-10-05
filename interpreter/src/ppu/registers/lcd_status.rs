@@ -9,7 +9,7 @@ pub enum StatMode {
     HBlank = 0, // Or LCD off.
     VBlank = 1,
     OamScan = 2,
-    Drawing = 3,
+    PixelTransfer = 3,
 }
 
 #[bitfield(u8, order = Msb)]
@@ -21,6 +21,6 @@ pub struct LcdStatus {
     pub mode1_int_select: bool,
     pub mode0_int_select: bool,
     pub coincidence: bool,
-    #[bits(2)]
+    #[bits(2, default = StatMode::OamScan)]
     pub mode: StatMode,
 }

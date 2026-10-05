@@ -87,11 +87,7 @@ impl AddressBus {
                 0xFF
             }
 
-            LY =>
-            /*self.ppu.read_byte(index, self.clock)*/
-            {
-                0xFF
-            }
+            LY => self.ppu.read_byte(index),
 
             // Delegate reads to the timers
             DIV | TIMA | TMA | TAC => {
@@ -235,7 +231,13 @@ impl AddressBus {
             // TODO: HEY!!! Optimization idea: if we're writing a value that's identical to the current value,
             // we don't actually need to catch up the component, because nothing has changed.
             // Pokemon Blue updates the value of SCX, SCY, and WY on the title screen what seems several times per frame.
-            LCDC | STAT | LYC => {
+            LCDC => {
+                #[cfg(feature = "waking-counters")]
+                self.waking_writes.log_access(index);
+
+                self.ppu.write_byte(index, value);
+            }
+            STAT | LYC => {
                 #[cfg(feature = "waking-counters")]
                 self.waking_writes.log_access(index);
 
@@ -310,7 +312,7 @@ impl AddressBus {
 
         // TODO: use copy_from_slice from the correct region of memory, only use read_byte as a fallback.
         for i in 0..oam_size {
-            self.ppu.oam[i as usize] = self.read_byte(src_start + i);
+            self.ppu.oam.oam[i as usize] = self.read_byte(src_start + i);
         }
 
         // Restore DMA running state.
@@ -322,6 +324,10 @@ impl AddressBus {
 
         if self.dma.catch_up(self.clock) {
             self.oam_dma();
+        }
+
+        for _ in 0..2 {
+            self.ppu.tick();
         }
 
         if self.next_interrupt <= self.clock {
@@ -348,6 +354,10 @@ impl AddressBus {
 
         if self.dma.catch_up(self.clock) {
             self.oam_dma();
+        }
+
+        for _ in 0..u64::from(m_cycles) * 4 {
+            self.ppu.tick();
         }
 
         if self.next_interrupt <= self.clock {

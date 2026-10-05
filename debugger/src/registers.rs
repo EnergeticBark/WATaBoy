@@ -1,6 +1,7 @@
 use egui::{Checkbox, Color32, RichText, Ui};
 use egui_extras::{Column, TableBody, TableBuilder};
-use interpreter::cpu::Cpu;
+use hw_constants::io_regs::LY;
+use interpreter::{cpu::Cpu, ppu::StatMode};
 
 const ROW_HEIGHT: f32 = 18.0;
 
@@ -43,6 +44,26 @@ pub fn draw_register_table(ui: &mut Ui, dmg_state: &Cpu) {
                     draw_flags_body(&mut body, dmg_state);
                 });
         });
+    });
+
+    ui.separator();
+
+    ui.vertical(|ui| {
+        let name = "PPU State";
+        ui.heading(name);
+        TableBuilder::new(ui)
+            .id_salt(name)
+            .striped(true)
+            .column(Column::auto())
+            .column(Column::remainder())
+            .header(ROW_HEIGHT, |mut header| {
+                for column_name in ["I/O Register", "Value"] {
+                    header.col(|ui| _ = ui.label(column_name));
+                }
+            })
+            .body(|body| {
+                draw_ppu_body(body, dmg_state);
+            });
     });
 }
 
@@ -130,5 +151,43 @@ fn draw_flags_body(body: &mut TableBody<'_>, dmg_state: &Cpu) {
         row.col(|ui| _ = ui.label("Next Inter"));
         let formatted = format!("{}", dmg_state.memory.next_interrupt);
         row.col(|ui| _ = ui.label(formatted));
+    });
+}
+
+fn draw_ppu_body(body: TableBody<'_>, dmg_state: &Cpu) {
+    let mode_string = match dmg_state.memory.ppu.mode {
+        StatMode::HBlank => String::from("HBlank"),
+        StatMode::VBlank => String::from("VBlank"),
+        StatMode::OamScan => String::from("Oam Scan"),
+        StatMode::PixelTransfer => String::from("Pixel Transfer"),
+    };
+
+    let reg_names_and_values = [
+        (
+            "On",
+            if dmg_state.memory.ppu.registers.lcdc.enabled() {
+                "ON"
+            } else {
+                "OFF"
+            }
+            .into(),
+        ),
+        ("Cycle", format!("{}", dmg_state.memory.ppu.cycles)),
+        ("Dots", format!("{}", dmg_state.memory.ppu.dots)),
+        ("Mode", mode_string),
+        (
+            "LY",
+            format!("{:#04X}", dmg_state.memory.ppu.debug_read_byte(LY)),
+        ),
+    ];
+
+    body.rows(ROW_HEIGHT, reg_names_and_values.len(), |mut row| {
+        let row_index = row.index();
+        let (name, value) = &reg_names_and_values[row_index];
+
+        row.col(|ui| _ = ui.label(*name));
+        row.col(|ui| {
+            ui.strong(RichText::from(value).monospace());
+        });
     });
 }

@@ -9,9 +9,9 @@ use hw_constants::PostBoot;
 use super::palette::Palette;
 
 #[derive(Clone, Copy, Default)]
-pub(super) struct IoRegisters {
+pub struct IoRegisters {
     // R/w
-    pub(super) lcdc: LcdControl,
+    pub lcdc: LcdControl,
     pub(super) stat: LcdStatus,
     pub(super) scy: u8,
     pub(super) scx: u8,
